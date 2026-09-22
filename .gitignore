@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+coverage/
+infra/.terraform/
+infra/*.tfstate*
+infra/*.tfvars
+!infra/*.tfvars.example
+apps/web/next-env.d.ts

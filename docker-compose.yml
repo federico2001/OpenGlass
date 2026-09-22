@@ -1,0 +1,170 @@
+# Local stack. `docker compose up --build` then `curl -k https://localhost/health`.
+# Production uses compose.prod.yml; the only differences are env vars and which services run.
+name: openglass
+
+x-node-env: &node-env
+  LOG_LEVEL: info
+  PUBLIC_URL: https://localhost
+  MONGODB_URI: mongodb://mongo:27017/openglass?replicaSet=rs0
+  S3_ENDPOINT: http://minio:9000
+  S3_REGION: us-east-1
+  S3_BUCKET: openglass-records
+  S3_FORCE_PATH_STYLE: "true"
+  AWS_ACCESS_KEY_ID: openglass
+  AWS_SECRET_ACCESS_KEY: openglass-dev-secret
+  SIGNER: local
+  EMAIL: smtp
+  SMTP_URL: smtp://mailpit:1025
+
+x-app: &app
+  restart: unless-stopped
+  init: true
+
+services:
+  mongo:
+    image: mongo:7
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    ports:
+      # From the host use mongodb://localhost:27017/openglass?directConnection=true
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      # Initiates the single-node replica set on first boot; healthy once this node is PRIMARY.
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - >-
+          quit((() => { try { return rs.status().members.some((m) => m.stateStr === 'PRIMARY') ? 0 : 1 }
+          catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }); return 1 } })())
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  # MinIO no longer publishes official images; pgsty/minio is the maintained community build.
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: openglass
+      MINIO_ROOT_PASSWORD: openglass-dev-secret
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot: creates the records bucket with Object Lock, like the S3 bucket in prod.
+  minio-init:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    depends_on:
+      minio: { condition: service_healthy }
+    environment:
+      MINIO_ROOT_USER: openglass
+      MINIO_ROOT_PASSWORD: openglass-dev-secret
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set og http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing --with-lock og/openglass-records &&
+        mc retention set --default GOVERNANCE 365d og/openglass-records
+    restart: "no"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025" # web UI
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    <<: *app
+    build:
+      context: .
+      dockerfile: docker/node-service.Dockerfile
+      args: { APP: api, APP_PORT: "3000" }
+    image: openglass-api:local
+    environment:
+      <<: *node-env
+      PORT: "3000"
+    depends_on:
+      mongo: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+      mailpit: { condition: service_healthy }
+
+  mcp:
+    <<: *app
+    build:
+      context: .
+      dockerfile: docker/node-service.Dockerfile
+      args: { APP: mcp, APP_PORT: "3001" }
+    image: openglass-mcp:local
+    environment:
+      LOG_LEVEL: info
+      PORT: "3001"
+
+  worker:
+    <<: *app
+    build:
+      context: .
+      dockerfile: docker/node-service.Dockerfile
+      args: { APP: worker, APP_PORT: "3003" }
+    image: openglass-worker:local
+    environment:
+      <<: *node-env
+      PORT: "3003"
+    depends_on:
+      # The api applies migrations on start; the worker waits for it.
+      api: { condition: service_healthy }
+
+  web:
+    <<: *app
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: openglass-web:local
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: localhost
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      api: { condition: service_healthy }
+      mcp: { condition: service_healthy }
+      web: { condition: service_healthy }
+
+volumes:
+  mongo_data:
+  mongo_config:
+  minio_data:
+  caddy_data:
+  caddy_config:

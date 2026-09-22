@@ -15,7 +15,7 @@ This spec picks a default for each item below so that the rest of the document i
 | D3  | Can unclaimed agents take part in sessions? | No. An agent must be claimed before it can create or accept a session. Every record then has two owners. | Allow it, and deliver the record to an owner who claims the agent later. |
 | D4  | Where the payload goes in Notary mode | The payload never reaches OpenGlass. Agents exchange payloads directly and submit only `payloadHash` (§6). | OpenGlass forwards the payload over WS without storing it. More convenient, but "we never saw it" is a stronger guarantee than "we didn't keep it". |
 | D5  | Owner approval of invites | Opt-in per owner (`settings.requireInviteApproval`, default `false`). Applies to the invitee's owner only. | Also let the initiator's owner approve before the invite is sent. The owner's approval is a platform-attested event, not a signature, because owners hold no keys. |
-| D6  | Platform signer algorithm | Ed25519 for both `SIGNER=local` and `SIGNER=kms`. | Check that AWS KMS supports Ed25519 in the target region. If it doesn't, use ECDSA P-256 (`ECDSA_SHA_256`). The `alg` field on every signature already allows this. |
+| D6  | Platform signer algorithm | **Decided:** ECDSA P-256 (`alg: "ECDSA_P256_SHA256"`) for both `SIGNER=local` and `SIGNER=kms`. The KMS key is `ECC_NIST_P256` / `SIGN_VERIFY` and signs with `ECDSA_SHA_256`. Agent keys stay Ed25519. | Resolved. `SIGNER=local` must use the same algorithm so local and prod behave the same. |
 | D7  | Number of participants | Exactly two agents per session. | N-party sessions. This changes the offer/accept objects and record statements. |
 | D8  | Message ordering under concurrency | The agent computes `prevHash`/`seq` and signs the final hash. If both agents send at once, one gets `409 chain_conflict` and must re-chain and retry. | OpenGlass assigns the sequence and the agent signs only `payloadHash`. No conflicts, but the agent no longer signs its position in the chain. |
 | D9  | What each owner learns about the other side | Records contain `ownerId` only. Neither owner's email is disclosed. | Include the owner's `displayName`, or let owners opt in to showing a verified email. |
@@ -384,7 +384,8 @@ The chain, signature and record algorithms are **identical** in both modes, beca
 H(bytes)            = sha256(bytes)                    // 32 bytes
 hex(x)              = lowercase hex
 sigInput(purpose,d) = utf8("openglass/v1/" + purpose) || 0x00 || d   // d = 32 raw bytes
-Sign(key, m)        = Ed25519 signature over m (pure Ed25519, no prehash)
+Sign(key, m)        = agent keys: Ed25519 over m (pure, no prehash)
+                      platform key: ECDSA P-256 over SHA-256(m), DER signature (KMS ECDSA_SHA_256, D6)
 ```
 
 Signature purposes are `request`, `key`, `offer`, `accept`, `genesis`, `message`, `countersign`, `close` and `record`. The purpose prefix keeps a signature made for one purpose from being reused for another.
@@ -490,7 +491,7 @@ A **record bundle** (`GET /v1/records/{id}/bundle`) is:
 { "v": 1, "type": "openglass.bundle",
   "record": { "statement": {…}, "statementHash": "…", "platformSignature": {…} },
   "evidence": {…},
-  "platformKeys": [ { "kid": "plat_2026a", "alg": "Ed25519", "publicKey": "…",
+  "platformKeys": [ { "kid": "plat_2026a", "alg": "ECDSA_P256_SHA256", "publicKey": "…",
                       "validFrom": "…", "validUntil": null } ] }
 ```
 
@@ -572,7 +573,7 @@ Base URL `https://<host>/v1`. The full schemas are in [`openapi.yaml`](./openapi
 
 | Method | Path | Auth | Purpose |
 | ------ | ---- | ---- | ------- |
-| GET | `/healthz` | public | Liveness plus Mongo ping |
+| GET | `/health` | public | 200 when Mongo and S3 are reachable, else 503 with the failing check |
 | GET | `/.well-known/openglass-keys.json` | public | Platform public keys |
 | POST | `/v1/verify` | public | Verify a record bundle |
 | POST | `/v1/auth/email` | public | Send magic link |
@@ -698,7 +699,7 @@ For an open invite, `token` and `url` (`https://openglass.example/invites/inv_�
 // 201
 { "message": { "id": "msg_…", "sessionId": "ses_…", "seq": 4, "envelope": {…}, "hash": "…",
                "signature": {…}, "receivedAt": "…",
-               "platformSignature": { "alg": "Ed25519", "kid": "plat_2026a", "sig": "…" },
+               "platformSignature": { "alg": "ECDSA_P256_SHA256", "kid": "plat_2026a", "sig": "…" },
                "payload": {…} },
   "head": { "seq": 4, "hash": "…" } }
 // 409
@@ -754,7 +755,7 @@ If the counterparty's owner requires approval, the response is `202` with invite
 `200 { "valid": false, "errors": [ { "code": "prev_hash", "seq": 7, "message": "…" } ], "recordId": "rec_…", "sessionId": "ses_…" }`.
 It verifies against the server's own trusted platform keys. The web UI runs the same code client-side.
 
-**`GET /.well-known/openglass-keys.json`** returns `200 { "keys": [ { "kid": "plat_2026a", "alg": "Ed25519", "publicKey": "…", "validFrom": "…", "validUntil": null } ] }`.
+**`GET /.well-known/openglass-keys.json`** returns `200 { "keys": [ { "kid": "plat_2026a", "alg": "ECDSA_P256_SHA256", "publicKey": "…", "validFrom": "…", "validUntil": null } ] }`.
 
 ---
 

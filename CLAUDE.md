@@ -15,10 +15,12 @@ TypeScript monorepo using pnpm workspaces:
 | `/packages/db` | Zod models, MongoDB client, migrations              |
 | `/sdk-js`      | JavaScript/TypeScript SDK                           |
 | `/sdk-py`      | Python SDK                                          |
+| `/infra`       | AWS CDK stack (ECR, EC2, S3, KMS, Route 53, SES, SSM, budget) |
+| `/deploy`      | `deploy.sh`, run on EC2 through SSM Run Command     |
 
 ## Running
 
-Everything runs in Docker.
+Everything runs in Docker. `docker compose up --build -d --wait` then `curl -k https://localhost/health`. Develop with `pnpm install && pnpm -r build && pnpm -r test`. See README.md for details and infra/README.md for AWS.
 
 - `docker-compose.yml`: local development. Runs api, mcp, worker, web, `mongo:7` (as a single-node replica set), minio, mailpit and caddy.
 - `compose.prod.yml`: production on EC2.

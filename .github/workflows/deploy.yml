@@ -1,0 +1,124 @@
+name: Deploy
+
+# main -> test -> build arm64 images -> push to ECR -> deploy to EC2 via SSM Run Command
+# -> check https://$OPENGLASS_DOMAIN/health returns 200.
+#
+# Repository variables (from the CDK stack outputs, see infra/README.md):
+#   AWS_REGION, AWS_DEPLOY_ROLE_ARN, EC2_INSTANCE_ID, DEPLOY_BUCKET, OPENGLASS_DOMAIN
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  push-images:
+    name: Push image (${{ matrix.app }})
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      matrix:
+        include:
+          - { app: api, file: docker/node-service.Dockerfile, args: "APP=api\nAPP_PORT=3000" }
+          - { app: mcp, file: docker/node-service.Dockerfile, args: "APP=mcp\nAPP_PORT=3001" }
+          - { app: worker, file: docker/node-service.Dockerfile, args: "APP=worker\nAPP_PORT=3003" }
+          - { app: web, file: apps/web/Dockerfile, args: "" }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-buildx-action@v4
+      # Build stages run natively on amd64 (the JS output is portable); the arm64
+      # runtime stages only COPY, so no QEMU is needed for the t4g instance.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          build-args: ${{ matrix.args }}
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/openglass-${{ matrix.app }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/openglass-${{ matrix.app }}:main
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max
+
+  deploy:
+    name: Deploy to EC2
+    needs: push-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: production
+      url: https://${{ vars.OPENGLASS_DOMAIN }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      BUCKET: ${{ vars.DEPLOY_BUCKET }}
+      INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload release bundle
+        run: |
+          for f in compose.prod.yml docker/caddy/Caddyfile deploy/deploy.sh; do
+            aws s3 cp --only-show-errors "$f" "s3://$BUCKET/releases/$TAG/$(basename "$f")"
+          done
+
+      - name: Run deploy.sh on the instance (SSM Run Command)
+        run: |
+          params=$(jq -nc --arg b "$BUCKET" --arg t "$TAG" --arg r "$AWS_REGION" '{commands: [
+            "set -euo pipefail",
+            "aws s3 cp --only-show-errors s3://\($b)/releases/\($t)/deploy.sh /tmp/openglass-deploy.sh",
+            "bash /tmp/openglass-deploy.sh \($t) \($b) \($r) /openglass/prod"
+          ], executionTimeout: ["900"]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "openglass deploy $TAG" \
+            --parameters "$params" \
+            --query Command.CommandId --output text)
+          echo "SSM command: $command_id"
+
+          status=Pending
+          for _ in $(seq 1 180); do
+            sleep 5
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) continue ;; *) break ;; esac
+          done
+
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text || true
+          echo "status: $status"
+          test "$status" = Success
+
+      - name: Check production /health
+        run: |
+          curl -fsS --retry 12 --retry-all-errors --retry-delay 5 --max-time 10 \
+            -w '\nHTTP %{http_code}\n' "https://${{ vars.OPENGLASS_DOMAIN }}/health"

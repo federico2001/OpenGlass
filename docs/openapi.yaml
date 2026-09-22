@@ -47,22 +47,22 @@ tags:
 security: []
 
 paths:
-  /healthz:
+  /health:
     get:
       tags: [meta]
       operationId: health
-      summary: Liveness and database ping
+      summary: Dependency health (Mongo, S3)
       responses:
         '200':
-          description: Healthy
+          description: All checks pass
           content:
             application/json:
-              schema:
-                type: object
-                required: [ok]
-                properties:
-                  ok: { type: boolean, const: true }
-        '503': { $ref: '#/components/responses/Unavailable' }
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: At least one check failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
 
   /.well-known/openglass-keys.json:
     get:
@@ -1106,6 +1106,14 @@ components:
 
   schemas:
     # ------------------------------------------------------------ primitives
+    Health:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, fail] }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [ok, fail] }
     Timestamp:
       type: string
       format: date-time
@@ -1167,7 +1175,7 @@ components:
       properties:
         kid: { type: string }
         alg: { type: string, enum: [Ed25519, ECDSA_P256_SHA256] }
-        publicKey: { type: string, description: 'Ed25519: raw base64url. ECDSA: SPKI DER base64url.' }
+        publicKey: { type: string, description: 'ECDSA P-256: SPKI DER, base64url (SPEC D6).' }
         validFrom: { $ref: '#/components/schemas/Timestamp' }
         validUntil:
           oneOf:

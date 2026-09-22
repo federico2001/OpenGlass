@@ -1,0 +1,4 @@
+{
+  "app": "npx tsx bin/openglass.ts",
+  "watch": { "include": ["bin/**/*.ts", "lib/**/*.ts"] }
+}

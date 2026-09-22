@@ -1,0 +1,31 @@
+{
+  "name": "@openglass/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+  },
+  "bin": { "openglass-migrate": "./dist/cli.js" },
+  "files": ["dist", "migrations"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "migrate": "node dist/cli.js migrate",
+    "migration:create": "node dist/cli.js create"
+  },
+  "dependencies": {
+    "migrate-mongo": "^14.0.7",
+    "mongodb": "^7.6.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@testcontainers/mongodb": "^12.1.0",
+    "@types/node": "^22",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

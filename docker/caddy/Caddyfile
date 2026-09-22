@@ -1,0 +1,30 @@
+# One Caddyfile for local and prod; only env vars differ.
+#   SITE_ADDRESS=localhost        -> certificate from Caddy's internal CA
+#   SITE_ADDRESS=openglass.example -> Let's Encrypt certificate (ACME_EMAIL for expiry notices)
+{
+	email {$ACME_EMAIL:admin@localhost}
+}
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	@api path /health /v1/* /.well-known/*
+	handle @api {
+		reverse_proxy api:3000
+	}
+
+	handle /mcp* {
+		reverse_proxy mcp:3001
+	}
+
+	handle {
+		reverse_proxy web:3002
+	}
+}

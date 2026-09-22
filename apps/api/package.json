@@ -1,0 +1,25 @@
+{
+  "name": "@openglass/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1138.0",
+    "@openglass/db": "workspace:*",
+    "fastify": "^5.12.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@testcontainers/mongodb": "^12.1.0",
+    "@types/node": "^22",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

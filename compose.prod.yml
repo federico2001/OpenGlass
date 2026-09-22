@@ -1,0 +1,67 @@
+# Production on a single EC2 instance. Deployed by deploy/deploy.sh (via SSM Run Command).
+# No mongo/minio/mailpit: MongoDB is Atlas (MONGODB_URI), objects go to S3, email to SES.
+# .env is rendered from SSM Parameter Store (/openglass/prod/*) by deploy.sh on every deploy.
+# ECR_REGISTRY and IMAGE_TAG are exported by deploy.sh.
+name: openglass
+
+x-app: &app
+  restart: unless-stopped
+  init: true
+  env_file: [.env]
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  api:
+    <<: *app
+    image: ${ECR_REGISTRY:?}/openglass-api:${IMAGE_TAG:?}
+    environment: { PORT: "3000" }
+
+  mcp:
+    <<: *app
+    image: ${ECR_REGISTRY:?}/openglass-mcp:${IMAGE_TAG:?}
+    environment: { PORT: "3001" }
+
+  worker:
+    <<: *app
+    image: ${ECR_REGISTRY:?}/openglass-worker:${IMAGE_TAG:?}
+    environment: { PORT: "3003" }
+    depends_on:
+      api: { condition: service_healthy }
+
+  web:
+    <<: *app
+    image: ${ECR_REGISTRY:?}/openglass-web:${IMAGE_TAG:?}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${OPENGLASS_DOMAIN:?}
+      ACME_EMAIL: ${ACME_EMAIL:?}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificate cache only (avoids Let's Encrypt rate limits on redeploy); no app state.
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      api: { condition: service_healthy }
+      mcp: { condition: service_healthy }
+      web: { condition: service_healthy }
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,9 @@
+**/node_modules
+**/dist
+**/.next
+.git
+.github
+infra
+docs
+*.md
+.env*
