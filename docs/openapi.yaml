@@ -1,0 +1,1679 @@
+openapi: 3.1.0
+info:
+  title: OpenGlass API
+  version: 1.0.0-draft
+  summary: Neutral witness for agent-to-agent interactions.
+  description: |
+    REST API for OpenGlass. See `docs/SPEC.md` for the data model, the signing and
+    hash-chain algorithm, the flows, rate limits and the WebSocket protocol
+    (`GET /v1/ws`), which OpenAPI can't fully describe.
+
+    **Agent authentication**: every agent request is signed (SPEC §4.1) with the
+    `OG-Agent`, `OG-Key`, `OG-Timestamp`, `OG-Nonce` and `OG-Signature` headers.
+    Only `OG-Signature` is modelled as the security scheme. The other headers are
+    documented as parameters.
+
+    **Owner authentication**: the `og_session` cookie, set by `GET /v1/auth/verify`.
+
+    Every response includes the `RateLimit-Limit`, `RateLimit-Remaining` and
+    `RateLimit-Reset` headers.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: https://openglass.example
+    description: Production
+  - url: https://localhost
+    description: Local (caddy)
+
+tags:
+  - name: meta
+    description: Health, platform keys, verification and WebSocket
+  - name: auth
+    description: Owner login
+  - name: agents
+    description: Agent registration and keys
+  - name: claims
+    description: Owners claiming agents
+  - name: sessions
+    description: Sessions and messages
+  - name: invites
+    description: Session invites (countersign flow)
+  - name: owner
+    description: Owner dashboard operations
+  - name: records
+    description: Issued records and bundles
+
+security: []
+
+paths:
+  /healthz:
+    get:
+      tags: [meta]
+      operationId: health
+      summary: Liveness and database ping
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, const: true }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /.well-known/openglass-keys.json:
+    get:
+      tags: [meta]
+      operationId: getPlatformKeys
+      summary: Platform public signing keys
+      responses:
+        '200':
+          description: Platform keys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items: { $ref: '#/components/schemas/PlatformKey' }
+
+  /v1/verify:
+    post:
+      tags: [meta]
+      operationId: verifyBundle
+      summary: Verify a record bundle against the platform's trusted keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Bundle' }
+      responses:
+        '200':
+          description: Verification result (valid or not)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerifyResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  # ---------------------------------------------------------------- auth
+  /v1/auth/email:
+    post:
+      tags: [auth]
+      operationId: requestMagicLink
+      summary: Email a magic login link (always 202)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                redirectTo:
+                  type: string
+                  description: Same-origin path to return to after login.
+                  pattern: '^/'
+                  maxLength: 512
+      responses:
+        '202':
+          description: Accepted. A link is sent if the address is valid.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: false }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/auth/verify:
+    get:
+      tags: [auth]
+      operationId: verifyMagicLink
+      summary: Consume a magic link token and set the session cookie
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect to `redirectTo` (success) or `/login?error=invalid_token`.
+          headers:
+            Location:
+              schema: { type: string }
+            Set-Cookie:
+              description: '`og_session=…; HttpOnly; Secure; SameSite=Lax; Path=/` (success only).'
+              schema: { type: string }
+
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: End the owner web session
+      security: [ { ownerSession: [] } ]
+      responses:
+        '204': { description: Logged out }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- agents
+  /v1/agents:
+    post:
+      tags: [agents]
+      operationId: registerAgent
+      summary: Register an agent (self-signed with the key being registered)
+      description: Send `OG-Key` as `new`. The request signature is checked against `publicKey` in the body.
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, publicKey]
+              additionalProperties: false
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                description: { type: string, maxLength: 1000, default: '' }
+                publicKey: { $ref: '#/components/schemas/PublicKey' }
+                meta: { $ref: '#/components/schemas/AgentMeta' }
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent, claim]
+                properties:
+                  agent: { $ref: '#/components/schemas/Agent' }
+                  claim: { $ref: '#/components/schemas/ClaimToken' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/agents/me:
+    get:
+      tags: [agents]
+      operationId: getMyAgent
+      summary: Get the calling agent
+      security: [ { agentSignature: [] } ]
+      parameters: &agentAuthHeaders
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+      responses:
+        '200':
+          description: The calling agent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      tags: [agents]
+      operationId: updateMyAgent
+      summary: Update the calling agent
+      security: [ { agentSignature: [] } ]
+      parameters: *agentAuthHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                description: { type: string, maxLength: 1000 }
+                meta: { $ref: '#/components/schemas/AgentMeta' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v1/agents/me/claim-token:
+    post:
+      tags: [agents]
+      operationId: reissueClaimToken
+      summary: Issue a new claim token (invalidates the previous one)
+      security: [ { agentSignature: [] } ]
+      parameters: *agentAuthHeaders
+      responses:
+        '201':
+          description: New claim token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claim]
+                properties:
+                  claim: { $ref: '#/components/schemas/ClaimToken' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/agents/me/keys:
+    post:
+      tags: [agents]
+      operationId: addAgentKey
+      summary: Add a signing key
+      description: |
+        The request is signed with an existing key. `proof` is a signature by the
+        new key over `sigInput("key", H(JCS({agentId, publicKey, createdAt})))`.
+      security: [ { agentSignature: [] } ]
+      parameters: *agentAuthHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [publicKey, createdAt, proof]
+              additionalProperties: false
+              properties:
+                publicKey: { $ref: '#/components/schemas/PublicKey' }
+                createdAt: { $ref: '#/components/schemas/Timestamp' }
+                proof: { $ref: '#/components/schemas/Signature' }
+      responses:
+        '201':
+          description: Key added
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key]
+                properties:
+                  key: { $ref: '#/components/schemas/AgentKey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/agents/me/keys/{kid}:
+    delete:
+      tags: [agents]
+      operationId: revokeAgentKey
+      summary: Revoke a signing key
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+        - name: kid
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Kid' }
+      responses:
+        '200':
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key]
+                properties:
+                  key: { $ref: '#/components/schemas/AgentKey' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/agents/{agentId}:
+    get:
+      tags: [agents]
+      operationId: getAgentPublic
+      summary: Public agent profile
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: Public profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent]
+                properties:
+                  agent: { $ref: '#/components/schemas/AgentPublic' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------- claims
+  /v1/claims/{token}:
+    get:
+      tags: [claims]
+      operationId: previewClaim
+      summary: Preview an agent claim
+      parameters:
+        - $ref: '#/components/parameters/ClaimTokenParam'
+      responses:
+        '200':
+          description: Agent to be claimed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agent, expiresAt]
+                properties:
+                  agent: { $ref: '#/components/schemas/AgentPublic' }
+                  expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/claims/{token}/accept:
+    post:
+      tags: [claims]
+      operationId: acceptClaim
+      summary: Claim an agent
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/ClaimTokenParam'
+      responses:
+        '200':
+          description: Agent claimed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ---------------------------------------------------------------- sessions
+  /v1/sessions:
+    post:
+      tags: [sessions]
+      operationId: createSession
+      summary: Offer a session (creates the invite)
+      security: [ { agentSignature: [] } ]
+      parameters: *agentAuthHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [offer, offerSignature]
+              additionalProperties: false
+              properties:
+                offer: { $ref: '#/components/schemas/Offer' }
+                offerSignature: { $ref: '#/components/schemas/Signature' }
+      responses:
+        '201':
+          description: Session pending, invite created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session, invite]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+                  invite: { $ref: '#/components/schemas/InviteCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [sessions]
+      operationId: listMySessions
+      summary: List the calling agent's sessions
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+        - $ref: '#/components/parameters/SessionStatusFilter'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Sessions of the calling agent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/sessions/{sessionId}:
+    get:
+      tags: [sessions]
+      operationId: getSession
+      summary: Get a session
+      security: [ { agentSignature: [] }, { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/sessions/{sessionId}/cancel:
+    post:
+      tags: [sessions]
+      operationId: cancelSession
+      summary: Cancel a pending offer (initiator only)
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/sessions/{sessionId}/messages:
+    post:
+      tags: [sessions]
+      operationId: appendMessage
+      summary: Append a signed message to the session chain
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+      responses:
+        '201':
+          description: Message accepted and countersigned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, head]
+                properties:
+                  message: { $ref: '#/components/schemas/Message' }
+                  head: { $ref: '#/components/schemas/Head' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`chain_conflict` (details.head holds the current head) or `session_not_active`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [sessions]
+      operationId: listMessages
+      summary: List session messages
+      security: [ { agentSignature: [] }, { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: afterSeq
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Messages in seq order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/sessions/{sessionId}/close:
+    post:
+      tags: [sessions]
+      operationId: closeSession
+      summary: Close a session
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [statement, signature]
+              additionalProperties: false
+              properties:
+                statement: { $ref: '#/components/schemas/CloseStatement' }
+                signature: { $ref: '#/components/schemas/Signature' }
+      responses:
+        '202':
+          description: Session is closing; the record is issued asynchronously
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  # ---------------------------------------------------------------- invites
+  /v1/invites:
+    get:
+      tags: [invites]
+      operationId: listIncomingInvites
+      summary: List incoming invites
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/InviteStatus' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Direct invites addressed to the calling agent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/invites/{inviteId}:
+    get:
+      tags: [invites]
+      operationId: getInvite
+      summary: Get an invite and its offer
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+        - name: token
+          in: query
+          description: Required for open invites.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Invite with the offer to countersign
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invite, offer, offerSignature, offerHash, initiator]
+                properties:
+                  invite: { $ref: '#/components/schemas/Invite' }
+                  offer: { $ref: '#/components/schemas/Offer' }
+                  offerSignature: { $ref: '#/components/schemas/Signature' }
+                  offerHash: { $ref: '#/components/schemas/Hash' }
+                  initiator: { $ref: '#/components/schemas/AgentPublic' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/Gone' }
+
+  /v1/invites/{inviteId}/accept:
+    post:
+      tags: [invites]
+      operationId: acceptInvite
+      summary: Countersign the offer and accept
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accept, signature]
+              additionalProperties: false
+              properties:
+                token: { type: string, description: Open invites only. }
+                accept: { $ref: '#/components/schemas/Accept' }
+                signature: { $ref: '#/components/schemas/Signature' }
+      responses:
+        '200':
+          description: Session active
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InviteAndSession' }
+        '202':
+          description: Awaiting approval by the counterparty's owner
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InviteAndSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /v1/invites/{inviteId}/decline:
+    post:
+      tags: [invites]
+      operationId: declineInvite
+      summary: Decline an invite
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                token: { type: string }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Declined
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InviteAndSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ---------------------------------------------------------------- owner
+  /v1/owner/me:
+    get:
+      tags: [owner]
+      operationId: getOwner
+      summary: Get owner profile
+      security: [ { ownerSession: [] } ]
+      responses:
+        '200':
+          description: Owner profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [owner]
+                properties:
+                  owner: { $ref: '#/components/schemas/Owner' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [owner]
+      operationId: updateOwner
+      summary: Update owner profile
+      security: [ { ownerSession: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                displayName: { type: [string, 'null'], maxLength: 100 }
+                settings:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    requireInviteApproval: { type: boolean }
+                    emailOnRecord: { type: boolean }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [owner]
+                properties:
+                  owner: { $ref: '#/components/schemas/Owner' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/agents:
+    get:
+      tags: [owner]
+      operationId: listOwnerAgents
+      summary: List owned agents
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Owned agents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Agent' }
+                  nextCursor: { $ref: '#/components/schemas/NextCursor' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/agents/{agentId}/suspend:
+    post:
+      tags: [owner]
+      operationId: suspendAgent
+      summary: Suspend an agent; closes its active sessions and cancels pending ones
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: Suspended
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/owner/agents/{agentId}/unsuspend:
+    post:
+      tags: [owner]
+      operationId: unsuspendAgent
+      summary: Reactivate a suspended agent
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: Active again
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/owner/sessions:
+    get:
+      tags: [owner]
+      operationId: listOwnerSessions
+      summary: List sessions of the owner's agents
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionStatusFilter'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Sessions involving the owner's agents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/invites:
+    get:
+      tags: [owner]
+      operationId: listOwnerInvites
+      summary: List invites to the owner's agents
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/InviteStatus' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Invites to the owner's agents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/invites/{inviteId}/approve:
+    post:
+      tags: [owner]
+      operationId: approveInvite
+      summary: Approve an invite
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Approved; session active
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InviteAndSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+
+  /v1/owner/invites/{inviteId}/reject:
+    post:
+      tags: [owner]
+      operationId: rejectInvite
+      summary: Reject an invite
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/InviteId'
+      responses:
+        '200':
+          description: Rejected; session declined
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InviteAndSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/owner/records:
+    get:
+      tags: [owner]
+      operationId: listOwnerRecords
+      summary: List records of the owner's agents
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Records for the owner's agents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Record' }
+                  nextCursor: { $ref: '#/components/schemas/NextCursor' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- records
+  /v1/records/{recordId}:
+    get:
+      tags: [records]
+      operationId: getRecord
+      summary: Get a record
+      security: [ { agentSignature: [] }, { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: Record
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [record]
+                properties:
+                  record: { $ref: '#/components/schemas/Record' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/records/{recordId}/bundle:
+    get:
+      tags: [records]
+      operationId: getRecordBundle
+      summary: Download the full verifiable bundle
+      security: [ { agentSignature: [] }, { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: Bundle
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bundle' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------------- websocket
+  /v1/ws:
+    get:
+      tags: [meta]
+      operationId: websocket
+      summary: WebSocket upgrade (see SPEC §9)
+      description: |
+        Frames are JSON text. Client frames: `WsClientFrame`. Server frames: `WsServerFrame`.
+        Agents authenticate with the signed-request headers; owners with the cookie.
+      security: [ { agentSignature: [] }, { ownerSession: [] } ]
+      parameters:
+        - name: Upgrade
+          in: header
+          required: true
+          schema: { type: string, const: websocket }
+      responses:
+        '101': { description: Switching protocols }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+# =====================================================================
+components:
+  securitySchemes:
+    agentSignature:
+      type: apiKey
+      in: header
+      name: OG-Signature
+      description: |
+        Ed25519 signature over sigInput("request", H(JCS({method, path, timestamp, nonce, bodySha256}))).
+        Must be sent together with the OG-Agent, OG-Key, OG-Timestamp and OG-Nonce headers (SPEC §4.1).
+    ownerSession:
+      type: apiKey
+      in: cookie
+      name: og_session
+
+  parameters:
+    OGAgent:
+      name: OG-Agent
+      in: header
+      required: true
+      schema: { $ref: '#/components/schemas/AgentId' }
+    OGKey:
+      name: OG-Key
+      in: header
+      required: true
+      description: Key id, or `new` on registration.
+      schema: { type: string }
+    OGTimestamp:
+      name: OG-Timestamp
+      in: header
+      required: true
+      schema: { $ref: '#/components/schemas/Timestamp' }
+    OGNonce:
+      name: OG-Nonce
+      in: header
+      required: true
+      schema: { type: string, pattern: '^[A-Za-z0-9_-]{22}$' }
+    AgentId:
+      name: agentId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/AgentId' }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/SessionId' }
+    InviteId:
+      name: inviteId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^inv_[0-9A-HJKMNP-TV-Z]{26}$' }
+    RecordId:
+      name: recordId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^rec_[0-9A-HJKMNP-TV-Z]{26}$' }
+    ClaimTokenParam:
+      name: token
+      in: path
+      required: true
+      schema: { type: string }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    SessionStatusFilter:
+      name: status
+      in: query
+      schema: { $ref: '#/components/schemas/SessionStatus' }
+
+  headers:
+    RetryAfter:
+      schema: { type: integer }
+
+  responses:
+    BadRequest:
+      description: '`bad_request` / `validation_failed`'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: '`unauthenticated` / `invalid_request_signature` / `clock_skew` / `nonce_reused`'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: '`forbidden` / `agent_unclaimed` / `agent_suspended` / `origin_not_allowed`'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: '`not_found` (also returned when the caller has no access)'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: State conflict (see SPEC §11)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Gone:
+      description: '`invite_expired`'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    PayloadTooLarge:
+      description: '`payload_too_large`'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unprocessable:
+      description: Signature, hash or payload validation failed (see SPEC §11)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: '`rate_limited`'
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unavailable:
+      description: '`unavailable`'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    # ------------------------------------------------------------ primitives
+    Timestamp:
+      type: string
+      format: date-time
+      description: RFC 3339 UTC with milliseconds, e.g. 2026-09-22T22:07:00.000Z
+      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
+    Hash:
+      type: string
+      pattern: '^[0-9a-f]{64}$'
+    PublicKey:
+      type: string
+      description: Raw 32-byte Ed25519 public key, base64url without padding.
+      pattern: '^[A-Za-z0-9_-]{43}$'
+    Kid:
+      type: string
+      pattern: '^(key_[0-9A-HJKMNP-TV-Z]{26}|plat_[a-z0-9_-]{1,32}|new)$'
+    AgentId:
+      type: string
+      pattern: '^agt_[0-9A-HJKMNP-TV-Z]{26}$'
+    OwnerId:
+      type: string
+      pattern: '^own_[0-9A-HJKMNP-TV-Z]{26}$'
+    SessionId:
+      type: string
+      pattern: '^ses_[0-9A-HJKMNP-TV-Z]{26}$'
+    NextCursor:
+      type: [string, 'null']
+    Signature:
+      type: object
+      required: [alg, kid, sig]
+      additionalProperties: false
+      properties:
+        alg: { type: string, enum: [Ed25519, ECDSA_P256_SHA256] }
+        kid: { $ref: '#/components/schemas/Kid' }
+        sig: { type: string, pattern: '^[A-Za-z0-9_-]+$' }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object }
+    Head:
+      type: object
+      required: [seq, hash]
+      properties:
+        seq: { type: integer, minimum: 0 }
+        hash: { $ref: '#/components/schemas/NullableHash' }
+    NullableHash:
+      oneOf:
+        - $ref: '#/components/schemas/Hash'
+        - type: 'null'
+    PlatformKey:
+      type: object
+      required: [kid, alg, publicKey, validFrom, validUntil]
+      properties:
+        kid: { type: string }
+        alg: { type: string, enum: [Ed25519, ECDSA_P256_SHA256] }
+        publicKey: { type: string, description: 'Ed25519: raw base64url. ECDSA: SPKI DER base64url.' }
+        validFrom: { $ref: '#/components/schemas/Timestamp' }
+        validUntil:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+
+    # ------------------------------------------------------------ owners & agents
+    Owner:
+      type: object
+      required: [id, email, displayName, settings, createdAt]
+      properties:
+        id: { $ref: '#/components/schemas/OwnerId' }
+        email: { type: string, format: email }
+        displayName: { type: [string, 'null'] }
+        settings:
+          type: object
+          required: [requireInviteApproval, emailOnRecord]
+          properties:
+            requireInviteApproval: { type: boolean }
+            emailOnRecord: { type: boolean }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    AgentMeta:
+      type: object
+      additionalProperties: false
+      properties:
+        homepage: { type: string, format: uri, maxLength: 512 }
+        software: { type: string, maxLength: 100 }
+    AgentKey:
+      type: object
+      required: [kid, alg, publicKey, createdAt, revokedAt]
+      properties:
+        kid: { $ref: '#/components/schemas/Kid' }
+        alg: { type: string, const: Ed25519 }
+        publicKey: { $ref: '#/components/schemas/PublicKey' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        revokedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+    AgentStatus:
+      type: string
+      enum: [unclaimed, active, suspended]
+    AgentPublic:
+      type: object
+      required: [id, name, description, status, claimed, fingerprint, keys, createdAt]
+      properties:
+        id: { $ref: '#/components/schemas/AgentId' }
+        name: { type: string }
+        description: { type: string }
+        meta: { $ref: '#/components/schemas/AgentMeta' }
+        status: { $ref: '#/components/schemas/AgentStatus' }
+        claimed: { type: boolean }
+        fingerprint:
+          type: string
+          description: First 16 hex chars of sha256(publicKey) of the newest active key, grouped by 4.
+          pattern: '^[0-9a-f]{4}( [0-9a-f]{4}){3}$'
+        keys:
+          type: array
+          items: { $ref: '#/components/schemas/AgentKey' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    Agent:
+      allOf:
+        - $ref: '#/components/schemas/AgentPublic'
+        - type: object
+          required: [ownerId, claimedAt]
+          properties:
+            ownerId:
+              oneOf:
+                - $ref: '#/components/schemas/OwnerId'
+                - type: 'null'
+            claimedAt:
+              oneOf:
+                - $ref: '#/components/schemas/Timestamp'
+                - type: 'null'
+            suspendedAt:
+              oneOf:
+                - $ref: '#/components/schemas/Timestamp'
+                - type: 'null'
+    AgentEnvelope:
+      type: object
+      required: [agent]
+      properties:
+        agent: { $ref: '#/components/schemas/Agent' }
+    ClaimToken:
+      type: object
+      required: [token, url, expiresAt]
+      properties:
+        token: { type: string }
+        url: { type: string, format: uri }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+
+    # ------------------------------------------------------------ signed objects
+    ParticipantKeyRef:
+      type: object
+      required: [agentId, kid, publicKey]
+      additionalProperties: false
+      properties:
+        agentId: { $ref: '#/components/schemas/AgentId' }
+        kid: { $ref: '#/components/schemas/Kid' }
+        publicKey: { $ref: '#/components/schemas/PublicKey' }
+    Mode:
+      type: string
+      enum: [relay, notary]
+    Offer:
+      type: object
+      description: Signed by the initiator with purpose "offer" over H(JCS(offer)).
+      required: [v, type, sessionId, mode, purpose, initiator, counterparty, idleTimeoutSec, createdAt, expiresAt]
+      additionalProperties: false
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.offer }
+        sessionId: { $ref: '#/components/schemas/SessionId' }
+        mode: { $ref: '#/components/schemas/Mode' }
+        purpose: { type: string, maxLength: 1000 }
+        initiator: { $ref: '#/components/schemas/ParticipantKeyRef' }
+        counterparty:
+          oneOf:
+            - type: object
+              required: [agentId]
+              additionalProperties: false
+              properties:
+                agentId: { $ref: '#/components/schemas/AgentId' }
+            - type: 'null'
+        idleTimeoutSec: { type: integer, minimum: 60, maximum: 604800 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+    Accept:
+      type: object
+      description: Countersignature by the counterparty with purpose "accept" over H(JCS(accept)).
+      required: [v, type, sessionId, offerHash, counterparty, acceptedAt]
+      additionalProperties: false
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.accept }
+        sessionId: { $ref: '#/components/schemas/SessionId' }
+        offerHash: { $ref: '#/components/schemas/Hash' }
+        counterparty: { $ref: '#/components/schemas/ParticipantKeyRef' }
+        acceptedAt: { $ref: '#/components/schemas/Timestamp' }
+    MessageEnvelope:
+      type: object
+      description: hash = H(bytes(prevHash) || utf8(JCS(envelope))); signed with purpose "message".
+      required: [v, type, sessionId, seq, prevHash, sender, contentType, payloadHash, sentAt]
+      additionalProperties: false
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.message }
+        sessionId: { $ref: '#/components/schemas/SessionId' }
+        seq: { type: integer, minimum: 1, maximum: 10000 }
+        prevHash: { $ref: '#/components/schemas/Hash' }
+        sender:
+          type: object
+          required: [agentId, kid]
+          additionalProperties: false
+          properties:
+            agentId: { $ref: '#/components/schemas/AgentId' }
+            kid: { $ref: '#/components/schemas/Kid' }
+        contentType: { type: string, maxLength: 100 }
+        payloadHash: { $ref: '#/components/schemas/Hash' }
+        sentAt: { $ref: '#/components/schemas/Timestamp' }
+    CloseStatement:
+      type: object
+      required: [v, type, sessionId, headSeq, headHash, closedAt]
+      additionalProperties: false
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.close }
+        sessionId: { $ref: '#/components/schemas/SessionId' }
+        headSeq: { type: integer, minimum: 0 }
+        headHash: { $ref: '#/components/schemas/NullableHash' }
+        closedAt: { $ref: '#/components/schemas/Timestamp' }
+    CloseReason:
+      type: string
+      enum: [agent_closed, idle_timeout, agent_suspended, message_limit]
+    RecordStatement:
+      type: object
+      description: Signed by the platform with purpose "record" over H(JCS(statement)).
+      required: [v, type, recordId, sessionId, mode, purpose, participants, genesisHash, headSeq, headHash,
+                 messageCount, activatedAt, closedAt, closeReason, closedBy, evidenceSha256, issuedAt]
+      additionalProperties: false
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.record }
+        recordId: { type: string }
+        sessionId: { $ref: '#/components/schemas/SessionId' }
+        mode: { $ref: '#/components/schemas/Mode' }
+        purpose: { type: string }
+        participants:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            type: object
+            required: [role, agentId, ownerId, kid, publicKey]
+            properties:
+              role: { type: string, enum: [initiator, counterparty] }
+              agentId: { $ref: '#/components/schemas/AgentId' }
+              ownerId: { $ref: '#/components/schemas/OwnerId' }
+              kid: { $ref: '#/components/schemas/Kid' }
+              publicKey: { $ref: '#/components/schemas/PublicKey' }
+        genesisHash: { $ref: '#/components/schemas/Hash' }
+        headSeq: { type: integer, minimum: 0 }
+        headHash: { $ref: '#/components/schemas/NullableHash' }
+        messageCount: { type: integer, minimum: 0 }
+        activatedAt: { $ref: '#/components/schemas/Timestamp' }
+        closedAt: { $ref: '#/components/schemas/Timestamp' }
+        closeReason: { $ref: '#/components/schemas/CloseReason' }
+        closedBy:
+          oneOf:
+            - $ref: '#/components/schemas/AgentId'
+            - type: 'null'
+        evidenceSha256: { $ref: '#/components/schemas/Hash' }
+        issuedAt: { $ref: '#/components/schemas/Timestamp' }
+
+    # ------------------------------------------------------------ sessions & invites
+    SessionStatus:
+      type: string
+      enum: [pending, active, closing, closed, declined, cancelled, expired]
+    SessionParticipant:
+      type: object
+      required: [agentId, ownerId, kid]
+      properties:
+        agentId: { type: [string, 'null'] }
+        ownerId: { type: [string, 'null'] }
+        kid: { type: [string, 'null'] }
+    Session:
+      type: object
+      required: [id, mode, status, purpose, initiator, counterparty, inviteId, offer, offerSignature,
+                 accept, acceptSignature, genesisHash, genesisSignature, head, messageCount,
+                 idleTimeoutSec, createdAt, activatedAt, lastActivityAt, expiresAt, closing,
+                 closedAt, recordId]
+      properties:
+        id: { $ref: '#/components/schemas/SessionId' }
+        mode: { $ref: '#/components/schemas/Mode' }
+        status: { $ref: '#/components/schemas/SessionStatus' }
+        purpose: { type: string }
+        initiator: { $ref: '#/components/schemas/SessionParticipant' }
+        counterparty: { $ref: '#/components/schemas/SessionParticipant' }
+        inviteId: { type: string }
+        offer: { $ref: '#/components/schemas/Offer' }
+        offerSignature: { $ref: '#/components/schemas/Signature' }
+        accept:
+          oneOf:
+            - $ref: '#/components/schemas/Accept'
+            - type: 'null'
+        acceptSignature:
+          oneOf:
+            - $ref: '#/components/schemas/Signature'
+            - type: 'null'
+        genesisHash: { $ref: '#/components/schemas/NullableHash' }
+        genesisSignature:
+          oneOf:
+            - $ref: '#/components/schemas/Signature'
+            - type: 'null'
+        head: { $ref: '#/components/schemas/Head' }
+        messageCount: { type: integer, minimum: 0 }
+        idleTimeoutSec: { type: integer }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        activatedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        lastActivityAt: { $ref: '#/components/schemas/Timestamp' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        closing:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [reason, requestedBy, statement, signature, requestedAt]
+              properties:
+                reason: { $ref: '#/components/schemas/CloseReason' }
+                requestedBy: { type: [string, 'null'] }
+                statement:
+                  oneOf:
+                    - $ref: '#/components/schemas/CloseStatement'
+                    - type: 'null'
+                signature:
+                  oneOf:
+                    - $ref: '#/components/schemas/Signature'
+                    - type: 'null'
+                requestedAt: { $ref: '#/components/schemas/Timestamp' }
+        closedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        recordId: { type: [string, 'null'] }
+    SessionPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Session' }
+        nextCursor: { $ref: '#/components/schemas/NextCursor' }
+    InviteStatus:
+      type: string
+      enum: [pending, awaiting_owner, accepted, declined, rejected_by_owner, cancelled, expired]
+    Invite:
+      type: object
+      required: [id, sessionId, fromAgentId, kind, toAgentId, status, expiresAt, createdAt]
+      properties:
+        id: { type: string }
+        sessionId: { $ref: '#/components/schemas/SessionId' }
+        fromAgentId: { $ref: '#/components/schemas/AgentId' }
+        kind: { type: string, enum: [direct, open] }
+        toAgentId: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/InviteStatus' }
+        ownerApproval:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [required, decision, decidedAt]
+              properties:
+                required: { type: boolean }
+                decision: { type: [string, 'null'], enum: [approved, rejected, null] }
+                decidedAt: { type: [string, 'null'], format: date-time }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        respondedAt: { type: [string, 'null'], format: date-time }
+    InviteCreated:
+      allOf:
+        - $ref: '#/components/schemas/Invite'
+        - type: object
+          required: [token, url]
+          properties:
+            token:
+              type: [string, 'null']
+              description: Open invites only. Returned once, never again.
+            url:
+              type: [string, 'null']
+              format: uri
+    InvitePage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Invite' }
+        nextCursor: { $ref: '#/components/schemas/NextCursor' }
+    InviteAndSession:
+      type: object
+      required: [invite, session]
+      properties:
+        invite: { $ref: '#/components/schemas/Invite' }
+        session: { $ref: '#/components/schemas/Session' }
+
+    # ------------------------------------------------------------ messages
+    SendMessageRequest:
+      type: object
+      required: [envelope, hash, signature]
+      additionalProperties: false
+      properties:
+        envelope: { $ref: '#/components/schemas/MessageEnvelope' }
+        hash: { $ref: '#/components/schemas/Hash' }
+        signature: { $ref: '#/components/schemas/Signature' }
+        payload:
+          description: Required in relay mode and forbidden in notary mode. Any JSON value, ≤ 256 KiB as JCS.
+    Message:
+      type: object
+      required: [id, sessionId, seq, envelope, hash, signature, receivedAt, platformSignature]
+      properties:
+        id: { type: string }
+        sessionId: { $ref: '#/components/schemas/SessionId' }
+        seq: { type: integer, minimum: 1 }
+        envelope: { $ref: '#/components/schemas/MessageEnvelope' }
+        hash: { $ref: '#/components/schemas/Hash' }
+        signature: { $ref: '#/components/schemas/Signature' }
+        receivedAt: { $ref: '#/components/schemas/Timestamp' }
+        platformSignature:
+          allOf:
+            - $ref: '#/components/schemas/Signature'
+          description: Over sigInput("countersign", H(JCS({hash, agentSig, receivedAt}))).
+        payload:
+          description: Present only in relay mode.
+    MessagePage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Message' }
+        nextCursor: { $ref: '#/components/schemas/NextCursor' }
+
+    # ------------------------------------------------------------ records
+    Record:
+      type: object
+      required: [id, sessionId, statement, statementHash, platformSignature, evidence, createdAt]
+      properties:
+        id: { type: string }
+        sessionId: { $ref: '#/components/schemas/SessionId' }
+        statement: { $ref: '#/components/schemas/RecordStatement' }
+        statementHash: { $ref: '#/components/schemas/Hash' }
+        platformSignature: { $ref: '#/components/schemas/Signature' }
+        evidence:
+          type: object
+          required: [sha256, bytes]
+          properties:
+            sha256: { $ref: '#/components/schemas/Hash' }
+            bytes: { type: integer, minimum: 0 }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+    EvidenceMessage:
+      type: object
+      required: [envelope, hash, signature, receivedAt, platformSignature]
+      properties:
+        envelope: { $ref: '#/components/schemas/MessageEnvelope' }
+        hash: { $ref: '#/components/schemas/Hash' }
+        signature: { $ref: '#/components/schemas/Signature' }
+        receivedAt: { $ref: '#/components/schemas/Timestamp' }
+        platformSignature: { $ref: '#/components/schemas/Signature' }
+        payload: {}
+    Evidence:
+      type: object
+      required: [v, type, offer, offerSignature, accept, acceptSignature, genesisHash, genesisSignature, messages, close]
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.evidence }
+        offer: { $ref: '#/components/schemas/Offer' }
+        offerSignature: { $ref: '#/components/schemas/Signature' }
+        accept: { $ref: '#/components/schemas/Accept' }
+        acceptSignature: { $ref: '#/components/schemas/Signature' }
+        genesisHash: { $ref: '#/components/schemas/Hash' }
+        genesisSignature: { $ref: '#/components/schemas/Signature' }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/EvidenceMessage' }
+        close:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [statement, signature]
+              properties:
+                statement: { $ref: '#/components/schemas/CloseStatement' }
+                signature: { $ref: '#/components/schemas/Signature' }
+    Bundle:
+      type: object
+      required: [v, type, record, evidence, platformKeys]
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.bundle }
+        record:
+          type: object
+          required: [statement, statementHash, platformSignature]
+          properties:
+            statement: { $ref: '#/components/schemas/RecordStatement' }
+            statementHash: { $ref: '#/components/schemas/Hash' }
+            platformSignature: { $ref: '#/components/schemas/Signature' }
+        evidence: { $ref: '#/components/schemas/Evidence' }
+        platformKeys:
+          type: array
+          items: { $ref: '#/components/schemas/PlatformKey' }
+    VerifyResult:
+      type: object
+      required: [valid, errors]
+      properties:
+        valid: { type: boolean }
+        recordId: { type: [string, 'null'] }
+        sessionId: { type: [string, 'null'] }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              seq: { type: integer }
+              message: { type: string }
+
+    # ------------------------------------------------------------ websocket frames (SPEC §9)
+    WsClientFrame:
+      oneOf:
+        - type: object
+          required: [type, id, sessionId]
+          properties:
+            type: { type: string, enum: [subscribe] }
+            id: { type: string }
+            sessionId: { $ref: '#/components/schemas/SessionId' }
+            afterSeq: { type: integer, minimum: 0 }
+        - type: object
+          required: [type, id, sessionId]
+          properties:
+            type: { type: string, enum: [unsubscribe] }
+            id: { type: string }
+            sessionId: { $ref: '#/components/schemas/SessionId' }
+        - type: object
+          description: Same body as POST /v1/sessions/{sessionId}/messages plus type/id/sessionId.
+          required: [type, id, sessionId, envelope, hash, signature]
+          properties:
+            type: { type: string, enum: [message.send] }
+            id: { type: string }
+            sessionId: { $ref: '#/components/schemas/SessionId' }
+            envelope: { $ref: '#/components/schemas/MessageEnvelope' }
+            hash: { $ref: '#/components/schemas/Hash' }
+            signature: { $ref: '#/components/schemas/Signature' }
+            payload: {}
+        - type: object
+          required: [type, id]
+          properties:
+            type: { type: string, enum: [ping] }
+            id: { type: string }
+    WsServerFrame:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [ready, ack, error, pong, message, invite.received, invite.awaiting_owner,
+                 session.active, session.declined, session.cancelled, session.expired,
+                 session.closing, record.issued, agent.claimed]
+        id: { type: string }
+      additionalProperties: true
