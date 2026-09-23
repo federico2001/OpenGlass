@@ -18,11 +18,16 @@
     "migration:create": "node dist/cli.js create"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.918.0",
+    "@noble/curves": "^1.9.1",
     "migrate-mongo": "^14.0.7",
     "mongodb": "^7.6.0",
+    "ulid": "^3.0.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1138.0",
+    "@testcontainers/minio": "^12.1.0",
     "@testcontainers/mongodb": "^12.1.0",
     "@types/node": "^22",
     "typescript": "^5.9.3",

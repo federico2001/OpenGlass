@@ -16,11 +16,21 @@ const Env = z
     S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
     SIGNER: z.enum(["local", "kms"]),
     KMS_KEY_ID: z.string().optional(),
+    /** PEM (PKCS8) ECDSA P-256 private key, required when SIGNER=local. Generate one with:
+     *  openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 */
+    PLATFORM_SIGNER_LOCAL_KEY: z.string().optional(),
+    PLATFORM_KID: z.string().min(1).default("plat_local"),
     EMAIL: z.enum(["smtp", "ses"]),
     SMTP_URL: z.string().optional(),
+    EMAIL_FROM: z.string().min(1),
+    /** Owner requests must send a matching Origin (SPEC §4.2); the web app's own origin. */
+    WEB_ORIGIN: z.url(),
   })
   .superRefine((env, ctx) => {
     if (env.SIGNER === "kms" && !env.KMS_KEY_ID) ctx.addIssue({ code: "custom", path: ["KMS_KEY_ID"], message: "required when SIGNER=kms" });
+    if (env.SIGNER === "local" && !env.PLATFORM_SIGNER_LOCAL_KEY) {
+      ctx.addIssue({ code: "custom", path: ["PLATFORM_SIGNER_LOCAL_KEY"], message: "required when SIGNER=local" });
+    }
     if (env.EMAIL === "smtp" && !env.SMTP_URL) ctx.addIssue({ code: "custom", path: ["SMTP_URL"], message: "required when EMAIL=smtp" });
   });
 

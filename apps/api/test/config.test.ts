@@ -8,8 +8,11 @@ const base = {
   S3_REGION: "us-east-1",
   S3_BUCKET: "openglass-records",
   SIGNER: "local",
+  PLATFORM_SIGNER_LOCAL_KEY: "-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----",
   EMAIL: "smtp",
   SMTP_URL: "smtp://mailpit:1025",
+  EMAIL_FROM: "OpenGlass <noreply@localhost>",
+  WEB_ORIGIN: "https://localhost",
 };
 
 describe("loadConfig", () => {

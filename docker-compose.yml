@@ -5,6 +5,7 @@ name: openglass
 x-node-env: &node-env
   LOG_LEVEL: info
   PUBLIC_URL: https://localhost
+  WEB_ORIGIN: https://localhost
   MONGODB_URI: mongodb://mongo:27017/openglass?replicaSet=rs0
   S3_ENDPOINT: http://minio:9000
   S3_REGION: us-east-1
@@ -13,8 +14,18 @@ x-node-env: &node-env
   AWS_ACCESS_KEY_ID: openglass
   AWS_SECRET_ACCESS_KEY: openglass-dev-secret
   SIGNER: local
+  # Dev-only throwaway key, same spirit as the other dev secrets in this file. Generate a
+  # fresh one with: openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256
+  PLATFORM_SIGNER_LOCAL_KEY: |
+    -----BEGIN PRIVATE KEY-----
+    MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgGRC5rMrVCHgqDviJ
+    /8dS6+bwhN6GtHO6GSZ7unvO/RehRANCAATvYkQ44p0aZFC2Q3qQ22bcReI07FtR
+    gTaHbibNqm2UGJrr48zrV221jHH5bK26RJTqMT2XVm/pjnUdfBe04O9g
+    -----END PRIVATE KEY-----
+  PLATFORM_KID: plat_local
   EMAIL: smtp
   SMTP_URL: smtp://mailpit:1025
+  EMAIL_FROM: "OpenGlass <noreply@localhost>"
 
 x-app: &app
   restart: unless-stopped
