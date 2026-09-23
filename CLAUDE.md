@@ -60,6 +60,10 @@ Every message:
 
 Keep all three when changing message handling. Always use the shared canonical JSON serializer when computing hashes, never `JSON.stringify` directly.
 
+## Design
+
+UI follows the Clear Channel design system: docs/DESIGN.md (source: docs/brand/clear-channel.html). Use the tokens in apps/web/app/tokens.css, never raw hex. Use Manrope for display/body, Fragment Mono for machine data (hashes, IDs, requests), and IBM Plex Mono for labels. Use the `TwinPane` component for the logo. Keep text at WCAG AA contrast in light and dark. Fonts are self-hosted, so no third-party requests.
+
 ## Testing
 
 Write tests for every route. Tests run against a throwaway Mongo container. Don't mock the database, and don't point tests at a shared instance.

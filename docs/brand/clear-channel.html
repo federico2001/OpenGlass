@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clear Channel Brand Sheet</title>
+<style>
+  :root{
+    --bg:#F6F8F7;
+    --bg-panel:#FFFFFF;
+    --ink:#12181B;
+    --ink-soft:#5B6A67;
+    --rule:#DCE3E1;
+    --accent:#1F8F6C;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0F1412;
+      --bg-panel:#161C1A;
+      --ink:#EAF3F0;
+      --ink-soft:#93A19D;
+      --rule:#283330;
+      --accent:#3FD9A4;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F1412;
+    --bg-panel:#161C1A;
+    --ink:#EAF3F0;
+    --ink-soft:#93A19D;
+    --rule:#283330;
+    --accent:#3FD9A4;
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0; padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    padding-inline:20px;
+    padding-block:56px;
+  }
+  .wrap{max-width:840px; margin:0 auto;}
+
+  .masthead{margin-bottom:44px;}
+  .masthead .kicker{
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 14px;
+  }
+  .masthead h1{
+    font-size:clamp(32px,5.5vw,48px);
+    line-height:1.06;
+    margin:0 0 16px;
+    text-wrap:balance;
+    font-weight:800;
+    font-family:"Manrope", sans-serif;
+  }
+  .masthead p{
+    font-size:15.5px;
+    line-height:1.6;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:0;
+  }
+
+  section{margin-bottom:48px;}
+  .row-label{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin:0 0 16px;
+    padding-bottom:10px;
+    border-bottom:1px solid var(--rule);
+  }
+
+  .swatches{display:flex; gap:12px; flex-wrap:wrap;}
+  .swatch{flex:1 1 110px; min-width:110px;}
+  .swatch .chip{height:88px; border-radius:3px; border:1px solid rgba(0,0,0,.08);}
+  .swatch .label{margin-top:10px; font-family:"IBM Plex Mono", monospace; font-size:12px; line-height:1.5;}
+  .swatch .name{display:block; color:var(--ink-soft); font-size:11px; text-transform:uppercase; letter-spacing:.04em;}
+  .swatch .hex{font-weight:500;}
+
+  .type-preview{
+    background:#EAF0EE;
+    color:#12181B;
+    padding:36px 32px;
+    border-radius:4px;
+  }
+  .type-preview .headline{
+    font-family:"Manrope", sans-serif;
+    font-weight:800;
+    font-size:clamp(26px,4vw,36px);
+    line-height:1.12;
+    margin:0 0 18px;
+    text-wrap:balance;
+  }
+  .type-preview .mono-line{
+    font-family:"Fragment Mono", monospace;
+    font-size:13.5px;
+    color:#1F8F6C;
+    margin:0 0 20px;
+    line-height:1.5;
+  }
+  .type-preview .specs{
+    display:flex;
+    gap:28px;
+    flex-wrap:wrap;
+    font-family:"IBM Plex Mono", monospace;
+    font-size:11.5px;
+    color:#5B6A67;
+    padding-top:16px;
+    border-top:1px solid #CFDBD7;
+  }
+  .type-preview .specs b{color:#12181B; display:block; font-size:10px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px; font-weight:500;}
+
+  .logo-block{
+    display:flex;
+    gap:32px;
+    flex-wrap:wrap;
+    align-items:center;
+    background:#F1F4F3;
+    padding:32px;
+    border-radius:4px;
+  }
+  .logo-sizes{display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap;}
+  .logo-sizes .lsz{display:flex; flex-direction:column; align-items:center; gap:8px;}
+  .logo-sizes .lsz span{font-family:"IBM Plex Mono", monospace; font-size:10px; color:var(--ink-soft);}
+  .logo-copy{flex:1 1 260px; font-size:14px; line-height:1.65; color:var(--ink-soft);}
+  .logo-copy b{display:block; font-size:12.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink); margin-bottom:8px;}
+
+  .hero-pair{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:640px){.hero-pair{grid-template-columns:1fr;}}
+  .hero-card{border-radius:4px; padding:26px 24px 28px;}
+  .hero-card .tag{font-family:"IBM Plex Mono", monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; opacity:.65; margin:0 0 14px;}
+  .hero-card.agent{background:#12181B; color:#CFEFE1;}
+  .hero-card.agent .tag{color:#3FD9A4;}
+  .hero-card.agent pre{margin:0; font-family:"IBM Plex Mono", monospace; font-size:13px; line-height:1.7; white-space:pre-wrap; word-break:break-word;}
+  .hero-card.human{background:#F1F4F3; color:#12181B;}
+  .hero-card.human .tag{color:#1F8F6C;}
+  .hero-card.human h3{margin:0 0 12px; font-size:19px; line-height:1.3; text-wrap:balance; font-family:"Manrope", sans-serif; font-weight:800;}
+  .hero-card.human p{margin:0; font-size:14px; line-height:1.65; opacity:.9;}
+
+  footer{margin-top:8px; padding-top:22px; border-top:1px solid var(--rule); font-size:12px; color:var(--ink-soft); line-height:1.6;}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;600;800&family=Fragment+Mono&display=swap">
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <p class="kicker">OpenGlass — selected direction</p>
+    <h1>Clear Channel, Refined</h1>
+    <p>Radical restraint — the interface gets out of the way so the record underneath reads as plainly as possible. Nothing to distrust because there's almost nothing there. Mark: Twin Pane, two agents as overlapping panes.</p>
+  </div>
+
+  <section>
+    <p class="row-label">Palette</p>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background:#F6F8F7"></div><div class="label"><span class="name">Glass White</span><span class="hex">#F6F8F7</span></div></div>
+      <div class="swatch"><div class="chip" style="background:#12181B"></div><div class="label"><span class="name">Near Black</span><span class="hex">#12181B</span></div></div>
+      <div class="swatch"><div class="chip" style="background:#3FD9A4"></div><div class="label"><span class="name">Signal Green</span><span class="hex">#3FD9A4</span></div></div>
+      <div class="swatch"><div class="chip" style="background:#94A3A0"></div><div class="label"><span class="name">Sage Steel</span><span class="hex">#94A3A0</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="row-label">Type</p>
+    <div class="type-preview">
+      <p class="headline">Every agent conversation, on the record.</p>
+      <p class="mono-line">GET /trace/8841 → 200 OK · unmodified · public-verifiable · 0 redactions</p>
+      <div class="specs">
+        <div><b>Display / body</b>Manrope 400 / 600 / 800</div>
+        <div><b>Machine / data</b>Fragment Mono 400</div>
+        <div><b>UI chrome / labels</b>IBM Plex Mono 400 / 500</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="row-label">Logo — Twin Pane</p>
+    <div class="logo-block">
+      <div class="logo-sizes">
+        <div class="lsz">
+          <svg width="120" height="120" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="14" y="14" width="52" height="52" rx="2" stroke="#12181B" stroke-width="2.5"/>
+            <rect x="30" y="30" width="52" height="52" rx="2" stroke="#12181B" stroke-width="2.5"/>
+            <path d="M30 30 H66 V66 H30 Z" fill="#3FD9A4" fill-opacity="0.6"/>
+          </svg>
+          <span>120px</span>
+        </div>
+        <div class="lsz">
+          <svg width="56" height="56" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="14" y="14" width="52" height="52" rx="2" stroke="#12181B" stroke-width="3.5"/>
+            <rect x="30" y="30" width="52" height="52" rx="2" stroke="#12181B" stroke-width="3.5"/>
+            <path d="M30 30 H66 V66 H30 Z" fill="#3FD9A4" fill-opacity="0.6"/>
+          </svg>
+          <span>56px</span>
+        </div>
+        <div class="lsz">
+          <svg width="28" height="28" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="12" y="12" width="54" height="54" rx="2" stroke="#12181B" stroke-width="5"/>
+            <rect x="30" y="30" width="54" height="54" rx="2" stroke="#12181B" stroke-width="5"/>
+            <path d="M30 30 H66 V66 H30 Z" fill="#3FD9A4" fill-opacity="0.7"/>
+          </svg>
+          <span>28px / favicon</span>
+        </div>
+      </div>
+      <div class="logo-copy">
+        <b>Twin Pane</b>
+        Two thin-stroke squares, one per agent, offset so they overlap. The overlap is rendered as glass, tinted signal green — the exact place where two agents meet and OpenGlass is watching. Stroke weight scales up as the mark shrinks so it stays legible down to favicon size.
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="row-label">Hero copy</p>
+    <div class="hero-pair">
+      <div class="hero-card agent">
+        <p class="tag">For agents</p>
+        <pre>GET /trace/8841
+→ 200 OK
+  unmodified
+  public-verifiable</pre>
+      </div>
+      <div class="hero-card human">
+        <p class="tag">For humans</p>
+        <h3>Transparency isn't a feature. It's the whole product.</h3>
+        <p>OpenGlass sits between your agents and does exactly one thing: watch, record, and never look away. Every conversation, plain to see.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Selected from the OpenGlass direction set. Palette shown at its intended fixed values regardless of device light/dark setting, the same way a paint swatch or ink sample would be.
+  </footer>
+
+</div>
+</body>
+</html>

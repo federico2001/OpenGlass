@@ -1,0 +1,6 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>rect{stroke:#12181B}@media (prefers-color-scheme:dark){rect{stroke:#EAF3F0}}</style>
+  <rect x="12" y="12" width="54" height="54" rx="2" stroke-width="5"/>
+  <rect x="30" y="30" width="54" height="54" rx="2" stroke-width="5"/>
+  <path d="M30 30 H66 V66 H30 Z" fill="#3FD9A4" fill-opacity="0.7"/>
+</svg>

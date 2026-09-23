@@ -1,0 +1,70 @@
+/*
+ * Clear Channel design tokens. Source of truth: docs/brand/clear-channel.html,
+ * rules in docs/DESIGN.md. Components use the semantic tokens, never raw hex.
+ */
+:root {
+  /* Brand palette: fixed values, same in both themes. */
+  --og-glass-white: #f6f8f7;
+  --og-near-black: #12181b;
+  --og-signal-green: #3fd9a4;
+  --og-sage-steel: #94a3a0;
+  --og-deep-green: #1f8f6c;
+
+  /* Type roles */
+  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif; /* 400 / 600 / 800 */
+  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-data: "Fragment Mono", ui-monospace, monospace; /* hashes, ids, requests */
+  --font-ui: "IBM Plex Mono", ui-monospace, monospace; /* labels, kickers, chrome: 400 / 500 */
+
+  --radius: 4px;
+  --radius-sm: 3px;
+  --measure: 60ch;
+  --page-width: 840px;
+
+  /* Semantic, light */
+  --bg: #f6f8f7;
+  --bg-panel: #ffffff;
+  --bg-subtle: #f1f4f3;
+  --bg-inset: #eaf0ee;
+  --ink: #12181b;
+  --ink-soft: #5b6a67;
+  --rule: #dce3e1;
+  --rule-strong: #cfdbd7;
+  --accent: #1f8f6c; /* marks, large text, borders */
+  --accent-text: #1a7a5c; /* small text: #1f8f6c is 3.5-4.0:1 here, this is >= 4.5:1 */
+  --glass: rgb(63 217 164 / 0.6); /* Signal Green overlap */
+  --inverse-bg: #12181b; /* "for agents" surfaces */
+  --inverse-ink: #cfefe1;
+  --inverse-accent: #3fd9a4;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1412;
+    --bg-panel: #161c1a;
+    --bg-subtle: #161c1a;
+    --bg-inset: #161c1a;
+    --ink: #eaf3f0;
+    --ink-soft: #93a19d;
+    --rule: #283330;
+    --rule-strong: #283330;
+    --accent: #3fd9a4;
+    --accent-text: #3fd9a4;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f1412;
+  --bg-panel: #161c1a;
+  --bg-subtle: #161c1a;
+  --bg-inset: #161c1a;
+  --ink: #eaf3f0;
+  --ink-soft: #93a19d;
+  --rule: #283330;
+  --rule-strong: #283330;
+  --accent: #3fd9a4;
+  --accent-text: #3fd9a4;
+  color-scheme: dark;
+}
