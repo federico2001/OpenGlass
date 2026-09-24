@@ -20,4 +20,11 @@ new OpenGlassStack(app, "OpenGlass", {
   acmeEmail: env("OG_ACME_EMAIL"),
   createGithubOidcProvider: process.env.OG_CREATE_GITHUB_OIDC_PROVIDER !== "false",
   objectLockMode: process.env.OG_OBJECT_LOCK_MODE === "COMPLIANCE" ? "COMPLIANCE" : "GOVERNANCE",
+  x402: process.env.OG_X402_PAY_TO_ADDRESS
+    ? {
+        payToAddress: process.env.OG_X402_PAY_TO_ADDRESS,
+        network: process.env.OG_X402_NETWORK,
+        cdpApiKeyId: process.env.OG_CDP_API_KEY_ID,
+      }
+    : undefined,
 });
