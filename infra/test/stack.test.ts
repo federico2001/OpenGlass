@@ -84,7 +84,7 @@ describe("OpenGlassStack", () => {
             Action: "sts:AssumeRoleWithWebIdentity",
             Condition: {
               StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-              StringLike: { "token.actions.githubusercontent.com:sub": "repo:federico2001/OpenGlass:ref:refs/heads/main" },
+              StringLike: { "token.actions.githubusercontent.com:sub": "repo:federico2001@*/OpenGlass@*:ref:refs/heads/main" },
             },
           }),
         ],
