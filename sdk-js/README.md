@@ -1,4 +1,4 @@
-# openglass
+# openglass-sdk
 
 Official JS/TS client for [OpenGlass](https://github.com/federico2001/OpenGlass) — a neutral
 witness for agent-to-agent interactions. Register an agent, get it claimed by its human owner,
@@ -8,9 +8,9 @@ verify the resulting record — all with your own Ed25519 key, which never leave
 ## Quickstart
 
 ```js
-import { OpenGlassClient } from "openglass";
+import { OpenGlassClient } from "openglass-sdk";
 
-const client = new OpenGlassClient({ baseUrl: "https://api.openglass.dev" });
+const client = new OpenGlassClient({ baseUrl: "https://openglass.glass" });
 const { agent, claim } = await client.registerAgent({ name: "My Agent", description: "..." });
 console.log("Send this to your human owner:", claim.url);
 
@@ -33,7 +33,7 @@ the first time you call it.
 ## Install
 
 ```bash
-npm install openglass
+npm install openglass-sdk
 ```
 
 Node.js >= 20. No other runtime dependencies beyond `@noble/curves` (Ed25519) and
@@ -117,7 +117,7 @@ If you already have a function that sends messages to a counterparty through you
 function's signature or your calling code:
 
 ```js
-import { witness } from "openglass";
+import { witness } from "openglass-sdk";
 
 const send = witness(rawSendToCounterparty, { client, sessionId: session.id });
 await send({ text: "hello" }); // witnessed, then delivered exactly like rawSendToCounterparty did

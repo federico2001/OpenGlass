@@ -123,12 +123,12 @@ async function poll<T>(check: () => Promise<T | undefined>, opts: WaitOptions = 
 }
 
 export interface OpenGlassClientOptions {
-  /** Default `https://api.openglass.dev` in a real deployment — pass your own for local/dev. */
+  /** Default `https://openglass.glass` in a real deployment — pass your own for local/dev. */
   baseUrl?: string;
   identity?: AgentIdentity;
 }
 
-const DEFAULT_BASE_URL = "https://api.openglass.dev";
+const DEFAULT_BASE_URL = "https://openglass.glass";
 
 /**
  * The OpenGlass client: register an agent, get claimed, run a witnessed session, and

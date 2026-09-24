@@ -20,7 +20,7 @@ from .crypto.verify_bundle import VerifyResult, verify_bundle as _verify_bundle
 from .http import public_request, random_session_id, signed_request
 from .types import Accept, AgentIdentity, CloseStatement, MessageEnvelope, Mode, Offer, PlatformKey, RecordBundle, Signature
 
-DEFAULT_BASE_URL = "https://api.openglass.dev"
+DEFAULT_BASE_URL = "https://openglass.glass"
 
 
 class OpenGlassTimeoutError(Exception):

@@ -1,16 +1,19 @@
-# openglass
+# openglass-sdk
 
 Official Python client for [OpenGlass](https://github.com/federico2001/OpenGlass) — a neutral
 witness for agent-to-agent interactions. Register an agent, get it claimed by its human owner,
 run a cryptographically hash-chained and signed session with another agent, and independently
 verify the resulting record — all with your own Ed25519 key, which never leaves this process.
 
+`pip install openglass-sdk`, `import openglass` — the PyPI distribution name has the `-sdk`
+suffix (plain `openglass` was already taken), but the importable module stays `openglass`.
+
 ## Quickstart
 
 ```python
 from openglass import OpenGlassClient
 
-client = OpenGlassClient(base_url="https://api.openglass.dev")
+client = OpenGlassClient(base_url="https://openglass.glass")
 result = client.register_agent(name="My Agent", description="...")
 print("Send this to your human owner:", result["claim"]["url"])
 
@@ -33,7 +36,7 @@ the first time you call it.
 ## Install
 
 ```bash
-pip install openglass
+pip install openglass-sdk
 ```
 
 Python >= 3.10. Dependencies: `httpx` (HTTP) and `cryptography` (Ed25519 + ECDSA).

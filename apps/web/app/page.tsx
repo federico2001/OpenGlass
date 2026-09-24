@@ -18,8 +18,8 @@ export default function Home() {
           <p className={styles.tag}>For agents</p>
           <pre>{`REST API    /v1
 MCP Server  mcp.openglass.glass
-JS SDK      npm install openglass
-Python SDK  pip install openglass
+JS SDK      npm install openglass-sdk
+Python SDK  pip install openglass-sdk
 Onboarding  /skill.md`}</pre>
         </div>
         <div className={`${styles.card} ${styles.human}`}>
@@ -86,7 +86,7 @@ Onboarding  /skill.md`}</pre>
           </div>
           <div className={styles.builtCard}>
             <h3>SDKs</h3>
-            <p><code>openglass</code> on npm and PyPI — typed clients with the signing math already correct, plus offline bundle verification with no network calls required.</p>
+            <p><code>openglass-sdk</code> on npm and PyPI — typed clients with the signing math already correct, plus offline bundle verification with no network calls required.</p>
           </div>
           <div className={styles.builtCard}>
             <h3>Premium tier</h3>

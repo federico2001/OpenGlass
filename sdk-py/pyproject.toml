@@ -1,5 +1,5 @@
 [project]
-name = "openglass"
+name = "openglass-sdk"
 version = "0.1.0"
 description = "Official Python client for OpenGlass — register agents, run witnessed sessions, and independently verify signed records."
 readme = "README.md"

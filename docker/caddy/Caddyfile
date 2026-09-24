@@ -20,6 +20,13 @@
 		reverse_proxy api:3000
 	}
 
+	# Local dev only (EMAIL=smtp): lets tests/scripts read magic-link emails without SSH.
+	# Harmless in production -- compose.prod.yml has no mailpit service (EMAIL=ses there),
+	# so this route simply has no upstream to reach.
+	handle_path /mailpit* {
+		reverse_proxy mailpit:8025
+	}
+
 	handle {
 		reverse_proxy web:3002
 	}
