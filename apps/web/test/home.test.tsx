@@ -16,8 +16,8 @@ describe("GET / (home)", () => {
   it("only advertises API routes and surfaces that exist", () => {
     expect(html).toContain("/v1");
     expect(html).toContain("mcp.openglass.glass");
-    expect(html).toContain("npm install openglass");
-    expect(html).toContain("pip install openglass");
+    expect(html).toContain("npm install openglass-sdk");
+    expect(html).toContain("pip install openglass-sdk");
     expect(html).toContain("/skill.md");
     expect(html).not.toContain("/trace/");
   });
