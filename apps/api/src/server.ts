@@ -1,4 +1,25 @@
+import cookie from "@fastify/cookie";
+import type { S3Client } from "@aws-sdk/client-s3";
+import type { PlatformSigner } from "@openglass/db";
+import type { RoutesConfig } from "@x402/core/server";
+import { paymentMiddleware } from "@x402/fastify";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import type { Db, MongoClient } from "mongodb";
+import { registerRawBodyCapture } from "./plugins/rawBody.js";
+import { registerAgentsRoutes } from "./routes/agents.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { registerClaimsRoutes } from "./routes/claims.js";
+import { registerCloseRoutes } from "./routes/close.js";
+import { registerInvitesRoutes } from "./routes/invites.js";
+import { registerMessagesRoutes } from "./routes/messages.js";
+import { registerOwnerRoutes } from "./routes/owner.js";
+import { registerPremiumRoutes } from "./routes/premium.js";
+import { registerRecordsRoutes } from "./routes/records.js";
+import { registerSessionsRoutes } from "./routes/sessions.js";
+import { registerVerifyRoutes } from "./routes/verify.js";
+import { registerWellKnownRoutes } from "./routes/wellKnown.js";
+import type { Mailer } from "./mailer.js";
+import type { X402Deps } from "./domain/x402.js";
 
 export type HealthCheck = () => Promise<unknown>;
 
@@ -6,6 +27,20 @@ export interface ServerDeps {
   /** Dependency checks reported by GET /health; any failure makes it 503. */
   healthChecks: Record<string, HealthCheck>;
   logger?: FastifyServerOptions["logger"];
+  db: Db;
+  /** Needed for the message-append transaction (insert + conditional head advance). */
+  mongoClient: MongoClient;
+  signer: PlatformSigner;
+  mailer: Mailer;
+  publicUrl: string;
+  webOrigin: string;
+  /** Referenced (not called) in /.well-known/agent.json — the mcp server, running on its
+   * own subdomain, never talks to this field's value; it's purely for discovery. */
+  publicMcpUrl: string;
+  s3: S3Client;
+  s3Bucket: string;
+  /** x402 premium tier (Prompt 12) — null disables `/v1/premium/*` entirely. See domain/x402.ts. */
+  x402: X402Deps | null;
 }
 
 const CHECK_TIMEOUT_MS = 2_000;
@@ -19,6 +54,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false, trustProxy: true });
+
+  registerRawBodyCapture(app);
+  app.register(cookie);
 
   app.get("/health", async (req, reply) => {
     const results = await Promise.all(
@@ -35,6 +73,38 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const ok = results.every(([, status]) => status === "ok");
     return reply.code(ok ? 200 : 503).send({ status: ok ? "ok" : "fail", checks: Object.fromEntries(results) });
   });
+
+  registerWellKnownRoutes(app, deps);
+  registerAuthRoutes(app, deps);
+  registerAgentsRoutes(app, deps);
+  registerClaimsRoutes(app, deps);
+  registerSessionsRoutes(app, deps);
+  registerInvitesRoutes(app, deps);
+  registerMessagesRoutes(app, deps);
+  registerCloseRoutes(app, deps);
+  registerOwnerRoutes(app, deps);
+  registerRecordsRoutes(app, deps);
+  registerVerifyRoutes(app, deps);
+
+  if (deps.x402) {
+    const { resourceServer, payTo, network } = deps.x402;
+    const routes: RoutesConfig = {
+      "POST /v1/premium/agents/me/verified-badge": {
+        accepts: { scheme: "exact", network, payTo, price: "$1.00" },
+        description: "Mark this agent as verified — shown on its public profile and in agent.json.",
+      },
+      "POST /v1/premium/records/:recordId/extend-retention": {
+        accepts: { scheme: "exact", network, payTo, price: "$0.50" },
+        description: "Extend a record's evidence retention (S3 Object Lock, GOVERNANCE mode) by 10 years.",
+      },
+      "GET /v1/premium/records/:recordId/pdf": {
+        accepts: { scheme: "exact", network, payTo, price: "$0.25" },
+        description: "A human-readable PDF summary of a witnessed session record.",
+      },
+    };
+    paymentMiddleware(app, routes, resourceServer);
+    registerPremiumRoutes(app, deps);
+  }
 
   return app;
 }

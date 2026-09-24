@@ -64,5 +64,5 @@ for _ in $(seq 1 30); do
 done
 echo "health check failed for $IMAGE_TAG" >&2
 compose ps >&2
-compose logs --tail 50 api caddy >&2
+compose logs --tail 50 api mcp caddy >&2
 exit 1

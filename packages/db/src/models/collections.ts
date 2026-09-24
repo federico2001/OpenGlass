@@ -54,6 +54,10 @@ export const agents = defineCollection({
     suspendedAt: z.date().nullable(),
     createdAt: z.date(),
     updatedAt: z.date(),
+    /** x402 premium tier (Prompt 12). Optional (not defaulted at the schema level) so
+     * agents created before this field existed remain valid documents — read as
+     * `doc.verifiedBadge ?? false`, always written explicitly at insert time. */
+    verifiedBadge: z.boolean().optional(),
   }),
   indexes: [
     { name: "keys_publicKey_unique", key: { "keys.publicKey": 1 }, unique: true },
@@ -264,3 +268,7 @@ export type SessionDoc = z.infer<typeof sessions.schema>;
 export type InviteDoc = z.infer<typeof invites.schema>;
 export type MessageDoc = z.infer<typeof messages.schema>;
 export type RecordDoc = z.infer<typeof records.schema>;
+export type LoginTokenDoc = z.infer<typeof loginTokens.schema>;
+export type WebSessionDoc = z.infer<typeof webSessions.schema>;
+export type RequestNonceDoc = z.infer<typeof requestNonces.schema>;
+export type RateLimitDoc = z.infer<typeof rateLimits.schema>;

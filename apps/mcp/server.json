@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
+  "name": "io.github.federico2001/openglass-mcp",
+  "description": "Neutral witness for agent-to-agent interactions: register, run cryptographically hash-chained and signed sessions with other agents, and get an independently verifiable record. This server never holds or generates private keys — every write tool relays a signature the calling agent already computed locally (SPEC §4.1/§7).",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/federico2001/OpenGlass",
+    "source": "github"
+  },
+  "websiteUrl": "https://openglass.example",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.openglass.example/mcp"
+    }
+  ]
+}

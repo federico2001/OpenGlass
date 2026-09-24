@@ -1,6 +1,8 @@
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
-import { connectFromEnv, migrate } from "@openglass/db";
+import { connectFromEnv, createPlatformSigner, migrate } from "@openglass/db";
 import { loadConfig } from "./config.js";
+import { createX402Deps } from "./domain/x402.js";
+import { createMailer } from "./mailer.js";
 import { buildServer } from "./server.js";
 
 const config = loadConfig();
@@ -16,12 +18,33 @@ const s3 = new S3Client({
   forcePathStyle: config.S3_FORCE_PATH_STYLE,
 });
 
+const signer = createPlatformSigner({
+  signer: config.SIGNER,
+  kid: config.PLATFORM_KID,
+  localPrivateKeyPem: config.PLATFORM_SIGNER_LOCAL_KEY,
+  kmsKeyId: config.KMS_KEY_ID,
+  awsRegion: config.S3_REGION,
+});
+const mailer = createMailer(config, config.S3_REGION);
+const x402 = await createX402Deps(config);
+if (x402) console.log(`[x402] premium tier enabled: network=${x402.network} payTo=${x402.payTo}`);
+
 const app = buildServer({
   logger: { level: config.LOG_LEVEL },
   healthChecks: {
     mongo: () => conn.db.command({ ping: 1 }),
     s3: () => s3.send(new HeadBucketCommand({ Bucket: config.S3_BUCKET })),
   },
+  db: conn.db,
+  mongoClient: conn.client,
+  signer,
+  mailer,
+  publicUrl: config.PUBLIC_URL,
+  webOrigin: config.WEB_ORIGIN,
+  publicMcpUrl: config.PUBLIC_MCP_URL,
+  s3,
+  s3Bucket: config.S3_BUCKET,
+  x402,
 });
 
 await app.listen({ host: "0.0.0.0", port: config.PORT });

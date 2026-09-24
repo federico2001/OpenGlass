@@ -1,0 +1,56 @@
+name: Publish sdk-js
+
+# Triggered by pushing a tag like sdk-js-v0.2.0. Gated to the canonical repo so a fork
+# can't accidentally (or maliciously) trigger a publish using this repo's NPM_TOKEN.
+#
+# This workflow builds and publishes — it does not create the tag. To release:
+#   1. Bump "version" in sdk-js/package.json to match.
+#   2. git tag sdk-js-v<version> && git push origin sdk-js-v<version>
+# Requires an NPM_TOKEN repository secret (an npm automation token with publish rights
+# to the `openglass` package) — set up out of band, not by this workflow.
+
+on:
+  push:
+    tags:
+      - "sdk-js-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build, test, and publish
+    if: github.repository == 'federico2001/OpenGlass'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sdk-js
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: sdk-js/pnpm-lock.yaml
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --ignore-workspace --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test
+
+      - name: Verify tag matches package.json version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#sdk-js-v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag sdk-js-v$TAG_VERSION does not match package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - run: pnpm publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

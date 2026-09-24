@@ -1,0 +1,525 @@
+{
+  "generatedAt": "2026-09-23T15:51:36.864Z",
+  "generatedBy": "packages/db (production crypto), see scripts/generate-vectors.ts",
+  "canonicalization": [
+    {
+      "input": {
+        "z": 1,
+        "a": 2,
+        "nested": {
+          "b": [
+            3,
+            2,
+            1
+          ],
+          "m": 0
+        },
+        "s": "quotes \" and \\ and /"
+      },
+      "expected": "{\"a\":2,\"nested\":{\"b\":[3,2,1],\"m\":0},\"s\":\"quotes \\\" and \\\\ and /\",\"z\":1}"
+    },
+    {
+      "input": {
+        "v": 1,
+        "type": "openglass.offer",
+        "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+        "mode": "relay",
+        "purpose": "Cross-implementation test vector for sdk-js.",
+        "initiator": {
+          "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+          "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+          "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+        },
+        "counterparty": {
+          "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC"
+        },
+        "idleTimeoutSec": 86400,
+        "createdAt": "2026-01-15T12:00:00.000Z",
+        "expiresAt": "2026-01-16T12:00:00.000Z"
+      },
+      "expected": "{\"counterparty\":{\"agentId\":\"agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC\"},\"createdAt\":\"2026-01-15T12:00:00.000Z\",\"expiresAt\":\"2026-01-16T12:00:00.000Z\",\"idleTimeoutSec\":86400,\"initiator\":{\"agentId\":\"agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA\",\"kid\":\"key_01J8Z3K4M5N6P7Q8R9S0T1V2WB\",\"publicKey\":\"XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E\"},\"mode\":\"relay\",\"purpose\":\"Cross-implementation test vector for sdk-js.\",\"sessionId\":\"ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG\",\"type\":\"openglass.offer\",\"v\":1}",
+      "expectedHex": "d8fc475eea5fa81c65cd420c1401486797973f3f5cbe2d6edc42a4507a053052",
+      "description": "sha256(canonicalize(offer)) — the offer hash"
+    },
+    {
+      "input": {
+        "n": 0
+      },
+      "expected": "{\"n\":0}"
+    },
+    {
+      "input": {
+        "n": 0
+      },
+      "expected": "{\"n\":0}"
+    },
+    {
+      "input": {
+        "n": 1
+      },
+      "expected": "{\"n\":1}"
+    },
+    {
+      "input": {
+        "n": -1
+      },
+      "expected": "{\"n\":-1}"
+    },
+    {
+      "input": {
+        "n": 42
+      },
+      "expected": "{\"n\":42}"
+    },
+    {
+      "input": {
+        "n": 100
+      },
+      "expected": "{\"n\":100}"
+    },
+    {
+      "input": {
+        "n": 0.1
+      },
+      "expected": "{\"n\":0.1}"
+    },
+    {
+      "input": {
+        "n": 0.5
+      },
+      "expected": "{\"n\":0.5}"
+    },
+    {
+      "input": {
+        "n": 1.5
+      },
+      "expected": "{\"n\":1.5}"
+    },
+    {
+      "input": {
+        "n": -1.5
+      },
+      "expected": "{\"n\":-1.5}"
+    },
+    {
+      "input": {
+        "n": 3.14159
+      },
+      "expected": "{\"n\":3.14159}"
+    },
+    {
+      "input": {
+        "n": 1e+21
+      },
+      "expected": "{\"n\":1e+21}"
+    },
+    {
+      "input": {
+        "n": 100000000000000000000
+      },
+      "expected": "{\"n\":100000000000000000000}"
+    },
+    {
+      "input": {
+        "n": 1e+30
+      },
+      "expected": "{\"n\":1e+30}"
+    },
+    {
+      "input": {
+        "n": 0.002
+      },
+      "expected": "{\"n\":0.002}"
+    },
+    {
+      "input": {
+        "n": 1e-7
+      },
+      "expected": "{\"n\":1e-7}"
+    },
+    {
+      "input": {
+        "n": 0.000001
+      },
+      "expected": "{\"n\":0.000001}"
+    },
+    {
+      "input": {
+        "n": 123456789012345
+      },
+      "expected": "{\"n\":123456789012345}"
+    },
+    {
+      "input": {
+        "n": 9007199254740991
+      },
+      "expected": "{\"n\":9007199254740991}",
+      "description": "Number.MAX_SAFE_INTEGER"
+    },
+    {
+      "input": {
+        "n": 333333333.3333333
+      },
+      "expected": "{\"n\":333333333.3333333}",
+      "description": "rounds to nearest representable double"
+    },
+    {
+      "input": {
+        "n": 100000000000000000000
+      },
+      "expected": "{\"n\":100000000000000000000}"
+    },
+    {
+      "input": {
+        "s": "unicode: café 日本語 😀"
+      },
+      "expected": "{\"s\":\"unicode: café 日本語 😀\"}",
+      "description": "non-ASCII + astral-plane emoji (surrogate pair)"
+    },
+    {
+      "input": {
+        "s": "\u0000\u0001\u001f control chars"
+      },
+      "expected": "{\"s\":\"\\u0000\\u0001\\u001f control chars\"}"
+    },
+    {
+      "input": [],
+      "expected": "[]"
+    },
+    {
+      "input": {},
+      "expected": "{}"
+    },
+    {
+      "input": null,
+      "expected": "null"
+    },
+    {
+      "input": [
+        1,
+        "two",
+        null,
+        true,
+        false,
+        {
+          "three": 3
+        }
+      ],
+      "expected": "[1,\"two\",null,true,false,{\"three\":3}]"
+    }
+  ],
+  "validBundle": {
+    "v": 1,
+    "type": "openglass.bundle",
+    "record": {
+      "statement": {
+        "v": 1,
+        "type": "openglass.record",
+        "recordId": "rec_01J8Z3K4M5N6P7Q8R9S0T1V2WH",
+        "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+        "mode": "relay",
+        "purpose": "Cross-implementation test vector for sdk-js.",
+        "participants": [
+          {
+            "role": "initiator",
+            "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+            "ownerId": "own_01J8Z3K4M5N6P7Q8R9S0T1V2WE",
+            "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+            "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+          },
+          {
+            "role": "counterparty",
+            "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC",
+            "ownerId": "own_01J8Z3K4M5N6P7Q8R9S0T1V2WF",
+            "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
+            "publicKey": "erL4yI9jzAGDvnoiuXRfkUbyMwnfeh1KsmSYtTNeUuk"
+          }
+        ],
+        "genesisHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+        "headSeq": 1,
+        "headHash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+        "messageCount": 1,
+        "activatedAt": "2026-01-15T12:00:01.000Z",
+        "closedAt": "2026-01-15T12:00:03.000Z",
+        "closeReason": "agent_closed",
+        "closedBy": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+        "evidenceSha256": "74fd19ec58c041e04e47efe4e644f8b550832d594998d57f01910820992c439f",
+        "issuedAt": "2026-01-15T12:00:04.000Z"
+      },
+      "statementHash": "dc79956a6d6e2e4e099c8b8b78ef38e40783d26e24d85e09ed995aa47e1a3a64",
+      "platformSignature": {
+        "alg": "ECDSA_P256_SHA256",
+        "kid": "plat_vectors",
+        "sig": "MEYCIQCHScZW5wLd0tpyJO62_FrckQjbg4mO8MXN3WY0TysVawIhAJATTyt9Je1baQ9M-2Qh9HLXlpJtzAHTLAxwz0ieehxZ"
+      }
+    },
+    "evidence": {
+      "v": 1,
+      "type": "openglass.evidence",
+      "offer": {
+        "v": 1,
+        "type": "openglass.offer",
+        "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+        "mode": "relay",
+        "purpose": "Cross-implementation test vector for sdk-js.",
+        "initiator": {
+          "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+          "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+          "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+        },
+        "counterparty": {
+          "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC"
+        },
+        "idleTimeoutSec": 86400,
+        "createdAt": "2026-01-15T12:00:00.000Z",
+        "expiresAt": "2026-01-16T12:00:00.000Z"
+      },
+      "offerSignature": {
+        "alg": "Ed25519",
+        "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+        "sig": "nN-mZ-wegftEUx_twYUY2rRAd_oeifW5VXX_X-XAx2KnZQVXcb_hbaL1jGLZbSa9uIekns7_gef8UKvLsvuMBQ"
+      },
+      "accept": {
+        "v": 1,
+        "type": "openglass.accept",
+        "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+        "offerHash": "d8fc475eea5fa81c65cd420c1401486797973f3f5cbe2d6edc42a4507a053052",
+        "counterparty": {
+          "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC",
+          "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
+          "publicKey": "erL4yI9jzAGDvnoiuXRfkUbyMwnfeh1KsmSYtTNeUuk"
+        },
+        "acceptedAt": "2026-01-15T12:00:01.000Z"
+      },
+      "acceptSignature": {
+        "alg": "Ed25519",
+        "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
+        "sig": "Q8owfU6xdy7ReiQ7cY3BsIsuI8nO6kQHJevx4Xro8Rcl0aaLG7yTuV-lh1E0J7fgyYyke_bP4Nw1MK4gsj6fAA"
+      },
+      "genesisHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+      "genesisSignature": {
+        "alg": "ECDSA_P256_SHA256",
+        "kid": "plat_vectors",
+        "sig": "MEUCIQCFcvNc8ptImSvvJG_iva6qfZgZYtsFfvOxZtyPQK1KfgIgNFSpRdpjeU6T83Fnq_4eYLgWNu6Tk0lWkXbNBQjimpg"
+      },
+      "messages": [
+        {
+          "envelope": {
+            "v": 1,
+            "type": "openglass.message",
+            "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+            "seq": 1,
+            "prevHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+            "sender": {
+              "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+              "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB"
+            },
+            "contentType": "application/json",
+            "payloadHash": "c84ae9338ebc9f3f9fbadf596f8df212cf5e278be598517b9761eac431a7a5da",
+            "sentAt": "2026-01-15T12:00:02.000Z"
+          },
+          "hash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+          "signature": {
+            "alg": "Ed25519",
+            "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+            "sig": "Y-30pJTtywsWEE_2cc453OOrz8PhOJb5_rF8dPb9Lh_9OpaN_PB5Xb4flTFFVSmwyjEZElBLc_nUnE4jCv_gCA"
+          },
+          "receivedAt": "2026-01-15T12:00:02.100Z",
+          "platformSignature": {
+            "alg": "ECDSA_P256_SHA256",
+            "kid": "plat_vectors",
+            "sig": "MEQCIF6wXcKEOE_C8OzqLEHXdwc2yDe8fOnkwRxptdliHkHtAiBApyaJudqHgnwYYe9kcifma694JryKpv5BU0cafK2v0w"
+          },
+          "payload": {
+            "text": "Hello — let's get started.",
+            "n": 42,
+            "nested": {
+              "ok": true
+            }
+          }
+        }
+      ],
+      "close": {
+        "statement": {
+          "v": 1,
+          "type": "openglass.close",
+          "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+          "headSeq": 1,
+          "headHash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+          "closedAt": "2026-01-15T12:00:03.000Z"
+        },
+        "signature": {
+          "alg": "Ed25519",
+          "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+          "sig": "sHcGLsNnseG1jCh-NoU3mFd9IBAawDiBlMaVsTF3ADuk5Jq6cMZgH9kB5cZVkIrAduw_r7FV8vX7Bupmp7epBw"
+        }
+      }
+    },
+    "platformKeys": [
+      {
+        "kid": "plat_vectors",
+        "alg": "ECDSA_P256_SHA256",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWU8VQpiRRZk35z6k67v8H2NgPyeThHEMwOZTk_sUgEGQmfjZvx2emAufDP9sqELjwsRiJ6BTxK9MYy1OS0j4GQ",
+        "validFrom": "2026-01-14T12:00:00.000Z",
+        "validUntil": null
+      }
+    ]
+  },
+  "tamperedBundle": {
+    "v": 1,
+    "type": "openglass.bundle",
+    "record": {
+      "statement": {
+        "v": 1,
+        "type": "openglass.record",
+        "recordId": "rec_01J8Z3K4M5N6P7Q8R9S0T1V2WH",
+        "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+        "mode": "relay",
+        "purpose": "Cross-implementation test vector for sdk-js.",
+        "participants": [
+          {
+            "role": "initiator",
+            "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+            "ownerId": "own_01J8Z3K4M5N6P7Q8R9S0T1V2WE",
+            "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+            "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+          },
+          {
+            "role": "counterparty",
+            "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC",
+            "ownerId": "own_01J8Z3K4M5N6P7Q8R9S0T1V2WF",
+            "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
+            "publicKey": "erL4yI9jzAGDvnoiuXRfkUbyMwnfeh1KsmSYtTNeUuk"
+          }
+        ],
+        "genesisHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+        "headSeq": 1,
+        "headHash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+        "messageCount": 1,
+        "activatedAt": "2026-01-15T12:00:01.000Z",
+        "closedAt": "2026-01-15T12:00:03.000Z",
+        "closeReason": "agent_closed",
+        "closedBy": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+        "evidenceSha256": "74fd19ec58c041e04e47efe4e644f8b550832d594998d57f01910820992c439f",
+        "issuedAt": "2026-01-15T12:00:04.000Z"
+      },
+      "statementHash": "dc79956a6d6e2e4e099c8b8b78ef38e40783d26e24d85e09ed995aa47e1a3a64",
+      "platformSignature": {
+        "alg": "ECDSA_P256_SHA256",
+        "kid": "plat_vectors",
+        "sig": "MEYCIQCHScZW5wLd0tpyJO62_FrckQjbg4mO8MXN3WY0TysVawIhAJATTyt9Je1baQ9M-2Qh9HLXlpJtzAHTLAxwz0ieehxZ"
+      }
+    },
+    "evidence": {
+      "v": 1,
+      "type": "openglass.evidence",
+      "offer": {
+        "v": 1,
+        "type": "openglass.offer",
+        "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+        "mode": "relay",
+        "purpose": "Tampered after signing.",
+        "initiator": {
+          "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+          "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+          "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+        },
+        "counterparty": {
+          "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC"
+        },
+        "idleTimeoutSec": 86400,
+        "createdAt": "2026-01-15T12:00:00.000Z",
+        "expiresAt": "2026-01-16T12:00:00.000Z"
+      },
+      "offerSignature": {
+        "alg": "Ed25519",
+        "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+        "sig": "nN-mZ-wegftEUx_twYUY2rRAd_oeifW5VXX_X-XAx2KnZQVXcb_hbaL1jGLZbSa9uIekns7_gef8UKvLsvuMBQ"
+      },
+      "accept": {
+        "v": 1,
+        "type": "openglass.accept",
+        "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+        "offerHash": "d8fc475eea5fa81c65cd420c1401486797973f3f5cbe2d6edc42a4507a053052",
+        "counterparty": {
+          "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC",
+          "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
+          "publicKey": "erL4yI9jzAGDvnoiuXRfkUbyMwnfeh1KsmSYtTNeUuk"
+        },
+        "acceptedAt": "2026-01-15T12:00:01.000Z"
+      },
+      "acceptSignature": {
+        "alg": "Ed25519",
+        "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
+        "sig": "Q8owfU6xdy7ReiQ7cY3BsIsuI8nO6kQHJevx4Xro8Rcl0aaLG7yTuV-lh1E0J7fgyYyke_bP4Nw1MK4gsj6fAA"
+      },
+      "genesisHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+      "genesisSignature": {
+        "alg": "ECDSA_P256_SHA256",
+        "kid": "plat_vectors",
+        "sig": "MEUCIQCFcvNc8ptImSvvJG_iva6qfZgZYtsFfvOxZtyPQK1KfgIgNFSpRdpjeU6T83Fnq_4eYLgWNu6Tk0lWkXbNBQjimpg"
+      },
+      "messages": [
+        {
+          "envelope": {
+            "v": 1,
+            "type": "openglass.message",
+            "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+            "seq": 1,
+            "prevHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+            "sender": {
+              "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
+              "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB"
+            },
+            "contentType": "application/json",
+            "payloadHash": "c84ae9338ebc9f3f9fbadf596f8df212cf5e278be598517b9761eac431a7a5da",
+            "sentAt": "2026-01-15T12:00:02.000Z"
+          },
+          "hash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+          "signature": {
+            "alg": "Ed25519",
+            "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+            "sig": "Y-30pJTtywsWEE_2cc453OOrz8PhOJb5_rF8dPb9Lh_9OpaN_PB5Xb4flTFFVSmwyjEZElBLc_nUnE4jCv_gCA"
+          },
+          "receivedAt": "2026-01-15T12:00:02.100Z",
+          "platformSignature": {
+            "alg": "ECDSA_P256_SHA256",
+            "kid": "plat_vectors",
+            "sig": "MEQCIF6wXcKEOE_C8OzqLEHXdwc2yDe8fOnkwRxptdliHkHtAiBApyaJudqHgnwYYe9kcifma694JryKpv5BU0cafK2v0w"
+          },
+          "payload": {
+            "text": "Hello — let's get started.",
+            "n": 42,
+            "nested": {
+              "ok": true
+            }
+          }
+        }
+      ],
+      "close": {
+        "statement": {
+          "v": 1,
+          "type": "openglass.close",
+          "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
+          "headSeq": 1,
+          "headHash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+          "closedAt": "2026-01-15T12:00:03.000Z"
+        },
+        "signature": {
+          "alg": "Ed25519",
+          "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
+          "sig": "sHcGLsNnseG1jCh-NoU3mFd9IBAawDiBlMaVsTF3ADuk5Jq6cMZgH9kB5cZVkIrAduw_r7FV8vX7Bupmp7epBw"
+        }
+      }
+    },
+    "platformKeys": [
+      {
+        "kid": "plat_vectors",
+        "alg": "ECDSA_P256_SHA256",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWU8VQpiRRZk35z6k67v8H2NgPyeThHEMwOZTk_sUgEGQmfjZvx2emAufDP9sqELjwsRiJ6BTxK9MYy1OS0j4GQ",
+        "validFrom": "2026-01-14T12:00:00.000Z",
+        "validUntil": null
+      }
+    ]
+  }
+}

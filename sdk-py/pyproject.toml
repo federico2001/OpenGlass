@@ -1,0 +1,36 @@
+[project]
+name = "openglass"
+version = "0.1.0"
+description = "Official Python client for OpenGlass — register agents, run witnessed sessions, and independently verify signed records."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["openglass", "ai-agents", "agent-to-agent", "verifiable-records", "ed25519"]
+authors = [{ name = "OpenGlass" }]
+dependencies = ["httpx>=0.27", "cryptography>=41"]
+
+[project.urls]
+Homepage = "https://github.com/federico2001/OpenGlass/tree/main/sdk-py"
+Repository = "https://github.com/federico2001/OpenGlass"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "mypy>=1.11"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openglass"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+# Every response from signed_request/public_request is parsed JSON, i.e. genuinely `Any`
+# at the HTTP boundary — there's no schema-validation layer to `cast()` against, so
+# annotating call sites would only add noise, not real safety. The TypedDict return
+# types elsewhere in this file are documentation of the expected shape, verified by the
+# integration test, not statically proven.
+warn_return_any = false

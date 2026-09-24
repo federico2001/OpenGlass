@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentId, Hash, IsoTimestamp, Kid, PublicKey, SessionId } from "./common.js";
+import { AgentId, Base64Url, Hash, IsoTimestamp, Kid, PublicKey, Signature, SessionId } from "./common.js";
 
 // Signed protocol objects (SPEC §7). Stored exactly as signed.
 
@@ -86,3 +86,54 @@ export const RecordStatement = z.strictObject({
   issuedAt: IsoTimestamp,
 });
 export type RecordStatement = z.infer<typeof RecordStatement>;
+
+// §7.4-7.5: the evidence bundle and its wrapper. Not stored documents — these are
+// wire/verification shapes (evidence.json in S3, and the downloadable record bundle).
+
+export const EvidenceMessage = z.strictObject({
+  envelope: MessageEnvelope,
+  hash: Hash,
+  signature: Signature,
+  receivedAt: IsoTimestamp,
+  platformSignature: Signature,
+  /** Relay mode only; absent (not null) in notary mode. */
+  payload: z.unknown().optional(),
+});
+export type EvidenceMessage = z.infer<typeof EvidenceMessage>;
+
+export const Evidence = z.strictObject({
+  v: z.literal(1),
+  type: z.literal("openglass.evidence"),
+  offer: Offer,
+  offerSignature: Signature,
+  accept: Accept,
+  acceptSignature: Signature,
+  genesisHash: Hash,
+  genesisSignature: Signature,
+  messages: z.array(EvidenceMessage),
+  close: z.strictObject({ statement: CloseStatement, signature: Signature }).nullable(),
+});
+export type Evidence = z.infer<typeof Evidence>;
+
+/** `/.well-known/openglass-keys.json` entries. publicKey is base64url(SPKI DER). */
+export const PlatformKey = z.strictObject({
+  kid: Kid,
+  alg: z.literal("ECDSA_P256_SHA256"),
+  publicKey: Base64Url,
+  validFrom: IsoTimestamp,
+  validUntil: IsoTimestamp.nullable(),
+});
+export type PlatformKey = z.infer<typeof PlatformKey>;
+
+export const RecordBundle = z.strictObject({
+  v: z.literal(1),
+  type: z.literal("openglass.bundle"),
+  record: z.strictObject({
+    statement: RecordStatement,
+    statementHash: Hash,
+    platformSignature: Signature,
+  }),
+  evidence: Evidence,
+  platformKeys: z.array(PlatformKey),
+});
+export type RecordBundle = z.infer<typeof RecordBundle>;

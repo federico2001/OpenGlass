@@ -11,3 +11,11 @@ infra/*.tfstate*
 infra/*.tfvars
 !infra/*.tfvars.example
 apps/web/next-env.d.ts
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.venv/
+build/
+infra/cdk.out/
+caddy-root.crt

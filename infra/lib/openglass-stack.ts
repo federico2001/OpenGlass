@@ -164,6 +164,14 @@ export class OpenGlassStack extends Stack {
       target: route53.RecordTarget.fromIpAddresses(eip.attrPublicIp),
       ttl: Duration.minutes(5),
     });
+    // The MCP server's own subdomain (SPEC-adjacent Prompt 9: "its own container, routed
+    // by Caddy at mcp.<domain>") — same single instance, so no new compute, just DNS.
+    new route53.ARecord(this, "McpRecord", {
+      zone,
+      recordName: `mcp.${props.domainName}`,
+      target: route53.RecordTarget.fromIpAddresses(eip.attrPublicIp),
+      ttl: Duration.minutes(5),
+    });
     // Domain identity with Easy DKIM records in the zone. New accounts start in the SES sandbox;
     // request production access separately.
     new ses.EmailIdentity(this, "EmailIdentity", { identity: ses.Identity.publicHostedZone(zone) });
@@ -172,6 +180,7 @@ export class OpenGlassStack extends Stack {
     // MONGODB_URI is a SecureString, which CloudFormation can't create; set it with the AWS CLI (see infra/README.md).
     const params: Record<string, string> = {
       PUBLIC_URL: `https://${props.domainName}`,
+      WEB_ORIGIN: `https://${props.domainName}`,
       OPENGLASS_DOMAIN: props.domainName,
       ACME_EMAIL: props.acmeEmail,
       AWS_REGION: this.region,
@@ -181,8 +190,11 @@ export class OpenGlassStack extends Stack {
       S3_FORCE_PATH_STYLE: "false",
       SIGNER: "kms",
       KMS_KEY_ID: signer.keyArn,
+      PLATFORM_KID: "plat_prod",
       EMAIL: "ses",
+      EMAIL_FROM: `OpenGlass <noreply@${props.domainName}>`,
       LOG_LEVEL: "info",
+      PUBLIC_MCP_URL: `https://mcp.${props.domainName}`,
     };
     for (const [name, value] of Object.entries(params)) {
       new ssm.StringParameter(this, `Param-${name}`, { parameterName: `${ssmPath}/${name}`, stringValue: value });
