@@ -211,12 +211,18 @@ export class OpenGlassStack extends Stack {
           )
         : new iam.OidcProviderNative(this, "GithubOidc", { url: oidcUrl, clientIds: ["sts.amazonaws.com"] });
 
+    // GitHub's OIDC `sub` claim embeds each side's stable numeric id alongside its
+    // (renameable) slug — `repo:{owner}@{ownerId}/{repo}@{repoId}:ref:refs/heads/main` —
+    // to stop a repo/org rename or transfer from letting a different entity inherit an
+    // old trust policy written against the name alone. Matching `owner@*` / `repo@*`
+    // keeps this readable and driven by `githubRepo` without hardcoding those ids.
+    const [ghOwner, ghRepoName] = props.githubRepo.split("/");
     const deployRole = new iam.Role(this, "GithubDeployRole", {
       description: `GitHub Actions deploys from ${props.githubRepo}@main`,
       maxSessionDuration: Duration.hours(1),
       assumedBy: new iam.WebIdentityPrincipal(provider.oidcProviderArn, {
         StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-        StringLike: { "token.actions.githubusercontent.com:sub": `repo:${props.githubRepo}:ref:refs/heads/main` },
+        StringLike: { "token.actions.githubusercontent.com:sub": `repo:${ghOwner}@*/${ghRepoName}@*:ref:refs/heads/main` },
       }),
     });
     for (const repo of repos) repo.grantPullPush(deployRole);
