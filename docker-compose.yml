@@ -26,6 +26,11 @@ x-node-env: &node-env
   EMAIL: smtp
   SMTP_URL: smtp://mailpit:1025
   EMAIL_FROM: "OpenGlass <noreply@localhost>"
+  # Dev-only throwaway Base Sepolia wallet (testnet only, zero real value), generated for
+  # local x402 testing. Receives payments; holds no funds itself.
+  X402_PAY_TO_ADDRESS: "0x7507e37Cb19E91445797a4D82915CE2016d69087"
+  X402_FACILITATOR_URL: https://x402.org/facilitator
+  X402_NETWORK: eip155:84532
 
 x-app: &app
   restart: unless-stopped
@@ -128,6 +133,11 @@ services:
     environment:
       LOG_LEVEL: info
       PORT: "3001"
+      # Called directly over the Docker network, never through Caddy/TLS.
+      API_INTERNAL_URL: http://api:3000
+      PUBLIC_MCP_URL: https://mcp.localhost
+    depends_on:
+      api: { condition: service_healthy }
 
   worker:
     <<: *app
@@ -149,6 +159,9 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     image: openglass-web:local
+    environment:
+      PUBLIC_URL: https://localhost
+      PUBLIC_MCP_URL: https://mcp.localhost
 
   caddy:
     image: caddy:2-alpine

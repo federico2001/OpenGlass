@@ -50,8 +50,10 @@ export function testServerDeps(
     mailer: createCapturingMailer(),
     publicUrl: "https://localhost",
     webOrigin: "https://localhost",
+    publicMcpUrl: "https://mcp.localhost",
     s3: s3?.client ?? new S3Client({ endpoint: "http://127.0.0.1:1", region: "us-east-1", forcePathStyle: true }),
     s3Bucket: s3?.bucket ?? "test-bucket",
+    x402: null,
   };
 }
 

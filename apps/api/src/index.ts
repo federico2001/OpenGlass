@@ -1,6 +1,7 @@
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { connectFromEnv, createPlatformSigner, migrate } from "@openglass/db";
 import { loadConfig } from "./config.js";
+import { createX402Deps } from "./domain/x402.js";
 import { createMailer } from "./mailer.js";
 import { buildServer } from "./server.js";
 
@@ -25,6 +26,8 @@ const signer = createPlatformSigner({
   awsRegion: config.S3_REGION,
 });
 const mailer = createMailer(config, config.S3_REGION);
+const x402 = await createX402Deps(config);
+if (x402) console.log(`[x402] premium tier enabled: network=${x402.network} payTo=${x402.payTo}`);
 
 const app = buildServer({
   logger: { level: config.LOG_LEVEL },
@@ -38,8 +41,10 @@ const app = buildServer({
   mailer,
   publicUrl: config.PUBLIC_URL,
   webOrigin: config.WEB_ORIGIN,
+  publicMcpUrl: config.PUBLIC_MCP_URL,
   s3,
   s3Bucket: config.S3_BUCKET,
+  x402,
 });
 
 await app.listen({ host: "0.0.0.0", port: config.PORT });

@@ -1,6 +1,8 @@
 import cookie from "@fastify/cookie";
 import type { S3Client } from "@aws-sdk/client-s3";
 import type { PlatformSigner } from "@openglass/db";
+import type { RoutesConfig } from "@x402/core/server";
+import { paymentMiddleware } from "@x402/fastify";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import type { Db, MongoClient } from "mongodb";
 import { registerRawBodyCapture } from "./plugins/rawBody.js";
@@ -11,11 +13,13 @@ import { registerCloseRoutes } from "./routes/close.js";
 import { registerInvitesRoutes } from "./routes/invites.js";
 import { registerMessagesRoutes } from "./routes/messages.js";
 import { registerOwnerRoutes } from "./routes/owner.js";
+import { registerPremiumRoutes } from "./routes/premium.js";
 import { registerRecordsRoutes } from "./routes/records.js";
 import { registerSessionsRoutes } from "./routes/sessions.js";
 import { registerVerifyRoutes } from "./routes/verify.js";
 import { registerWellKnownRoutes } from "./routes/wellKnown.js";
 import type { Mailer } from "./mailer.js";
+import type { X402Deps } from "./domain/x402.js";
 
 export type HealthCheck = () => Promise<unknown>;
 
@@ -30,8 +34,13 @@ export interface ServerDeps {
   mailer: Mailer;
   publicUrl: string;
   webOrigin: string;
+  /** Referenced (not called) in /.well-known/agent.json — the mcp server, running on its
+   * own subdomain, never talks to this field's value; it's purely for discovery. */
+  publicMcpUrl: string;
   s3: S3Client;
   s3Bucket: string;
+  /** x402 premium tier (Prompt 12) — null disables `/v1/premium/*` entirely. See domain/x402.ts. */
+  x402: X402Deps | null;
 }
 
 const CHECK_TIMEOUT_MS = 2_000;
@@ -76,6 +85,26 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerOwnerRoutes(app, deps);
   registerRecordsRoutes(app, deps);
   registerVerifyRoutes(app, deps);
+
+  if (deps.x402) {
+    const { resourceServer, payTo, network } = deps.x402;
+    const routes: RoutesConfig = {
+      "POST /v1/premium/agents/me/verified-badge": {
+        accepts: { scheme: "exact", network, payTo, price: "$1.00" },
+        description: "Mark this agent as verified — shown on its public profile and in agent.json.",
+      },
+      "POST /v1/premium/records/:recordId/extend-retention": {
+        accepts: { scheme: "exact", network, payTo, price: "$0.50" },
+        description: "Extend a record's evidence retention (S3 Object Lock, GOVERNANCE mode) by 10 years.",
+      },
+      "GET /v1/premium/records/:recordId/pdf": {
+        accepts: { scheme: "exact", network, payTo, price: "$0.25" },
+        description: "A human-readable PDF summary of a witnessed session record.",
+      },
+    };
+    paymentMiddleware(app, routes, resourceServer);
+    registerPremiumRoutes(app, deps);
+  }
 
   return app;
 }

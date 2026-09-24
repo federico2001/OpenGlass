@@ -27,6 +27,51 @@ jobs:
       # Mongo-backed tests start a throwaway mongo:7 container (Testcontainers).
       - run: pnpm -r test
 
+  sdk-js:
+    name: sdk-js (typecheck, build, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Intentionally outside the pnpm workspace (see sdk-js/README.md#contributing) — it
+    # ships standalone on its own release cadence (tag sdk-js-v*, see sdk-js-publish.yml).
+    # Its own live-stack integration test skips itself here since there's no docker-compose
+    # stack running in this job; the JCS/cross-implementation vector tests still run.
+    defaults:
+      run:
+        working-directory: sdk-js
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: sdk-js/pnpm-lock.yaml
+      - run: pnpm install --ignore-workspace --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test
+
+  sdk-py:
+    name: sdk-py (typecheck, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Standalone Python package, no relation to the pnpm workspace — ships on its own
+    # release cadence (tag sdk-py-v*, see sdk-py-publish.yml). Its own live-stack
+    # integration test skips itself here since there's no docker-compose stack running in
+    # this job; the JCS/cross-implementation vector tests (shared with sdk-js's
+    # fixtures/vectors.json) still run.
+    defaults:
+      run:
+        working-directory: sdk-py
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: mypy src
+      - run: pytest -v
+
   images:
     name: Build image (${{ matrix.app }})
     runs-on: ubuntu-latest

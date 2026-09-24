@@ -20,7 +20,10 @@ export async function openTestS3(): Promise<{ client: S3Client; bucket: string; 
     credentials: { accessKeyId: inject("s3AccessKeyId"), secretAccessKey: inject("s3SecretAccessKey") },
   });
   const bucket = `og-test-${randomBytes(6).toString("hex")}`;
-  await client.send(new CreateBucketCommand({ Bucket: bucket }));
+  // Object Lock must be enabled at bucket creation (S3 and MinIO both refuse to turn it on
+  // later) — needed for the premium extend-retention route's PutObjectRetention/
+  // GetObjectRetention calls to work in tests, matching the real bucket's `--with-lock`.
+  await client.send(new CreateBucketCommand({ Bucket: bucket, ObjectLockEnabledForBucket: true }));
   return {
     client,
     bucket,

@@ -1,0 +1,58 @@
+name: Publish sdk-py
+
+# Triggered by pushing a tag like sdk-py-v0.2.0. Gated to the canonical repo so a fork
+# can't accidentally (or maliciously) trigger a publish using this repo's PyPI trust.
+#
+# This workflow builds and publishes — it does not create the tag. To release:
+#   1. Bump "version" in sdk-py/pyproject.toml to match.
+#   2. git tag sdk-py-v<version> && git push origin sdk-py-v<version>
+#
+# Uses PyPI's Trusted Publisher (OIDC) flow — no API token stored in this repo. Set up out
+# of band: on pypi.org, add this repo/workflow as a trusted publisher for the `openglass`
+# project before the first release.
+
+on:
+  push:
+    tags:
+      - "sdk-py-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build, test, and publish
+    if: github.repository == 'federico2001/OpenGlass'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: pypi
+    permissions:
+      id-token: write # required for PyPI Trusted Publisher OIDC
+    defaults:
+      run:
+        working-directory: sdk-py
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - run: pip install -e ".[dev]" build
+      - run: mypy src
+      - run: pytest -v
+
+      - name: Verify tag matches pyproject.toml version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#sdk-py-v}"
+          PKG_VERSION="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag sdk-py-v$TAG_VERSION does not match pyproject.toml version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - run: python -m build
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk-py/dist

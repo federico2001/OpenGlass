@@ -21,7 +21,13 @@ services:
   mcp:
     <<: *app
     image: ${ECR_REGISTRY:?}/openglass-mcp:${IMAGE_TAG:?}
-    environment: { PORT: "3001" }
+    environment:
+      PORT: "3001"
+      # Called directly over the Docker network, never through Caddy/TLS.
+      API_INTERNAL_URL: http://api:3000
+      PUBLIC_MCP_URL: https://mcp.${OPENGLASS_DOMAIN:?}
+    depends_on:
+      api: { condition: service_healthy }
 
   worker:
     <<: *app

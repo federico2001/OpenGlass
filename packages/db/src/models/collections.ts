@@ -54,6 +54,10 @@ export const agents = defineCollection({
     suspendedAt: z.date().nullable(),
     createdAt: z.date(),
     updatedAt: z.date(),
+    /** x402 premium tier (Prompt 12). Optional (not defaulted at the schema level) so
+     * agents created before this field existed remain valid documents — read as
+     * `doc.verifiedBadge ?? false`, always written explicitly at insert time. */
+    verifiedBadge: z.boolean().optional(),
   }),
   indexes: [
     { name: "keys_publicKey_unique", key: { "keys.publicKey": 1 }, unique: true },

@@ -63,6 +63,10 @@ describe("OpenGlassStack", () => {
     t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "openglass.example.com.", Type: "A", HostedZoneId: props.hostedZoneId });
   });
 
+  it("points mcp.<domain> at the same Elastic IP", () => {
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "mcp.openglass.example.com.", Type: "A", HostedZoneId: props.hostedZoneId });
+  });
+
   it("alerts on a $100/month budget", () => {
     t.hasResourceProperties("AWS::Budgets::Budget", {
       Budget: { BudgetLimit: { Amount: 100, Unit: "USD" }, TimeUnit: "MONTHLY", BudgetType: "COST" },

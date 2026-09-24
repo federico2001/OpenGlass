@@ -75,6 +75,7 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
         suspendedAt: null,
         createdAt: now,
         updatedAt: now,
+        verifiedBadge: false,
       });
 
       return reply.code(201).send({

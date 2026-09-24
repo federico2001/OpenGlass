@@ -20,11 +20,23 @@
 		reverse_proxy api:3000
 	}
 
-	handle /mcp* {
-		reverse_proxy mcp:3001
-	}
-
 	handle {
 		reverse_proxy web:3002
 	}
+}
+
+# The MCP server gets its own subdomain (not a path under the main site) so it's a single
+# canonical origin for registry listing/discovery — a remote MCP server is normally
+# identified by its own origin, not a path prefix on an unrelated site.
+mcp.{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	reverse_proxy mcp:3001
 }

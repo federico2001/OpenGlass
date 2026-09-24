@@ -8,11 +8,14 @@ import {
   verifyBundle,
   type RecordBundle,
 } from "@openglass/db";
+import Fastify from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openTestDb } from "../../../../packages/db/test/testDb.js";
 import { openTestS3 } from "../../../../packages/db/test/testS3.js";
 import { issueRecords } from "../../../worker/src/jobs/issueRecords.js";
 import { createCapturingMailer as createWorkerMailer } from "../../../worker/src/mailer.js";
+import { registerRawBodyCapture } from "../../src/plugins/rawBody.js";
+import { registerPremiumRoutes } from "../../src/routes/premium.js";
 import { buildServer } from "../../src/server.js";
 import {
   buildAccept,
@@ -41,6 +44,7 @@ import {
 let t: Awaited<ReturnType<typeof openTestDb>>;
 let s3: Awaited<ReturnType<typeof openTestS3>>;
 let app: ReturnType<typeof buildServer>;
+let premiumApp: ReturnType<typeof buildServer>;
 let signer: ReturnType<typeof testServerDeps>["signer"];
 
 beforeAll(async () => {
@@ -49,6 +53,20 @@ beforeAll(async () => {
   const deps = testServerDeps(t, { client: s3.client, bucket: s3.bucket });
   signer = deps.signer;
   app = buildServer({ ...deps, healthChecks: {} });
+
+  // A second, separate app with the premium routes' actual handler logic attached
+  // directly — no `paymentMiddleware` in front of it. x402 itself (parsing a real 402
+  // challenge, constructing and settling a real payment against a live facilitator) is
+  // verified live via `scripts/x402-test-agent.ts` against a funded Base Sepolia wallet,
+  // not re-mocked here; what belongs in the deterministic, network-free test suite is the
+  // route logic these premium endpoints actually run once payment has cleared — that a
+  // verified badge is really set, that S3 retention is really extended, that a real PDF
+  // comes back — which is what this instance exercises.
+  premiumApp = Fastify({ logger: false });
+  registerRawBodyCapture(premiumApp);
+  const cookie = await import("@fastify/cookie");
+  await premiumApp.register(cookie.default);
+  registerPremiumRoutes(premiumApp, { ...deps, healthChecks: {} });
 });
 afterAll(async () => {
   await t.cleanup();
@@ -178,5 +196,55 @@ describe("Phase 1 sign-off: full two-agent session lifecycle", () => {
     const tamperedRes = await app.inject({ method: "POST", url: "/v1/verify", payload: tampered });
     expect(tamperedRes.json().valid).toBe(false);
     expect(tamperedRes.json().errors.map((e: { code: string }) => e.code)).toContain("payload_hash");
+
+    // ---- Premium (x402) routes: real behavior once payment has cleared (see the
+    // `premiumApp` note in beforeAll for why payment itself isn't re-mocked here) ----
+
+    const badgePath = "/v1/premium/agents/me/verified-badge";
+    const badgeRes = await premiumApp.inject({
+      method: "POST",
+      url: badgePath,
+      headers: signedRequestHeaders({ method: "POST", path: badgePath, identity: alice }),
+    });
+    expect(badgeRes.statusCode).toBe(200);
+    expect(badgeRes.json().agent.verifiedBadge).toBe(true);
+
+    const retentionPath = `/v1/premium/records/${recordId}/extend-retention`;
+    const retentionRes = await premiumApp.inject({
+      method: "POST",
+      url: retentionPath,
+      headers: signedRequestHeaders({ method: "POST", path: retentionPath, identity: alice }),
+    });
+    expect(retentionRes.statusCode).toBe(200);
+    expect(retentionRes.json().retentionMode).toBe("GOVERNANCE");
+    const retainUntil = new Date(retentionRes.json().retainUntilDate);
+    expect(retainUntil.getTime()).toBeGreaterThan(Date.now() + 9 * 365 * 24 * 3600_000); // ~10 years out
+
+    const readRetentionPath = `/v1/premium/records/${recordId}/retention`;
+    const readRetentionRes = await premiumApp.inject({
+      method: "GET",
+      url: readRetentionPath,
+      headers: signedRequestHeaders({ method: "GET", path: readRetentionPath, identity: alice }),
+    });
+    expect(readRetentionRes.json().retentionMode).toBe("GOVERNANCE");
+
+    const pdfPath = `/v1/premium/records/${recordId}/pdf`;
+    const pdfRes = await premiumApp.inject({
+      method: "GET",
+      url: pdfPath,
+      headers: signedRequestHeaders({ method: "GET", path: pdfPath, identity: alice }),
+    });
+    expect(pdfRes.statusCode).toBe(200);
+    expect(pdfRes.headers["content-type"]).toBe("application/pdf");
+    expect(pdfRes.rawPayload.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+
+    // a third, unrelated agent can't reach either record-scoped premium route
+    const carol = await registerAndClaim(`carol_${newId("agt").slice(-6)}`);
+    const strangerRes = await premiumApp.inject({
+      method: "GET",
+      url: pdfPath,
+      headers: signedRequestHeaders({ method: "GET", path: pdfPath, identity: carol }),
+    });
+    expect(strangerRes.statusCode).toBe(404);
   });
 });
