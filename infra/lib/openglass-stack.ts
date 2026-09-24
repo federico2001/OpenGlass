@@ -29,6 +29,18 @@ export interface OpenGlassStackProps extends StackProps {
   ssmPath?: string;
   /** Docker Compose plugin release installed on the instance. */
   composeVersion?: string;
+  /** x402 premium tier (Prompt 12). Omit entirely to leave `/v1/premium/*` disabled — the
+   * CDP API key SECRET is never handled here (CloudFormation can't create SecureStrings);
+   * set `/openglass/prod/CDP_API_KEY_SECRET` with the AWS CLI, same as MONGODB_URI. */
+  x402?: {
+    /** EVM address (0x…) that receives payments. */
+    payToAddress: string;
+    /** CAIP-2 chain id. Defaults to Base mainnet (eip155:8453). */
+    network?: string;
+    /** CDP facilitator API key id (not secret on its own) — required for mainnet, since
+     * the free public facilitator only settles testnet. */
+    cdpApiKeyId?: string;
+  };
 }
 
 export class OpenGlassStack extends Stack {
@@ -196,6 +208,11 @@ export class OpenGlassStack extends Stack {
       LOG_LEVEL: "info",
       PUBLIC_MCP_URL: `https://mcp.${props.domainName}`,
     };
+    if (props.x402) {
+      params.X402_PAY_TO_ADDRESS = props.x402.payToAddress;
+      params.X402_NETWORK = props.x402.network ?? "eip155:8453";
+      if (props.x402.cdpApiKeyId) params.CDP_API_KEY_ID = props.x402.cdpApiKeyId;
+    }
     for (const [name, value] of Object.entries(params)) {
       new ssm.StringParameter(this, `Param-${name}`, { parameterName: `${ssmPath}/${name}`, stringValue: value });
     }

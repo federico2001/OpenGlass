@@ -1,5 +1,6 @@
 import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
 import type { Config } from "../config.js";
 
 /**
@@ -27,7 +28,12 @@ export async function createX402Deps(config: Config): Promise<X402Deps | null> {
   // config.ts), but Zod can't carry a regex constraint into the type system as a
   // template-literal type, hence the one cast here rather than one at every call site.
   const network = config.X402_NETWORK as NetworkId;
-  const facilitatorClient = new HTTPFacilitatorClient({ url: config.X402_FACILITATOR_URL });
+  // CDP's facilitator settles Base mainnet (required for real payments); the free public
+  // one at X402_FACILITATOR_URL only settles testnet, so it's a dev-only fallback.
+  const facilitatorClient =
+    config.CDP_API_KEY_ID && config.CDP_API_KEY_SECRET
+      ? createCdpFacilitatorClient({ apiKeyId: config.CDP_API_KEY_ID, apiKeySecret: config.CDP_API_KEY_SECRET })
+      : new HTTPFacilitatorClient({ url: config.X402_FACILITATOR_URL });
   const resourceServer = new x402ResourceServer(facilitatorClient).register(network, new ExactEvmScheme());
   // Fetches the facilitator's supported (scheme, network) kinds once at boot so route
   // validation below can catch a misconfigured network immediately, not on first request.

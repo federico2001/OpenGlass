@@ -31,9 +31,16 @@ const Env = z
      * an EVM address (0x…) that receives payments. Unset in any environment that hasn't
      * been given a payout wallet, so the free-tier API is unaffected either way. */
     X402_PAY_TO_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
+    /** Used only as a fallback when CDP credentials aren't set (e.g. local dev against
+     * the free public facilitator, which is testnet-only — see CDP_API_KEY_ID below). */
     X402_FACILITATOR_URL: z.url().default("https://x402.org/facilitator"),
     /** CAIP-2 chain id. Base Sepolia (testnet) by default — swap to eip155:8453 for Base mainnet. */
     X402_NETWORK: z.string().regex(/^[a-z0-9-]+:.+$/).default("eip155:84532"),
+    /** Coinbase Developer Platform facilitator credentials (SPEC-adjacent, Prompt 12).
+     * Required for Base mainnet — the free public facilitator only settles testnet. When
+     * both are set, the CDP facilitator replaces X402_FACILITATOR_URL entirely. */
+    CDP_API_KEY_ID: z.string().optional(),
+    CDP_API_KEY_SECRET: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.SIGNER === "kms" && !env.KMS_KEY_ID) ctx.addIssue({ code: "custom", path: ["KMS_KEY_ID"], message: "required when SIGNER=kms" });

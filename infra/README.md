@@ -43,6 +43,13 @@ pnpm exec cdk deploy                # prints the outputs used below
    `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`, `EC2_INSTANCE_ID`, `DEPLOY_BUCKET` (output `DeployBucketName`), `OPENGLASS_DOMAIN`.
 3. **Push to `main`**, or run the Deploy workflow by hand. The workflow runs the tests and pushes `linux/arm64` images tagged with the commit SHA. Then it runs [`deploy/deploy.sh`](../deploy/deploy.sh) on the instance through SSM Run Command. That script renders `.env` from `/openglass/prod/*`, pulls the images, runs `docker compose -f compose.prod.yml up -d --wait`, and checks `/health`. The last workflow step checks `https://$OPENGLASS_DOMAIN/health` from outside and fails unless it returns 200.
 4. **SES**: new accounts are in the SES sandbox. Request production access before sending to unverified addresses.
+5. **x402 premium tier (optional)**: omit `OG_X402_PAY_TO_ADDRESS` to leave `/v1/premium/*` disabled entirely. To enable it for real (Base mainnet) payments:
+   ```sh
+   export OG_X402_PAY_TO_ADDRESS=0x... OG_CDP_API_KEY_ID=...   # OG_X402_NETWORK defaults to eip155:8453
+   pnpm exec cdk deploy
+   aws ssm put-parameter --name /openglass/prod/CDP_API_KEY_SECRET --type SecureString --value '<cdp-api-key-secret>'
+   ```
+   The free public facilitator (used when these are unset, e.g. local dev) only settles Base Sepolia testnet — real payments need a CDP API key from [portal.cdp.coinbase.com/api-keys/secret](https://portal.cdp.coinbase.com/api-keys/secret), IP-allowlisted to the stack's `PublicIp` output.
 
 ## Checks that don't need AWS
 
