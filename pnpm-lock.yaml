@@ -28,7 +28,7 @@ importers:
         version: 3.1138.0
       '@coinbase/cdp-sdk':
         specifier: ^1.56.0
-        version: 1.56.0(@x402/core@2.26.0)(@x402/evm@2.26.0(typescript@5.9.3))(@x402/extensions@2.26.0(typescript@5.9.3))(typescript@5.9.3)
+        version: 1.56.0(@x402/core@2.26.0)(@x402/evm@2.26.0(typescript@5.9.3))(@x402/extensions@2.26.0(typescript@5.9.3))(@x402/svm@2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3)))(typescript@5.9.3)
       '@fastify/cookie':
         specifier: ^11.0.2
         version: 11.1.2
@@ -47,6 +47,9 @@ importers:
       '@x402/fastify':
         specifier: 2.26.0
         version: 2.26.0(fastify@5.12.5)(typescript@5.9.3)
+      '@x402/svm':
+        specifier: 2.26.0
+        version: 2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))
       fastify:
         specifier: ^5.12.5
         version: 5.12.5
@@ -1035,10 +1038,21 @@ packages:
     resolution: {integrity: sha512-r7jh49VJxGerfAcTQA6gXcKc+98zOp/tqRwzYjgOE+iSQsP6cEU1hq2QzbuipmP68QtYdY9wKEhiCQZIzHgZ4Q==}
     engines: {node: '>=18.0.0'}
 
+  '@solana-program/compute-budget@0.11.0':
+    resolution: {integrity: sha512-7f1ePqB/eURkTwTOO9TNIdUXZcyrZoX3Uy2hNo7cXMfNhPFWp9AVgIyRNBc2jf15sdUa9gNpW+PfP2iV8AYAaw==}
+    peerDependencies:
+      '@solana/kit': ^5.0
+
   '@solana-program/system@0.10.0':
     resolution: {integrity: sha512-Go+LOEZmqmNlfr+Gjy5ZWAdY5HbYzk2RBewD9QinEU/bBSzpFfzqDRT55JjFRBGJUvMgf3C2vfXEGT4i8DSI4g==}
     peerDependencies:
       '@solana/kit': ^5.0
+
+  '@solana-program/token-2022@0.6.1':
+    resolution: {integrity: sha512-Ex02cruDMGfBMvZZCrggVR45vdQQSI/unHVpt/7HPt/IwFYB4eTlXtO8otYZyqV/ce5GqZ8S6uwyRf0zy6fdbA==}
+    peerDependencies:
+      '@solana/kit': ^5.0
+      '@solana/sysvars': ^5.0
 
   '@solana-program/token@0.9.0':
     resolution: {integrity: sha512-vnZxndd4ED4Fc56sw93cWZ2djEeeOFxtaPS8SPf5+a+JZjKA/EnKqzbE1y04FuMhIVrLERQ8uR8H2h72eZzlsA==}
@@ -1490,6 +1504,11 @@ packages:
 
   '@x402/fetch@2.26.0':
     resolution: {integrity: sha512-pXwFGaWkc76+3ZGKfi9Xjay4h3KfdnbiRMwPC+J2+XGQDP1OVQvyvdyVEDuEtdrVPDYVP6rqq6f+hq1aaFql8g==}
+
+  '@x402/svm@2.26.0':
+    resolution: {integrity: sha512-mQGqErpM9D0Z0CMH3JLiFlsFQymwwO8Y7ykCTujpI3jatO3d1Xp5RdO6m55gwoYkGqZb+xdr/hSQTb0sSa8PPQ==}
+    peerDependencies:
+      '@solana/kit': '>=5.1.0'
 
   abitype@1.0.6:
     resolution: {integrity: sha512-MMSqYh4+C/aVqI2RQaWqbvI4Kxo5cQV40WQ4QFtDnNzCkqChm8MuENhElmynZlO0qUy/ObkEUaXtKqYnx1Kp3A==}
@@ -3252,7 +3271,7 @@ snapshots:
 
   '@balena/dockerignore@1.0.2': {}
 
-  '@coinbase/cdp-sdk@1.56.0(@x402/core@2.26.0)(@x402/evm@2.26.0(typescript@5.9.3))(@x402/extensions@2.26.0(typescript@5.9.3))(typescript@5.9.3)':
+  '@coinbase/cdp-sdk@1.56.0(@x402/core@2.26.0)(@x402/evm@2.26.0(typescript@5.9.3))(@x402/extensions@2.26.0(typescript@5.9.3))(@x402/svm@2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3)))(typescript@5.9.3)':
     dependencies:
       '@solana-program/system': 0.10.0(@solana/kit@5.5.1(typescript@5.9.3))
       '@solana-program/token': 0.9.0(@solana/kit@5.5.1(typescript@5.9.3))
@@ -3270,6 +3289,7 @@ snapshots:
       '@x402/core': 2.26.0
       '@x402/evm': 2.26.0(typescript@5.9.3)
       '@x402/extensions': 2.26.0(typescript@5.9.3)
+      '@x402/svm': 2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -3757,9 +3777,18 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
+  '@solana-program/compute-budget@0.11.0(@solana/kit@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+
   '@solana-program/system@0.10.0(@solana/kit@5.5.1(typescript@5.9.3))':
     dependencies:
       '@solana/kit': 5.5.1(typescript@5.9.3)
+
+  '@solana-program/token-2022@0.6.1(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+      '@solana/sysvars': 5.5.1(typescript@5.9.3)
 
   '@solana-program/token@0.9.0(@solana/kit@5.5.1(typescript@5.9.3))':
     dependencies:
@@ -4327,6 +4356,17 @@ snapshots:
   '@x402/fetch@2.26.0':
     dependencies:
       '@x402/core': 2.26.0
+
+  '@x402/svm@2.26.0(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))':
+    dependencies:
+      '@noble/hashes': 1.8.0
+      '@solana-program/compute-budget': 0.11.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/token': 0.9.0(@solana/kit@5.5.1(typescript@5.9.3))
+      '@solana-program/token-2022': 0.6.1(@solana/kit@5.5.1(typescript@5.9.3))(@solana/sysvars@5.5.1(typescript@5.9.3))
+      '@solana/kit': 5.5.1(typescript@5.9.3)
+      '@x402/core': 2.26.0
+    transitivePeerDependencies:
+      - '@solana/sysvars'
 
   abitype@1.0.6(typescript@5.9.3)(zod@3.25.76):
     optionalDependencies:
