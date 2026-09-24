@@ -212,17 +212,27 @@ export class OpenGlassStack extends Stack {
         : new iam.OidcProviderNative(this, "GithubOidc", { url: oidcUrl, clientIds: ["sts.amazonaws.com"] });
 
     // GitHub's OIDC `sub` claim embeds each side's stable numeric id alongside its
-    // (renameable) slug — `repo:{owner}@{ownerId}/{repo}@{repoId}:ref:refs/heads/main` —
-    // to stop a repo/org rename or transfer from letting a different entity inherit an
-    // old trust policy written against the name alone. Matching `owner@*` / `repo@*`
-    // keeps this readable and driven by `githubRepo` without hardcoding those ids.
+    // (renameable) slug — `repo:{owner}@{ownerId}/{repo}@{repoId}:...` — to stop a
+    // repo/org rename or transfer from letting a different entity inherit an old trust
+    // policy written against the name alone. Matching `owner@*` / `repo@*` keeps this
+    // readable and driven by `githubRepo` without hardcoding those ids.
+    //
+    // The claim's suffix also depends on how the job is triggered: deploy.yml's
+    // `push-images` job (no `environment:`) gets `:ref:refs/heads/main`, but its `deploy`
+    // job declares `environment: production` and gets `:environment:production` instead —
+    // a different claim shape entirely, not just a different value — so both are listed.
     const [ghOwner, ghRepoName] = props.githubRepo.split("/");
     const deployRole = new iam.Role(this, "GithubDeployRole", {
       description: `GitHub Actions deploys from ${props.githubRepo}@main`,
       maxSessionDuration: Duration.hours(1),
       assumedBy: new iam.WebIdentityPrincipal(provider.oidcProviderArn, {
         StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-        StringLike: { "token.actions.githubusercontent.com:sub": `repo:${ghOwner}@*/${ghRepoName}@*:ref:refs/heads/main` },
+        StringLike: {
+          "token.actions.githubusercontent.com:sub": [
+            `repo:${ghOwner}@*/${ghRepoName}@*:ref:refs/heads/main`,
+            `repo:${ghOwner}@*/${ghRepoName}@*:environment:production`,
+          ],
+        },
       }),
     });
     for (const repo of repos) repo.grantPullPush(deployRole);

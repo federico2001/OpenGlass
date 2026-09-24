@@ -76,7 +76,7 @@ describe("OpenGlassStack", () => {
     });
   });
 
-  it("lets only main of the repo assume the deploy role", () => {
+  it("lets only main (or the production environment) of the repo assume the deploy role", () => {
     t.hasResourceProperties("AWS::IAM::Role", {
       AssumeRolePolicyDocument: {
         Statement: [
@@ -84,7 +84,12 @@ describe("OpenGlassStack", () => {
             Action: "sts:AssumeRoleWithWebIdentity",
             Condition: {
               StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-              StringLike: { "token.actions.githubusercontent.com:sub": "repo:federico2001@*/OpenGlass@*:ref:refs/heads/main" },
+              StringLike: {
+                "token.actions.githubusercontent.com:sub": [
+                  "repo:federico2001@*/OpenGlass@*:ref:refs/heads/main",
+                  "repo:federico2001@*/OpenGlass@*:environment:production",
+                ],
+              },
             },
           }),
         ],
