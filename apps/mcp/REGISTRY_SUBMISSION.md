@@ -7,11 +7,11 @@ explicit-permission, external-facing action I leave to you.
 
 ## Before submitting
 
-- [ ] `openglass.example` in `server.json`'s `websiteUrl`/`repository`/`remotes.url` needs
-      to become your real domain once you have one (currently a placeholder matching
-      `docs/SPEC.md`'s examples).
-- [ ] Confirm `mcp.<your-domain>` actually resolves and serves `/mcp` before submitting —
-      registries generally do a live reachability check.
+- [x] `server.json`'s `websiteUrl`/`remotes.url` point at the real domain
+      (`openglass.glass`, `mcp.openglass.glass`).
+- [x] `https://mcp.openglass.glass/mcp` is live and healthy in production.
+- [ ] Double-check the current schema URL and submission flow against the registry's own
+      docs at submission time — the rest of this checklist below is unchanged.
 - [ ] Double-check the current schema URL and submission flow against the registry's own
       docs at submission time — `$schema` above is my best understanding as of when this
       was written, but registry schemas evolve.
