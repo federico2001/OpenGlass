@@ -7,11 +7,11 @@
     "url": "https://github.com/federico2001/OpenGlass",
     "source": "github"
   },
-  "websiteUrl": "https://openglass.example",
+  "websiteUrl": "https://openglass.glass",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp.openglass.example/mcp"
+      "url": "https://mcp.openglass.glass/mcp"
     }
   ]
 }
