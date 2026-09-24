@@ -58,7 +58,6 @@ function agentCard(deps: ServerDeps) {
         ? {
             x402: {
               network: deps.x402.network,
-              facilitatorUrl: "https://x402.org/facilitator",
               resources: [
                 { url: `${deps.publicUrl}/v1/premium/agents/me/verified-badge`, method: "POST", price: "$1.00" },
                 { url: `${deps.publicUrl}/v1/premium/records/{recordId}/extend-retention`, method: "POST", price: "$0.50" },
