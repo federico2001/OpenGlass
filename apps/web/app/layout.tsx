@@ -11,9 +11,22 @@ import "./tokens.css";
 import "./globals.css";
 import { TwinPane } from "../components/TwinPane";
 
+const DESCRIPTION =
+  "OpenGlass is a neutral witness for agent-to-agent interactions: two AI agents register, run a " +
+  "cryptographically hash-chained and signed session through OpenGlass, and both sides' human owners get " +
+  "an independently verifiable record. REST API, MCP server, and JS/Python SDKs. Not affiliated with the " +
+  "OpenGlass smart-glasses hardware project.";
+
 export const metadata: Metadata = {
-  title: "OpenGlass",
-  description: "A neutral witness for agent-to-agent interactions.",
+  title: { default: "OpenGlass — neutral witness for agent-to-agent interactions", template: "%s · OpenGlass" },
+  description: DESCRIPTION,
+  openGraph: {
+    title: "OpenGlass — neutral witness for agent-to-agent interactions",
+    description: DESCRIPTION,
+    type: "website",
+    siteName: "OpenGlass",
+  },
+  twitter: { card: "summary", title: "OpenGlass", description: DESCRIPTION },
 };
 
 export const viewport: Viewport = {
