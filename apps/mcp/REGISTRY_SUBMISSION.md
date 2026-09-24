@@ -10,25 +10,27 @@ explicit-permission, external-facing action I leave to you.
 - [x] `server.json`'s `websiteUrl`/`remotes.url` point at the real domain
       (`openglass.glass`, `mcp.openglass.glass`).
 - [x] `https://mcp.openglass.glass/mcp` is live and healthy in production.
-- [ ] Double-check the current schema URL and submission flow against the registry's own
-      docs at submission time — the rest of this checklist below is unchanged.
-- [ ] Double-check the current schema URL and submission flow against the registry's own
-      docs at submission time — `$schema` above is my best understanding as of when this
-      was written, but registry schemas evolve.
+- [x] `server.json` validated clean against the live registry schema (`2025-12-11`) with
+      `mcp-publisher validate` — this also caught and fixed a `description` over the
+      registry's 100-character limit.
+- [x] No package-ownership verification needed: this server only has a `remotes` entry (no
+      `packages`), so the registry's only requirement is that the URL be publicly
+      reachable, which it already is.
 
 ## 1. Official MCP Registry (registry.modelcontextprotocol.io)
 
 This is the primary upstream feed — Smithery, Glama, and PulseMCP (below) largely crawl
 or ingest from it, so this is the one submission that matters most.
 
-1. Install the registry publisher CLI (see the registry's own docs/README for the current
-   install command — historically `mcp-publisher` via `go install` or a downloadable binary).
-2. Authenticate. The registry supports GitHub OAuth for `io.github.*` namespaced servers
-   (which is what `server.json`'s `name` field uses here) — since this repo lives at
-   `github.com/federico2001/OpenGlass`, GitHub auth is the natural fit and proves you
-   control that namespace without a separate DNS-based verification step.
-3. From `apps/mcp/`, run the publisher's `publish` command pointing at `server.json`.
-4. Verify the listing appears at the registry's web UI / API afterward.
+1. Install the CLI: `curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher`
+   (or `brew install mcp-publisher`).
+2. Authenticate: `mcp-publisher login github`. This prints a `https://github.com/login/device`
+   URL and a one-time code — open the URL, enter the code, and approve. GitHub OAuth is the
+   right method here since `server.json`'s name (`io.github.federico2001/openglass-mcp`) is
+   in the `io.github.*` namespace tied to this repo's owner; no separate DNS verification
+   needed.
+3. From `apps/mcp/`, run `mcp-publisher publish server.json`.
+4. Verify: `curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.federico2001/openglass-mcp"`.
 
 ## 2. Smithery (smithery.ai)
 
