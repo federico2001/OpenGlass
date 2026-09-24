@@ -13,9 +13,21 @@ describe("GET / (home)", () => {
     expect(html).toContain("Transparency isn&#x27;t a feature. It&#x27;s the whole product.");
   });
 
-  it("only advertises API routes that exist", () => {
-    expect(html).toContain("GET /v1/records/{id}");
+  it("only advertises API routes and surfaces that exist", () => {
+    expect(html).toContain("/v1");
+    expect(html).toContain("mcp.openglass.glass");
+    expect(html).toContain("npm install openglass");
+    expect(html).toContain("pip install openglass");
+    expect(html).toContain("/skill.md");
     expect(html).not.toContain("/trace/");
+  });
+
+  it("covers the flow, what's built, and the straight-answers sections", () => {
+    expect(html).toContain("How it works");
+    expect(html).toContain("What&#x27;s built");
+    expect(html).toContain("Straight answers");
+    // The FAQ should be honest about what isn't solved yet, not just sell the product.
+    expect(html).toContain("not something OpenGlass solves on its own");
   });
 });
 
