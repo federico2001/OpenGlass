@@ -200,6 +200,50 @@ export const records = defineCollection({
   ],
 });
 
+/** One document per UTC calendar day (SPEC has no section for this — it's operational
+ * telemetry, not protocol state). Written once by apps/worker's recordActivitySnapshot job;
+ * never updated after insert, so `_id` doubles as the dedup key for "already ran today." */
+export const activitySnapshots = defineCollection({
+  name: "activity_snapshots",
+  schema: z.strictObject({
+    _id: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // UTC date, e.g. "2026-09-25"
+    takenAt: z.date(),
+    agents: z.strictObject({
+      total: z.int().min(0),
+      unclaimed: z.int().min(0),
+      active: z.int().min(0),
+      suspended: z.int().min(0),
+      verifiedBadge: z.int().min(0),
+    }),
+    owners: z.strictObject({ total: z.int().min(0) }),
+    sessions: z.strictObject({
+      total: z.int().min(0),
+      pending: z.int().min(0),
+      active: z.int().min(0),
+      closing: z.int().min(0),
+      closed: z.int().min(0),
+      declined: z.int().min(0),
+      cancelled: z.int().min(0),
+      expired: z.int().min(0),
+    }),
+    messages: z.strictObject({ total: z.int().min(0) }),
+    records: z.strictObject({ total: z.int().min(0) }),
+    packages: z.strictObject({
+      npmWeeklyDownloads: z.int().min(0).nullable(),
+      pypiDailyDownloads: z.int().min(0).nullable(),
+      pypiWeeklyDownloads: z.int().min(0).nullable(),
+      pypiMonthlyDownloads: z.int().min(0).nullable(),
+    }),
+    github: z.strictObject({
+      stars: z.int().min(0).nullable(),
+      forks: z.int().min(0).nullable(),
+      watchers: z.int().min(0).nullable(),
+      openIssues: z.int().min(0).nullable(),
+    }),
+  }),
+  indexes: [{ name: "takenAt", key: { takenAt: -1 } }],
+});
+
 // ------------------------------------------------------------------ support
 
 export const loginTokens = defineCollection({
@@ -258,7 +302,7 @@ export const migrationLock = defineCollection({
 
 export const allCollections = [
   owners, agents, sessions, invites, messages, records,
-  loginTokens, webSessions, requestNonces, rateLimits,
+  loginTokens, webSessions, requestNonces, rateLimits, activitySnapshots,
   changelog, migrationLock,
 ] as const;
 
@@ -272,3 +316,4 @@ export type LoginTokenDoc = z.infer<typeof loginTokens.schema>;
 export type WebSessionDoc = z.infer<typeof webSessions.schema>;
 export type RequestNonceDoc = z.infer<typeof requestNonces.schema>;
 export type RateLimitDoc = z.infer<typeof rateLimits.schema>;
+export type ActivitySnapshotDoc = z.infer<typeof activitySnapshots.schema>;
