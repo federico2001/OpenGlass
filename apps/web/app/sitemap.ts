@@ -1,5 +1,11 @@
 import type { MetadataRoute } from "next";
 
+// Without this, Next.js statically generates this file at build time — baking in
+// whatever PUBLIC_URL happened to be set to during `docker build` (nothing; it's only
+// injected at container runtime), not the real domain. Matches skill.md/llms.txt/etc.,
+// which already have this for the same reason.
+export const dynamic = "force-dynamic";
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = process.env.PUBLIC_URL ?? "https://localhost";
   const now = new Date();
