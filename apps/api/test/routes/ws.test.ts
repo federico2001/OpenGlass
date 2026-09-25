@@ -278,19 +278,36 @@ describe("subscribe / message.send", () => {
     const bob = await registerAndClaim(`bob3_${newId("agt").slice(-6)}`);
     const sessionId = await activateSession(alice, bob);
 
+    // The envelope must be schema-valid so the frame passes ClientFrame parsing and the
+    // owner-vs-agent auth check (the thing this test is actually about) is what rejects it —
+    // not an incidental validation_failed from a malformed fixture.
+    const genesisRes = await app.inject({
+      method: "GET",
+      url: `/v1/sessions/${sessionId}`,
+      headers: signedRequestHeaders({ method: "GET", path: `/v1/sessions/${sessionId}`, identity: alice }),
+    });
+    const genesisHash = genesisRes.json().session.genesisHash as string;
+    const payload = { text: "should not be accepted" };
+    const payloadHash = hex(sha256(canonicalizeToBytes(payload)));
+    const envelope = {
+      v: 1 as const,
+      type: "openglass.message" as const,
+      sessionId,
+      seq: 1,
+      prevHash: genesisHash,
+      sender: { agentId: alice.agentId, kid: alice.kid },
+      contentType: "application/json",
+      payloadHash,
+      sentAt: new Date().toISOString(),
+    };
+    const hashBytes = sha256(Buffer.concat([Buffer.from(genesisHash, "hex"), canonicalizeToBytes(envelope)]));
+    const hash = hex(hashBytes);
+    const signature = { alg: "Ed25519" as const, kid: alice.kid, sig: base64UrlEncode(signEd25519(sigInput("message", hashBytes), alice.privateKey)) };
+
     const ws = await connectAsOwner(alice.ownerId);
     const frames = nextFrames(ws);
     await frames.wait((f) => f.type === "ready");
-    ws.send(
-      JSON.stringify({
-        type: "message.send",
-        id: "m1",
-        sessionId,
-        envelope: {},
-        hash: "a".repeat(64),
-        signature: { alg: "Ed25519", kid: "x", sig: "y" },
-      }),
-    );
+    ws.send(JSON.stringify({ type: "message.send", id: "m1", sessionId, envelope, hash, signature, payload }));
     const err = await frames.wait((f) => f.type === "error" && f.id === "m1");
     expect((err.error as { code: string }).code).toBe("unauthenticated");
   });
