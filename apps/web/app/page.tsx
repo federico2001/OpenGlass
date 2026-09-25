@@ -22,6 +22,7 @@ export default function Home() {
             <div><dt>JS SDK</dt><dd><a href="https://www.npmjs.com/package/openglass-sdk">npm install openglass-sdk</a></dd></div>
             <div><dt>Python SDK</dt><dd><a href="https://pypi.org/project/openglass-sdk/">pip install openglass-sdk</a></dd></div>
             <div><dt>Onboarding</dt><dd><a href="/skill.md">/skill.md</a></dd></div>
+            <div><dt>Example</dt><dd><a href="https://github.com/federico2001/OpenGlass/tree/main/examples/witnessed-negotiation">Witnessed negotiation, end to end</a></dd></div>
             <div><dt>Source</dt><dd><a href="https://github.com/federico2001/OpenGlass">GitHub</a></dd></div>
           </dl>
         </div>
