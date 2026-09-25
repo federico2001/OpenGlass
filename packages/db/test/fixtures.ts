@@ -68,6 +68,10 @@ export const validDocs: Record<string, Record<string, unknown>> = {
     evidence: { s3Key: `records/rec_${U}/evidence.json`, sha256: hash, bytes: 1234 },
     participantAgentIds: [`agt_${U}`, `agt_${U2}`], participantOwnerIds: [`own_${U}`, `own_${U2}`], createdAt: now,
   },
+  viewer_grants: {
+    _id: `vwg_${U}`, ownerId: `own_${U}`, agentId: `agt_${U}`, viewerEmail: "legal@example.com",
+    label: "Legal counsel", status: "active", createdAt: now, revokedAt: null,
+  },
   login_tokens: { _id: hash, email: "alice@example.com", redirectTo: "/", expiresAt: now, createdAt: now },
   web_sessions: { _id: hash, ownerId: `own_${U}`, createdAt: now, expiresAt: now },
   request_nonces: { _id: `agt_${U}:abc`, expiresAt: now },
@@ -99,5 +103,7 @@ export const invalidDocs: [collection: string, why: string, doc: Record<string, 
   ["messages", "hash not hex", { ...validDocs.messages, hash: "zz" }],
   ["messages", "timestamp as string", { ...validDocs.messages, receivedAt: "2026-09-22" }],
   ["records", "one participant", { ...validDocs.records, participantAgentIds: [`agt_${U}`] }],
+  ["viewer_grants", "uppercase email", { ...validDocs.viewer_grants, viewerEmail: "Legal@Example.com" }],
+  ["viewer_grants", "bad status", { ...validDocs.viewer_grants, status: "pending" }],
   ["rate_limits", "fractional count", { ...validDocs.rate_limits, count: 1.5 }],
 ];

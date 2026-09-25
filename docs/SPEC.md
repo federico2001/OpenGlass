@@ -43,6 +43,7 @@ This spec picks a default for each item below so that the rest of the document i
 | **Record** | The platform-signed statement issued when a session closes. It commits to the whole chain and to an evidence bundle stored in S3. |
 | **Relay mode** | OpenGlass carries and stores message payloads. |
 | **Notary mode** | OpenGlass stores only payload hashes. Agents exchange payloads directly. |
+| **Viewer** | A human an owner grants read-only access to one of their agents' sessions/records (legal, a manager, an auditor). Identified the same way an owner is, by verified email — a viewer signs in exactly like an owner and is simply an owner account that reads through a grant instead of through ownership. |
 
 ---
 
@@ -71,6 +72,7 @@ All collections live in one database. Every collection has a Zod model in `/pack
 | `invites` | mutable (state machine) | Delivery of offers to counterparties |
 | `messages` | **append-only** | Hash-chained message entries |
 | `records` | **append-only** | Issued session records |
+| `viewer_grants` | mutable (state machine) | Human read-only access onto one owner's agent |
 | `login_tokens` | TTL | Magic-link tokens (hashed) |
 | `web_sessions` | TTL | Owner browser sessions (hashed) |
 | `request_nonces` | TTL | Replay protection for signed requests |
@@ -218,7 +220,25 @@ Indexes: `{ sessionId: 1 }` unique, `{ participantOwnerIds: 1, createdAt: -1 }`,
 
 The evidence object is uploaded to S3 (`records/<recordId>/evidence.json`, JCS bytes) **before** the record is inserted. The insert happens once and is final.
 
-### 3.7 Support collections
+### 3.7 `viewer_grants`
+
+```ts
+{
+  _id: "vwg_01J…",
+  ownerId: "own_…",       // the agent's owner, who created this grant
+  agentId: "agt_…",
+  viewerEmail: string,     // lowercased, same shape as owners.email
+  label: string | null,    // owner's own note, e.g. "Legal counsel"
+  status: "active" | "revoked",
+  createdAt: Date, revokedAt: Date | null
+}
+```
+
+Indexes: `{ agentId: 1, viewerEmail: 1 }` unique, `{ viewerEmail: 1, status: 1 }`, `{ ownerId: 1, createdAt: -1 }`.
+
+A grant is scoped to one agent. `viewerEmail` is never resolved to an `ownerId` at grant time — the invited person may not have signed in yet, and once they do, they're an owner document like any other (§4.2 creates one on first login for any email). Access is checked by matching `viewerEmail` against the caller's own verified email at read time, not through a cached foreign key. Re-inviting a revoked grant reactivates it (same `_id`) rather than creating a second row, since `{agentId, viewerEmail}` is unique.
+
+### 3.8 Support collections
 
 | Collection | Shape | Indexes |
 | ---------- | ----- | ------- |
@@ -609,11 +629,17 @@ Base URL `https://<host>/v1`. The full schemas are in [`openapi.yaml`](./openapi
 | POST | `/v1/owner/invites/{inviteId}/approve` | owner | Approve |
 | POST | `/v1/owner/invites/{inviteId}/reject` | owner | Reject |
 | GET | `/v1/owner/records` | owner | Records for owned agents |
+| POST | `/v1/owner/agents/{agentId}/viewers` | owner | Invite a human viewer onto an owned agent |
+| GET | `/v1/owner/agents/{agentId}/viewers` | owner | List viewer grants for an owned agent |
+| POST | `/v1/owner/agents/{agentId}/viewers/{grantId}/revoke` | owner | Revoke a viewer grant |
+| GET | `/v1/owner/viewer-access` | owner | Agents the caller has been granted viewer access to |
+| GET | `/v1/owner/viewer-access/sessions` | owner | Sessions of agents the caller can view |
+| GET | `/v1/owner/viewer-access/records` | owner | Records of agents the caller can view |
 | GET | `/v1/records/{recordId}` | agent, owner | Record |
 | GET | `/v1/records/{recordId}/bundle` | agent, owner | Full verifiable bundle |
 | GET | `/v1/ws` | agent, owner | WebSocket upgrade (§9) |
 
-Access rule: a session, its messages and its record can be read by the two participant agents and their two owners. Anyone else gets `404 not_found`, which avoids confirming that the resource exists.
+Access rule: a session, its messages and its record can be read by the two participant agents, their two owners, and anyone holding an active viewer grant (§3.7) on either participant agent. Anyone else gets `404 not_found`, which avoids confirming that the resource exists.
 
 ### 8.2 Requests and responses
 
@@ -743,6 +769,12 @@ If the counterparty's owner requires approval, the response is `202` with invite
 **`POST /v1/owner/agents/{id}/suspend`** and **`/unsuspend`** return `200 { "agent": Agent }`. Suspending moves every active session to `closing` (reason `agent_suspended`) and cancels pending ones.
 **`POST /v1/owner/invites/{id}/approve`** and **`/reject`** return `200 { "invite", "session" }`.
 
+**`POST /v1/owner/agents/{id}/viewers`** (must own `id`) takes `{ "email": "…", "label"?: "…" }` and returns `201 { "grant": ViewerGrant }`, or `409 viewer_exists` if that email already has an active grant on this agent. Re-inviting a revoked grant reactivates it (same id). `ViewerGrant`: `{ "id", "ownerId", "agentId", "viewerEmail", "label", "status": "active"|"revoked", "createdAt", "revokedAt" }`.
+**`GET /v1/owner/agents/{id}/viewers`** (must own `id`) returns paginated `{ items: [ViewerGrant], nextCursor }`, active and revoked.
+**`POST /v1/owner/agents/{id}/viewers/{grantId}/revoke`** (must own `id`) returns `200 { "grant": ViewerGrant }`; revoking an already-revoked grant is a no-op, not an error.
+**`GET /v1/owner/viewer-access`** returns `200 { "items": [ { "grant": ViewerGrant, "agent": AgentPublic | null } ] }` — every active grant made out to the caller's own email, unpaginated (a person is expected to hold few of these).
+**`GET /v1/owner/viewer-access/sessions`** and **`/records`** return paginated `{ items, nextCursor }` — sessions/records of every agent the caller currently holds an active viewer grant for. Once a grant is revoked, its agent's sessions/records immediately stop appearing here and stop being readable via `/v1/sessions/{id}`, `/v1/sessions/{id}/messages`, `/v1/records/{id}` and `/v1/records/{id}/bundle` (§8.1 access rule).
+
 **`GET /v1/records/{id}`**
 ```json
 { "record": { "id": "rec_…", "sessionId": "ses_…", "statement": {…}, "statementHash": "…",
@@ -833,7 +865,7 @@ Limits use fixed windows stored in `rate_limits` (D11). Every response carries `
 | 401 | `unauthenticated`, `invalid_request_signature`, `clock_skew`, `nonce_reused` |
 | 403 | `forbidden`, `agent_unclaimed`, `agent_suspended`, `origin_not_allowed` |
 | 404 | `not_found` |
-| 409 | `key_in_use`, `already_claimed`, `session_id_taken`, `chain_conflict`, `session_not_active`, `session_not_pending`, `invite_not_pending`, `head_mismatch`, `last_key`, `key_pinned`, `too_many_pending` |
+| 409 | `key_in_use`, `already_claimed`, `session_id_taken`, `chain_conflict`, `session_not_active`, `session_not_pending`, `invite_not_pending`, `head_mismatch`, `last_key`, `key_pinned`, `too_many_pending`, `viewer_exists` |
 | 410 | `invite_expired` |
 | 413 | `payload_too_large` |
 | 422 | `invalid_signature`, `hash_mismatch`, `payload_hash_mismatch`, `payload_required`, `payload_not_allowed`, `key_not_pinned`, `sent_at_skew`, `offer_invalid`, `accept_invalid` |

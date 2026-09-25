@@ -3,7 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "../../components/StatusBadge";
-import { ApiError, apiFetch, formatDate, type AgentPublic, type Owner, type OwnerAgent, type OwnerInvite, type OwnerSession } from "../../lib/dashboard";
+import {
+  ApiError,
+  apiFetch,
+  formatDate,
+  type AgentPublic,
+  type Owner,
+  type OwnerAgent,
+  type OwnerInvite,
+  type OwnerSession,
+  type ViewerAccessItem,
+} from "../../lib/dashboard";
 import styles from "./page.module.css";
 
 function otherSide(session: OwnerSession, myAgentIds: Set<string>): { agentId: string | null; iAmInitiator: boolean } {
@@ -21,6 +31,8 @@ export default function DashboardPage() {
   const [counterparties, setCounterparties] = useState<Record<string, AgentPublic>>({});
   const [inviteActionError, setInviteActionError] = useState<string | null>(null);
   const [actingOnInvite, setActingOnInvite] = useState<string | null>(null);
+  const [viewerAccess, setViewerAccess] = useState<ViewerAccessItem[]>([]);
+  const [sharedSessions, setSharedSessions] = useState<OwnerSession[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,13 +41,17 @@ export default function DashboardPage() {
       apiFetch<{ items: OwnerAgent[] }>("/v1/owner/agents?limit=200"),
       apiFetch<{ items: OwnerSession[] }>("/v1/owner/sessions?limit=200"),
       apiFetch<{ items: OwnerInvite[] }>("/v1/owner/invites?limit=200"),
+      apiFetch<{ items: ViewerAccessItem[] }>("/v1/owner/viewer-access"),
+      apiFetch<{ items: OwnerSession[] }>("/v1/owner/viewer-access/sessions?limit=200"),
     ])
-      .then(([ownerRes, agentsRes, sessionsRes, invitesRes]) => {
+      .then(([ownerRes, agentsRes, sessionsRes, invitesRes, viewerAccessRes, sharedSessionsRes]) => {
         if (cancelled) return;
         setOwner(ownerRes.owner);
         setAgents(agentsRes.items);
         setSessions(sessionsRes.items);
         setInvites(invitesRes.items);
+        setViewerAccess(viewerAccessRes.items);
+        setSharedSessions(sharedSessionsRes.items);
 
         const myAgentIds = new Set(agentsRes.items.map((a) => a.id));
         const idsToResolve = new Set<string>();
@@ -45,6 +61,10 @@ export default function DashboardPage() {
         }
         for (const i of invitesRes.items) {
           if (!myAgentIds.has(i.fromAgentId)) idsToResolve.add(i.fromAgentId);
+        }
+        for (const s of sharedSessionsRes.items) {
+          if (s.initiator.agentId && !myAgentIds.has(s.initiator.agentId)) idsToResolve.add(s.initiator.agentId);
+          if (s.counterparty.agentId && !myAgentIds.has(s.counterparty.agentId)) idsToResolve.add(s.counterparty.agentId);
         }
         Promise.all(
           [...idsToResolve].map((id) =>
@@ -209,6 +229,56 @@ export default function DashboardPage() {
           </ul>
         )}
       </section>
+
+      {viewerAccess.length > 0 && (
+        <section className={styles.section} aria-label="Shared with you">
+          <div className={styles.sectionHeader}>
+            <p className="label">Shared with you ({viewerAccess.length})</p>
+            <p className={styles.hint}>Read-only access another owner gave you — you can see these agents&apos; sessions and records, but can&apos;t act as them.</p>
+          </div>
+          <div className={styles.agentGrid}>
+            {viewerAccess.map(({ grant, agent }) => (
+              <div key={grant.id} className={styles.agentCard}>
+                <div className={styles.agentCardTop}>
+                  <p className={styles.agentName}>{agent?.name ?? grant.agentId}</p>
+                  {agent && <StatusBadge status={agent.status} />}
+                </div>
+                <p className={styles.hint}>
+                  {grant.label ?? "Viewer access"} · granted {formatDate(grant.createdAt)}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {sharedSessions.length > 0 && (
+            <ul className={styles.sessionList}>
+              {sharedSessions.map((session) => {
+                const other = [session.initiator.agentId, session.counterparty.agentId].find(
+                  (agentId) => agentId && !viewerAccess.some((v) => v.agent?.id === agentId),
+                );
+                const initiatorName = session.initiator.agentId ? (counterparties[session.initiator.agentId]?.name ?? session.initiator.agentId) : "—";
+                const otherName = other ? (counterparties[other]?.name ?? other) : initiatorName;
+                return (
+                  <li key={session.id}>
+                    <a href={`/dashboard/sessions/${session.id}`} className={styles.sessionRow}>
+                      <div className={styles.sessionMain}>
+                        <p className={styles.sessionPurpose}>{session.purpose}</p>
+                        <p className={styles.hint}>
+                          {otherName} · {session.messageCount} message{session.messageCount === 1 ? "" : "s"} · {formatDate(session.createdAt)}
+                        </p>
+                      </div>
+                      <div className={styles.sessionMeta}>
+                        <StatusBadge status={session.status} />
+                        {session.recordId && <span className={styles.recordLink}>Record issued</span>}
+                      </div>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
     </main>
   );
 }

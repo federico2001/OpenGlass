@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   AgentId, Hash, InviteId, KeyId, MessageId, ObjectIdSchema, OwnerId, PublicKey,
-  RecordId, SessionId, Signature, Kid,
+  RecordId, SessionId, Signature, Kid, ViewerGrantId,
 } from "./common.js";
 import { Accept, CloseReason, CloseStatement, MessageEnvelope, Mode, Offer, RecordStatement } from "./protocol.js";
 import { defineCollection } from "./define.js";
@@ -200,6 +200,35 @@ export const records = defineCollection({
   ],
 });
 
+/**
+ * A human, read-only grant onto one of an owner's agents (SPEC §3.7 / Prompt 6): the
+ * owner-facing counterpart to viewer access — legal, a manager, an auditor — seeing the
+ * same records and sessions an owner can, without any of an owner's write actions
+ * (suspend, approve invites, manage keys). `viewerEmail` is deliberately not resolved to
+ * an `ownerId` at grant time: the invited person may not have signed in yet, and once they
+ * do, they're identified the same way any owner is — by verified email — so access is
+ * checked by matching `viewerEmail` against the caller's own email at read time (see
+ * apps/api/src/domain/access.ts), not by a cached foreign key that could drift.
+ */
+export const viewerGrants = defineCollection({
+  name: "viewer_grants",
+  schema: z.strictObject({
+    _id: ViewerGrantId,
+    ownerId: OwnerId, // the agent's owner, who created this grant
+    agentId: AgentId,
+    viewerEmail: z.string().max(254).regex(/^[^A-Z\s@]+@[^A-Z\s@]+$/),
+    label: z.string().max(100).nullable(),
+    status: z.enum(["active", "revoked"]),
+    createdAt: z.date(),
+    revokedAt: z.date().nullable(),
+  }),
+  indexes: [
+    { name: "agent_viewerEmail_unique", key: { agentId: 1, viewerEmail: 1 }, unique: true },
+    { name: "viewerEmail_status", key: { viewerEmail: 1, status: 1 } },
+    { name: "ownerId_createdAt", key: { ownerId: 1, createdAt: -1 } },
+  ],
+});
+
 /** One document per UTC calendar day (SPEC has no section for this — it's operational
  * telemetry, not protocol state). Written once by apps/worker's recordActivitySnapshot job;
  * never updated after insert, so `_id` doubles as the dedup key for "already ran today." */
@@ -301,7 +330,7 @@ export const migrationLock = defineCollection({
 });
 
 export const allCollections = [
-  owners, agents, sessions, invites, messages, records,
+  owners, agents, sessions, invites, messages, records, viewerGrants,
   loginTokens, webSessions, requestNonces, rateLimits, activitySnapshots,
   changelog, migrationLock,
 ] as const;
@@ -312,6 +341,7 @@ export type SessionDoc = z.infer<typeof sessions.schema>;
 export type InviteDoc = z.infer<typeof invites.schema>;
 export type MessageDoc = z.infer<typeof messages.schema>;
 export type RecordDoc = z.infer<typeof records.schema>;
+export type ViewerGrantDoc = z.infer<typeof viewerGrants.schema>;
 export type LoginTokenDoc = z.infer<typeof loginTokens.schema>;
 export type WebSessionDoc = z.infer<typeof webSessions.schema>;
 export type RequestNonceDoc = z.infer<typeof requestNonces.schema>;

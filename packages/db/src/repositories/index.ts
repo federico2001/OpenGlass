@@ -5,7 +5,8 @@ export { loginTokensRepository, type LoginTokensRepository } from "./loginTokens
 export { findAllMessagesBySession, findMessageByHash, findMessagesBySession, insertMessage } from "./messages.js";
 export { ownersRepository, type OwnersRepository } from "./owners.js";
 export { rateLimitsRepository, type RateLimitsRepository } from "./rateLimits.js";
-export { DUPLICATE_KEY_ERROR_CODE, findRecordById, findRecordBySession, insertRecord, listRecordsForOwner } from "./records.js";
+export { DUPLICATE_KEY_ERROR_CODE, findRecordById, findRecordBySession, insertRecord, listRecordsForAgents, listRecordsForOwner } from "./records.js";
 export { requestNoncesRepository, type RequestNoncesRepository } from "./requestNonces.js";
 export { sessionsRepository, type SessionsRepository } from "./sessions.js";
+export { viewerGrantsRepository, type ViewerGrantsRepository } from "./viewerGrants.js";
 export { webSessionsRepository, type WebSessionsRepository } from "./webSessions.js";

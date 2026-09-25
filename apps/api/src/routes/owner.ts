@@ -1,22 +1,32 @@
 import {
   agentsRepository,
   invitesRepository,
+  listRecordsForAgents,
   listRecordsForOwner,
+  newId,
   ownersRepository,
   sessionsRepository,
+  viewerGrantsRepository,
+  type ViewerGrantDoc,
 } from "@openglass/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { agentFullView } from "../domain/agentViews.js";
+import { agentFullView, agentPublicView } from "../domain/agentViews.js";
 import { computeGenesisHash } from "../domain/genesis.js";
 import { inviteView, sessionView } from "../domain/sessionViews.js";
 import { parseOrError, sendError } from "../errors.js";
+import { rateLimit } from "../plugins/rateLimit.js";
 import { verifyOwnerSession } from "../plugins/ownerAuth.js";
 import type { ServerDeps } from "../server.js";
 
 const PatchOwnerBody = z.strictObject({
   displayName: z.string().max(100).nullable().optional(),
   settings: z.strictObject({ requireInviteApproval: z.boolean().optional(), emailOnRecord: z.boolean().optional() }).optional(),
+});
+
+const InviteViewerBody = z.strictObject({
+  email: z.string().email().max(254),
+  label: z.string().max(100).nullable().optional(),
 });
 
 function paginationOf(query: unknown): { limit: number; cursor?: string } {
@@ -39,11 +49,25 @@ function recordView(doc: { _id: string; sessionId: string; statement: unknown; s
   };
 }
 
+function viewerGrantView(doc: ViewerGrantDoc) {
+  return {
+    id: doc._id,
+    ownerId: doc.ownerId,
+    agentId: doc.agentId,
+    viewerEmail: doc.viewerEmail,
+    label: doc.label,
+    status: doc.status,
+    createdAt: doc.createdAt.toISOString(),
+    revokedAt: doc.revokedAt?.toISOString() ?? null,
+  };
+}
+
 export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const agents = agentsRepository(deps.db);
   const sessions = sessionsRepository(deps.db);
   const invites = invitesRepository(deps.db);
   const owners = ownersRepository(deps.db);
+  const viewerGrants = viewerGrantsRepository(deps.db);
   const ownerAuth = verifyOwnerSession(deps.db, { webOrigin: deps.webOrigin });
 
   app.get("/v1/owner/me", { preHandler: ownerAuth }, async (req) => ({ owner: ownerView(req.owner!) }));
@@ -155,6 +179,96 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
   app.get("/v1/owner/records", { preHandler: ownerAuth }, async (req) => {
     const { limit, cursor } = paginationOf(req.query);
     const items = await listRecordsForOwner(deps.db, req.owner!._id, { limit, cursor });
+    return { items: items.map(recordView), nextCursor: items.length === limit ? items[items.length - 1]!._id : null };
+  });
+
+  // -------------------------------------------------------------- viewer access (Prompt 6)
+  // Granting side: an owner invites a human — legal, a manager, an auditor — to read-only
+  // access on one of their agents. Receiving side: that human (identified the same way any
+  // owner is, by verified email — see plugins/ownerAuth.ts) lists what they've been given.
+
+  app.post<{ Params: { agentId: string } }>(
+    "/v1/owner/agents/:agentId/viewers",
+    { preHandler: [ownerAuth, rateLimit(deps.db, "viewer_invite", (req) => req.owner!._id)] },
+    async (req, reply) => {
+      const agent = await agents.findById(req.params.agentId);
+      if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+
+      const body = parseOrError(InviteViewerBody, req.body, reply);
+      if (!body) return;
+      const viewerEmail = body.email.toLowerCase();
+
+      const existing = await viewerGrants.findByAgentAndEmail(agent._id, viewerEmail);
+      if (existing) {
+        if (existing.status === "active") return sendError(reply, 409, "viewer_exists", "This email already has viewer access to this agent");
+        const reactivated = await viewerGrants.update(existing._id, { status: "active", revokedAt: null, label: body.label ?? existing.label });
+        await deps.mailer
+          .sendViewerInvite(viewerEmail, agent.name, `${deps.webOrigin}/login?redirectTo=/dashboard`)
+          .catch((err) => req.log.error({ err }, "failed to send viewer invite email"));
+        return reply.code(201).send({ grant: viewerGrantView(reactivated!) });
+      }
+
+      const now = new Date();
+      const doc = await viewerGrants.insert({
+        _id: newId("vwg"),
+        ownerId: req.owner!._id,
+        agentId: agent._id,
+        viewerEmail,
+        label: body.label ?? null,
+        status: "active",
+        createdAt: now,
+        revokedAt: null,
+      });
+      await deps.mailer
+        .sendViewerInvite(viewerEmail, agent.name, `${deps.webOrigin}/login?redirectTo=/dashboard`)
+        .catch((err) => req.log.error({ err }, "failed to send viewer invite email"));
+      return reply.code(201).send({ grant: viewerGrantView(doc) });
+    },
+  );
+
+  app.get<{ Params: { agentId: string } }>("/v1/owner/agents/:agentId/viewers", { preHandler: ownerAuth }, async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+    const { limit, cursor } = paginationOf(req.query);
+    const items = await viewerGrants.listForAgent(agent._id, { limit, cursor });
+    return { items: items.map(viewerGrantView), nextCursor: items.length === limit ? items[items.length - 1]!._id : null };
+  });
+
+  app.post<{ Params: { agentId: string; grantId: string } }>(
+    "/v1/owner/agents/:agentId/viewers/:grantId/revoke",
+    { preHandler: ownerAuth },
+    async (req, reply) => {
+      const agent = await agents.findById(req.params.agentId);
+      if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+      const grant = await viewerGrants.findById(req.params.grantId);
+      if (!grant || grant.agentId !== agent._id) return sendError(reply, 404, "not_found", "Viewer grant not found");
+      if (grant.status === "revoked") return { grant: viewerGrantView(grant) };
+      const updated = await viewerGrants.update(grant._id, { status: "revoked", revokedAt: new Date() });
+      return { grant: viewerGrantView(updated!) };
+    },
+  );
+
+  app.get("/v1/owner/viewer-access", { preHandler: ownerAuth }, async (req) => {
+    const grants = await viewerGrants.listActiveForViewer(req.owner!.email);
+    const agentDocs = await Promise.all(grants.map((g) => agents.findById(g.agentId)));
+    const items = grants.map((g, i) => ({ grant: viewerGrantView(g), agent: agentDocs[i] ? agentPublicView(agentDocs[i]!) : null }));
+    return { items };
+  });
+
+  app.get("/v1/owner/viewer-access/sessions", { preHandler: ownerAuth }, async (req) => {
+    const { limit, cursor } = paginationOf(req.query);
+    const agentIds = [...(req.viewerAgentIds ?? [])];
+    const filter: Record<string, unknown> = {
+      $or: [{ "initiator.agentId": { $in: agentIds } }, { "counterparty.agentId": { $in: agentIds } }],
+    };
+    if (cursor) filter._id = { $lt: cursor };
+    const items = await sessions.collection.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit).toArray();
+    return { items: items.map(sessionView), nextCursor: items.length === limit ? items[items.length - 1]!._id : null };
+  });
+
+  app.get("/v1/owner/viewer-access/records", { preHandler: ownerAuth }, async (req) => {
+    const { limit, cursor } = paginationOf(req.query);
+    const items = await listRecordsForAgents(deps.db, [...(req.viewerAgentIds ?? [])], { limit, cursor });
     return { items: items.map(recordView), nextCursor: items.length === limit ? items[items.length - 1]!._id : null };
   });
 }

@@ -559,6 +559,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/owner/agents/{agentId}/viewers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List viewer grants (active and revoked) for an owned agent */
+        get: operations["listAgentViewers"];
+        put?: never;
+        /** Invite a human to read-only access on an owned agent */
+        post: operations["inviteViewer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/agents/{agentId}/viewers/{grantId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a viewer grant (idempotent) */
+        post: operations["revokeViewer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/viewer-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agents the caller has been granted read-only viewer access to */
+        get: operations["listViewerAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/viewer-access/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sessions of agents the caller can view */
+        get: operations["listViewerAccessSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/viewer-access/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Records of agents the caller can view */
+        get: operations["listViewerAccessRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/records/{recordId}": {
         parameters: {
             query?: never;
@@ -924,6 +1010,22 @@ export interface components {
             };
             createdAt: components["schemas"]["Timestamp"];
         };
+        ViewerGrant: {
+            id: string;
+            ownerId: components["schemas"]["OwnerId"];
+            agentId: components["schemas"]["AgentId"];
+            /** Format: email */
+            viewerEmail: string;
+            label: string | null;
+            /** @enum {string} */
+            status: "active" | "revoked";
+            createdAt: components["schemas"]["Timestamp"];
+            revokedAt: null | components["schemas"]["Timestamp"];
+        };
+        ViewerAccessItem: {
+            grant: components["schemas"]["ViewerGrant"];
+            agent: null | components["schemas"]["AgentPublic"];
+        };
         EvidenceMessage: {
             envelope: components["schemas"]["MessageEnvelope"];
             hash: components["schemas"]["Hash"];
@@ -1109,6 +1211,7 @@ export interface components {
         InviteId: string;
         RecordId: string;
         ClaimTokenParam: string;
+        GrantId: string;
         Cursor: string;
         Limit: number;
         SessionStatusFilter: components["schemas"]["SessionStatus"];
@@ -2174,6 +2277,172 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Records for the owner's agents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Record"][];
+                        nextCursor: components["schemas"]["NextCursor"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listAgentViewers: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Viewer grants for this agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ViewerGrant"][];
+                        nextCursor: components["schemas"]["NextCursor"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    inviteViewer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                    label?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Grant created (or reactivated, if it was previously revoked) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        grant: components["schemas"]["ViewerGrant"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    revokeViewer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+                grantId: components["parameters"]["GrantId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked (or already was) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        grant: components["schemas"]["ViewerGrant"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listViewerAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active grants made out to the caller's own email */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ViewerAccessItem"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listViewerAccessSessions: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions of every agent the caller holds an active viewer grant for */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listViewerAccessRecords: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records of every agent the caller holds an active viewer grant for */
             200: {
                 headers: {
                     [name: string]: unknown;

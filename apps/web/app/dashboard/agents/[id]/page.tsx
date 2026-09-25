@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { StatusBadge } from "../../../../components/StatusBadge";
-import { ApiError, apiFetch, formatDate, type AgentPublic, type OwnerAgent, type OwnerSession } from "../../../../lib/dashboard";
+import { ApiError, apiFetch, formatDate, type AgentPublic, type OwnerAgent, type OwnerSession, type ViewerGrant } from "../../../../lib/dashboard";
 import styles from "./page.module.css";
 
 export default function AgentDetailPage() {
@@ -15,6 +15,13 @@ export default function AgentDetailPage() {
   const [counterparties, setCounterparties] = useState<Record<string, AgentPublic>>({});
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const [viewers, setViewers] = useState<ViewerGrant[]>([]);
+  const [viewerEmail, setViewerEmail] = useState("");
+  const [viewerLabel, setViewerLabel] = useState("");
+  const [invitingViewer, setInvitingViewer] = useState(false);
+  const [revokingViewerId, setRevokingViewerId] = useState<string | null>(null);
+  const [viewerError, setViewerError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +35,14 @@ export default function AgentDetailPage() {
         setAgent(found);
         const mine = sessionsRes.items.filter((s) => s.initiator.agentId === id || s.counterparty.agentId === id);
         setSessions(mine);
+
+        if (found) {
+          apiFetch<{ items: ViewerGrant[] }>(`/v1/owner/agents/${id}/viewers?limit=200`)
+            .then((r) => {
+              if (!cancelled) setViewers(r.items);
+            })
+            .catch(() => {});
+        }
 
         const myAgentIds = new Set(agentsRes.items.map((a) => a.id));
         const idsToResolve = new Set<string>();
@@ -73,6 +88,44 @@ export default function AgentDetailPage() {
       setActionError(err instanceof Error ? err.message : "Could not update this agent.");
     } finally {
       setActing(false);
+    }
+  }
+
+  async function inviteViewer(e: FormEvent) {
+    e.preventDefault();
+    if (!agent) return;
+    setInvitingViewer(true);
+    setViewerError(null);
+    try {
+      const res = await apiFetch<{ grant: ViewerGrant }>(`/v1/owner/agents/${agent.id}/viewers`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: viewerEmail, label: viewerLabel || null }),
+      });
+      setViewers((prev) => [res.grant, ...prev.filter((v) => v.id !== res.grant.id)]);
+      setViewerEmail("");
+      setViewerLabel("");
+    } catch (err) {
+      setViewerError(err instanceof Error ? err.message : "Could not invite this viewer.");
+    } finally {
+      setInvitingViewer(false);
+    }
+  }
+
+  async function revokeViewer(grantId: string) {
+    if (!agent) return;
+    setRevokingViewerId(grantId);
+    setViewerError(null);
+    try {
+      const res = await apiFetch<{ grant: ViewerGrant }>(`/v1/owner/agents/${agent.id}/viewers/${grantId}/revoke`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      setViewers((prev) => prev.map((v) => (v.id === res.grant.id ? res.grant : v)));
+    } catch (err) {
+      setViewerError(err instanceof Error ? err.message : "Could not revoke this viewer.");
+    } finally {
+      setRevokingViewerId(null);
     }
   }
 
@@ -148,6 +201,61 @@ export default function AgentDetailPage() {
             ? "Suspended agents can't create or accept sessions until unsuspended."
             : "Suspending closes any active sessions and cancels pending offers immediately."}
         </p>
+      </section>
+
+      <section className={styles.section} aria-label="Viewers with read-only access to this agent">
+        <p className="label">Viewers ({viewers.filter((v) => v.status === "active").length})</p>
+        <p className={styles.hint}>
+          Give a human — legal, a manager, an auditor — read-only access to this agent&apos;s sessions and records. They
+          sign in the same way you did, with a one-time email link.
+        </p>
+        <form onSubmit={inviteViewer} className={styles.viewerForm}>
+          <input
+            type="email"
+            required
+            placeholder="viewer@company.com"
+            value={viewerEmail}
+            onChange={(e) => setViewerEmail(e.target.value)}
+            className={styles.viewerInput}
+          />
+          <input
+            type="text"
+            placeholder="Label (optional) — e.g. Legal counsel"
+            value={viewerLabel}
+            onChange={(e) => setViewerLabel(e.target.value)}
+            className={styles.viewerInput}
+            maxLength={100}
+          />
+          <button type="submit" className={styles.smallButton} disabled={invitingViewer}>
+            {invitingViewer ? "Inviting…" : "Invite viewer"}
+          </button>
+        </form>
+        {viewerError && <p className={styles.error}>{viewerError}</p>}
+        {viewers.length > 0 && (
+          <ul className={styles.viewerList}>
+            {viewers.map((v) => (
+              <li key={v.id} className={styles.viewerRow}>
+                <div>
+                  <p className={styles.viewerEmail}>
+                    {v.viewerEmail}
+                    {v.label && <span className={styles.viewerLabel}> · {v.label}</span>}
+                  </p>
+                  <p className={styles.hint}>
+                    {v.status === "active" ? "Invited" : "Revoked"} {formatDate(v.status === "active" ? v.createdAt : v.revokedAt)}
+                  </p>
+                </div>
+                <div className={styles.viewerRowActions}>
+                  <StatusBadge status={v.status} />
+                  {v.status === "active" && (
+                    <button className={styles.smallButtonGhost} onClick={() => revokeViewer(v.id)} disabled={revokingViewerId === v.id}>
+                      {revokingViewerId === v.id ? "Revoking…" : "Revoke"}
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className={styles.section} aria-label="Sessions involving this agent">

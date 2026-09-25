@@ -53,6 +53,22 @@ export interface OwnerSession {
   recordId: string | null;
 }
 
+export interface ViewerGrant {
+  id: string;
+  ownerId: string;
+  agentId: string;
+  viewerEmail: string;
+  label: string | null;
+  status: "active" | "revoked";
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface ViewerAccessItem {
+  grant: ViewerGrant;
+  agent: AgentPublic | null;
+}
+
 export interface OwnerInvite {
   id: string;
   sessionId: string;
@@ -136,6 +152,7 @@ export const STATUS_LABEL: Record<string, string> = {
   declined: "Declined",
   cancelled: "Cancelled",
   expired: "Expired",
+  revoked: "Revoked",
 };
 
 export function formatDate(iso: string | null): string {

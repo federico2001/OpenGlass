@@ -1,4 +1,4 @@
-import { ownersRepository, webSessionsRepository, type OwnerDoc } from "@openglass/db";
+import { ownersRepository, viewerGrantsRepository, webSessionsRepository, type OwnerDoc } from "@openglass/db";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Db } from "mongodb";
 import { hashToken } from "../domain/tokens.js";
@@ -9,6 +9,11 @@ export const SESSION_COOKIE_NAME = "og_session";
 declare module "fastify" {
   interface FastifyRequest {
     owner?: OwnerDoc;
+    /** Agents this owner-authenticated caller holds an active human viewer grant for
+     * (Prompt 6), keyed by their verified email — see domain/access.ts. Always set once
+     * `owner` is set (possibly empty), so callers don't need to distinguish "not an owner
+     * request" from "no viewer grants". */
+    viewerAgentIds?: Set<string>;
   }
 }
 
@@ -20,6 +25,7 @@ declare module "fastify" {
 export function verifyOwnerSession(db: Db, opts: { webOrigin: string }) {
   const owners = ownersRepository(db);
   const webSessions = webSessionsRepository(db);
+  const viewerGrants = viewerGrantsRepository(db);
 
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
     if (req.method !== "GET") {
@@ -45,5 +51,6 @@ export function verifyOwnerSession(db: Db, opts: { webOrigin: string }) {
       return sendError(reply, 401, "unauthenticated", "Owner not found or disabled");
     }
     req.owner = owner;
+    req.viewerAgentIds = new Set((await viewerGrants.listActiveForViewer(owner.email)).map((g) => g.agentId));
   };
 }

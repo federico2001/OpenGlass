@@ -3,6 +3,7 @@ import { findRecordById, type RecordDoc } from "@openglass/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Db } from "mongodb";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { canAccessRecord } from "../domain/access.js";
 import { sendError } from "../errors.js";
 import { verifyAgentOrOwner } from "../plugins/agentOrOwnerAuth.js";
 import { requireClaimed } from "../plugins/requireClaimed.js";
@@ -12,12 +13,6 @@ import { agentsRepository } from "@openglass/db";
 import type { ServerDeps } from "../server.js";
 
 const EXTENDED_RETENTION_YEARS = 10;
-
-function canAccessRecord(record: RecordDoc, req: { agent?: { doc: { _id: string } }; owner?: { _id: string } }): boolean {
-  if (req.agent && record.participantAgentIds.includes(req.agent.doc._id)) return true;
-  if (req.owner && record.participantOwnerIds.includes(req.owner._id)) return true;
-  return false;
-}
 
 /** Matches the two record-scoped premium routes and captures `recordId`. */
 export const RECORD_SCOPED_PREMIUM_ROUTE = /^\/v1\/premium\/records\/([^/?]+)\/(?:pdf|extend-retention)(?:$|\?)/;

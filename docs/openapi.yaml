@@ -909,6 +909,146 @@ paths:
                   nextCursor: { $ref: '#/components/schemas/NextCursor' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  # ---------------------------------------------------------------- viewer access (Prompt 6)
+  /v1/owner/agents/{agentId}/viewers:
+    post:
+      tags: [owner]
+      operationId: inviteViewer
+      summary: Invite a human to read-only access on an owned agent
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                label: { type: [string, 'null'], maxLength: 100 }
+      responses:
+        '201':
+          description: Grant created (or reactivated, if it was previously revoked)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grant]
+                properties:
+                  grant: { $ref: '#/components/schemas/ViewerGrant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    get:
+      tags: [owner]
+      operationId: listAgentViewers
+      summary: List viewer grants (active and revoked) for an owned agent
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Viewer grants for this agent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ViewerGrant' }
+                  nextCursor: { $ref: '#/components/schemas/NextCursor' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/owner/agents/{agentId}/viewers/{grantId}/revoke:
+    post:
+      tags: [owner]
+      operationId: revokeViewer
+      summary: Revoke a viewer grant (idempotent)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/GrantId'
+      responses:
+        '200':
+          description: Revoked (or already was)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grant]
+                properties:
+                  grant: { $ref: '#/components/schemas/ViewerGrant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/owner/viewer-access:
+    get:
+      tags: [owner]
+      operationId: listViewerAccess
+      summary: Agents the caller has been granted read-only viewer access to
+      security: [ { ownerSession: [] } ]
+      responses:
+        '200':
+          description: Active grants made out to the caller's own email
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ViewerAccessItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/viewer-access/sessions:
+    get:
+      tags: [owner]
+      operationId: listViewerAccessSessions
+      summary: Sessions of agents the caller can view
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Sessions of every agent the caller holds an active viewer grant for
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/viewer-access/records:
+    get:
+      tags: [owner]
+      operationId: listViewerAccessRecords
+      summary: Records of agents the caller can view
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Records of every agent the caller holds an active viewer grant for
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Record' }
+                  nextCursor: { $ref: '#/components/schemas/NextCursor' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   # ---------------------------------------------------------------- records
   /v1/records/{recordId}:
     get:
@@ -1033,6 +1173,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    GrantId:
+      name: grantId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^vwg_[0-9A-HJKMNP-TV-Z]{26}$' }
     Cursor:
       name: cursor
       in: query
@@ -1575,6 +1720,27 @@ components:
             sha256: { $ref: '#/components/schemas/Hash' }
             bytes: { type: integer, minimum: 0 }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
+    ViewerGrant:
+      type: object
+      required: [id, ownerId, agentId, viewerEmail, label, status, createdAt, revokedAt]
+      properties:
+        id: { type: string }
+        ownerId: { $ref: '#/components/schemas/OwnerId' }
+        agentId: { $ref: '#/components/schemas/AgentId' }
+        viewerEmail: { type: string, format: email }
+        label: { type: [string, 'null'] }
+        status: { type: string, enum: [active, revoked] }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        revokedAt: { oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/Timestamp' }] }
+    ViewerAccessItem:
+      type: object
+      required: [grant, agent]
+      properties:
+        grant: { $ref: '#/components/schemas/ViewerGrant' }
+        agent:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/AgentPublic'
     EvidenceMessage:
       type: object
       required: [envelope, hash, signature, receivedAt, platformSignature]
