@@ -193,6 +193,17 @@ describe("GET /v1/agents/{agentId}/agent.json", () => {
 });
 
 describe("domain verification", () => {
+  // Every describe above this one calls `registerAgent()` at least once, and only
+  // "POST /v1/agents" resets `rate_limits` between tests — by the time execution
+  // reaches here the shared agent_register bucket (10/hour, keyed by req.ip, and every
+  // `.inject()` call shares the same ip) is close to exhausted. Reset it per-test so a
+  // registration here never silently 429s and leaves `identity.agentId` pointing at a
+  // placeholder that doesn't exist, which would surface as a confusing 401 instead of
+  // whatever the test actually means to assert.
+  beforeEach(async () => {
+    await t.db.collection("rate_limits").deleteMany({});
+  });
+
   function appWithCheck(result: boolean) {
     return buildServer({ ...testServerDeps(t), healthChecks: {}, checkDomainVerification: async () => result });
   }
@@ -228,7 +239,8 @@ describe("domain verification", () => {
     expect(failRes.json().error.code).toBe("domain_verification_failed");
 
     // published — the check succeeds
-    const okRes = await appWithCheck(true).inject({ method: "POST", url: checkPath, headers: checkHeaders });
+    const okHeaders = signedRequestHeaders({ method: "POST", path: checkPath, identity });
+    const okRes = await appWithCheck(true).inject({ method: "POST", url: checkPath, headers: okHeaders });
     expect(okRes.statusCode).toBe(200);
     expect(okRes.json().domainVerification.status).toBe("verified");
     expect(okRes.json().domainVerification.verifiedAt).toBeTruthy();
