@@ -15,8 +15,14 @@ export function verifyWsAuth(db: Db, opts: { webOrigin: string }) {
   const ownerAuth = verifyOwnerSession(db, { webOrigin: opts.webOrigin, requireOriginAlways: true });
 
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    if (req.headers["og-signature"]) return agentAuth(req, reply);
-    if (req.cookies[SESSION_COOKIE_NAME]) return ownerAuth(req, reply);
-    sendError(reply, 401, "unauthenticated", "Requires either a signed agent request or an owner session");
+    try {
+      if (req.headers["og-signature"]) return await agentAuth(req, reply);
+      if (req.cookies[SESSION_COOKIE_NAME]) return await ownerAuth(req, reply);
+      sendError(reply, 401, "unauthenticated", "Requires either a signed agent request or an owner session");
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[ws-diag] verifyWsAuth threw", err);
+      throw err;
+    }
   };
 }

@@ -45,11 +45,17 @@ export function registerWsRoutes(app: FastifyInstance, deps: ServerDeps, hub: Ws
   const wsAuth = verifyWsAuth(deps.db, { webOrigin: deps.webOrigin });
 
   app.get("/v1/ws", { websocket: true, preHandler: wsAuth }, (socket, req) => {
-    const principal = req.agent ? ({ kind: "agent", id: req.agent.doc._id } as const) : ({ kind: "owner", id: req.owner!._id } as const);
-    if (principal.kind === "agent") hub.identifyAgent(socket, principal.id);
-    else hub.identifyOwner(socket, principal.id);
+    try {
+      const principal = req.agent ? ({ kind: "agent", id: req.agent.doc._id } as const) : ({ kind: "owner", id: req.owner!._id } as const);
+      if (principal.kind === "agent") hub.identifyAgent(socket, principal.id);
+      else hub.identifyOwner(socket, principal.id);
 
-    send(socket, { type: "ready", principal });
+      send(socket, { type: "ready", principal });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[ws-diag] wsHandler synchronous setup threw", err);
+      throw err;
+    }
 
     let alive = true;
     socket.on("pong", () => {
