@@ -41,11 +41,7 @@ beforeAll(async () => {
   s3 = await openTestS3();
   const deps = testServerDeps(t, s3);
   signer = deps.signer;
-  // TEMP: real logging while diagnosing a CI-only WS upgrade failure (500 instead of 101)
-  // that doesn't reproduce as a clear synchronous throw on inspection — logger:false (the
-  // testServerDeps default) would otherwise swallow whatever @fastify/websocket's error
-  // handler logs.
-  app = buildServer({ ...deps, healthChecks: {}, logger: true });
+  app = buildServer({ ...deps, healthChecks: {} });
   // Unlike .inject(), injectWS() (from @fastify/websocket) doesn't wait for the instance
   // to finish loading plugins/routes first — without this, the first call in the file
   // hits "app.injectWS is not a function" (plugin not decorated yet).
@@ -103,15 +99,23 @@ interface WsLike {
   on: (event: string, cb: (...args: unknown[]) => void) => void;
 }
 
+// buildServer() sets trustProxy: true, so Fastify needs req.socket.remoteAddress (via
+// @fastify/forwarded) whenever it resolves req.ip — which it does even for a WS upgrade
+// (e.g. while formatting its own request log line). injectWS()'s hand-rolled fake request
+// has no .socket at all (unlike light-my-request's fake request for plain .inject()),
+// so every real upgrade attempt here needs one stubbed in, or it 500s before ever reaching
+// this route's own preHandler/handler logic.
+const FAKE_SOCKET = { remoteAddress: "127.0.0.1" } as unknown as import("net").Socket;
+
 async function connectAsAgent(identity: TestAgentIdentity): Promise<WsLike> {
-  const ws = (await app.injectWS("/v1/ws", { headers: signRequestFrame(identity) })) as unknown as WsLike;
+  const ws = (await app.injectWS("/v1/ws", { headers: signRequestFrame(identity), socket: FAKE_SOCKET })) as unknown as WsLike;
   openSockets.push(ws);
   return ws;
 }
 
 async function connectAsOwner(ownerId: string): Promise<WsLike> {
   const cookie = await createOwnerSessionCookie(t.db, ownerId);
-  const ws = (await app.injectWS("/v1/ws", { headers: { cookie, origin: "https://localhost" } })) as unknown as WsLike;
+  const ws = (await app.injectWS("/v1/ws", { headers: { cookie, origin: "https://localhost" }, socket: FAKE_SOCKET })) as unknown as WsLike;
   openSockets.push(ws);
   return ws;
 }
@@ -152,13 +156,13 @@ function nextFrames(ws: WsLike): {
 
 describe("GET /v1/ws auth", () => {
   it("rejects a connection with no credentials", async () => {
-    await expect(app.injectWS("/v1/ws")).rejects.toThrow(/401/);
+    await expect(app.injectWS("/v1/ws", { socket: FAKE_SOCKET })).rejects.toThrow(/401/);
   });
 
   it("rejects an owner connection with the wrong Origin", async () => {
     const owner = await insertTestOwner(t.db, `origin_${newId("own").slice(-6)}@example.com`.toLowerCase());
     const cookie = await createOwnerSessionCookie(t.db, owner._id);
-    await expect(app.injectWS("/v1/ws", { headers: { cookie, origin: "https://evil.example" } })).rejects.toThrow(/403/);
+    await expect(app.injectWS("/v1/ws", { headers: { cookie, origin: "https://evil.example" }, socket: FAKE_SOCKET })).rejects.toThrow(/403/);
   });
 
   it("accepts a signed agent connection and sends ready", async () => {
