@@ -49,7 +49,12 @@ export function registerWsRoutes(app: FastifyInstance, deps: ServerDeps, hub: Ws
     if (principal.kind === "agent") hub.identifyAgent(socket, principal.id);
     else hub.identifyOwner(socket, principal.id);
 
-    send(socket, { type: "ready", principal });
+    // Deferred a tick rather than sent inline: `wss.handleUpgrade()`'s callback fires the
+    // instant the handshake completes server-side, before the client's own connection
+    // handling has necessarily finished settling into frame-reading mode — a real ws client
+    // always attaches its listeners before the connection even starts, so this is purely
+    // defensive, but costs nothing a client would ever notice.
+    setImmediate(() => send(socket, { type: "ready", principal }));
 
     let alive = true;
     socket.on("pong", () => {
