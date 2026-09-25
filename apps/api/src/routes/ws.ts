@@ -45,28 +45,11 @@ export function registerWsRoutes(app: FastifyInstance, deps: ServerDeps, hub: Ws
   const wsAuth = verifyWsAuth(deps.db, { webOrigin: deps.webOrigin });
 
   app.get("/v1/ws", { websocket: true, preHandler: wsAuth }, (socket, req) => {
-    try {
-      // eslint-disable-next-line no-console
-      console.error("[ws-diag] wsHandler entered", {
-        socketHasSend: typeof (socket as unknown as { send?: unknown }).send,
-        socketHasOn: typeof (socket as unknown as { on?: unknown }).on,
-        reqHasSend: typeof (req as unknown as { send?: unknown }).send,
-        reqHasHeaders: typeof req.headers,
-        reqHasAgent: req.agent !== undefined,
-        reqHasOwner: req.owner !== undefined,
-        reqMethod: req.method,
-        reqUrl: req.url,
-      });
-      const principal = req.agent ? ({ kind: "agent", id: req.agent.doc._id } as const) : ({ kind: "owner", id: req.owner!._id } as const);
-      if (principal.kind === "agent") hub.identifyAgent(socket, principal.id);
-      else hub.identifyOwner(socket, principal.id);
+    const principal = req.agent ? ({ kind: "agent", id: req.agent.doc._id } as const) : ({ kind: "owner", id: req.owner!._id } as const);
+    if (principal.kind === "agent") hub.identifyAgent(socket, principal.id);
+    else hub.identifyOwner(socket, principal.id);
 
-      send(socket, { type: "ready", principal });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("[ws-diag] wsHandler synchronous setup threw", err);
-      throw err;
-    }
+    send(socket, { type: "ready", principal });
 
     let alive = true;
     socket.on("pong", () => {

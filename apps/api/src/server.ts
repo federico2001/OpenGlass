@@ -5,6 +5,7 @@ import type { PlatformSigner } from "@openglass/db";
 import type { RoutesConfig } from "@x402/core/server";
 import { paymentMiddleware } from "@x402/fastify";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import fp from "fastify-plugin";
 import type { Db, MongoClient } from "mongodb";
 import { registerRawBodyCapture } from "./plugins/rawBody.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
@@ -20,7 +21,7 @@ import { registerSessionsRoutes } from "./routes/sessions.js";
 import { registerVerifyRoutes } from "./routes/verify.js";
 import { registerWellKnownRoutes } from "./routes/wellKnown.js";
 import { registerWsRoutes } from "./routes/ws.js";
-import { createWsHub } from "./ws/hub.js";
+import { createWsHub, type WsHub } from "./ws/hub.js";
 import type { Mailer } from "./mailer.js";
 import type { X402Deps } from "./domain/x402.js";
 
@@ -68,12 +69,28 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+/**
+ * `app.register(websocket)` followed by `app.get("/v1/ws", {websocket: true}, ...)` as two
+ * separate top-level calls looks right but isn't: avvio only guarantees a plugin's onRoute
+ * hooks (which is how @fastify/websocket wraps a route's handler to actually perform the
+ * upgrade) run before a later route registration if that registration is nested inside the
+ * plugin's own registration, not just sequenced after it in the source. Unnested, the route
+ * gets added before @fastify/websocket's hook exists, so it's never wrapped — the handler
+ * then runs as an ordinary (request, reply) handler instead of (socket, request), a bug
+ * that only shows up once you actually try to complete an upgrade. `fp()` here undoes the
+ * encapsulation a nested register() would otherwise add, so `websocketServer`/`injectWS`
+ * still end up decorated on the outer `app`, not just this inner scope.
+ */
+const registerWs = fp(async function registerWs(instance: FastifyInstance, opts: { deps: ServerDeps; hub: WsHub }) {
+  await instance.register(websocket);
+  registerWsRoutes(instance, opts.deps, opts.hub);
+});
+
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false, trustProxy: true });
 
   registerRawBodyCapture(app);
   app.register(cookie);
-  app.register(websocket);
 
   app.get("/health", async (req, reply) => {
     const results = await Promise.all(
@@ -104,7 +121,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerVerifyRoutes(app, deps);
 
   const wsHub = createWsHub(deps.db);
-  registerWsRoutes(app, deps, wsHub);
+  app.register(registerWs, { deps, hub: wsHub });
   app.addHook("onClose", async () => wsHub.close());
 
   if (deps.x402) {

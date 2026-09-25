@@ -56,6 +56,9 @@ importers:
       fastify:
         specifier: ^5.12.5
         version: 5.12.5
+      fastify-plugin:
+        specifier: ^6.0.0
+        version: 6.0.0
       mongodb:
         specifier: ^7.6.0
         version: 7.6.0
