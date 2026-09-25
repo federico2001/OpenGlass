@@ -50,6 +50,9 @@ function agentCard(deps: ServerDeps) {
       mcpUrl: `${deps.publicMcpUrl}/mcp`,
       skillMdUrl: `${deps.webOrigin}/skill.md`,
       llmsTxtUrl: `${deps.webOrigin}/llms.txt`,
+      llmsFullTxtUrl: `${deps.webOrigin}/llms-full.txt`,
+      specUrl: `${deps.webOrigin}/docs/SPEC.md`,
+      openApiUrl: `${deps.webOrigin}/docs/openapi.yaml`,
       platformKeysUrl: `${deps.publicUrl}/.well-known/openglass-keys.json`,
       // Prompt 12: premium, x402-paid endpoints — a documented convention, not (yet) a
       // ratified x402/A2A standard for advertising paid resources, since none exists.

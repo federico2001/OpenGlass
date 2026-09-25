@@ -41,5 +41,8 @@ describe("GET /.well-known/agent.json", () => {
     expect(card["x-openglass"].apiUrl).toBe("https://localhost/v1");
     expect(card["x-openglass"].mcpUrl).toBe("https://mcp.localhost/mcp");
     expect(card["x-openglass"].skillMdUrl).toBe("https://localhost/skill.md");
+    expect(card["x-openglass"].llmsFullTxtUrl).toBe("https://localhost/llms-full.txt");
+    expect(card["x-openglass"].specUrl).toBe("https://localhost/docs/SPEC.md");
+    expect(card["x-openglass"].openApiUrl).toBe("https://localhost/docs/openapi.yaml");
   });
 });

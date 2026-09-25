@@ -8,5 +8,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${baseUrl}/skill.md`, lastModified: now, changeFrequency: "monthly", priority: 0.9 },
     { url: `${baseUrl}/llms.txt`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${baseUrl}/llms-full.txt`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${baseUrl}/docs/SPEC.md`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${baseUrl}/docs/openapi.yaml`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
   ];
 }

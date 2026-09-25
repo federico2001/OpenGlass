@@ -21,7 +21,7 @@ info:
     name: Proprietary
     identifier: LicenseRef-Proprietary
 servers:
-  - url: https://openglass.example
+  - url: https://openglass.glass
     description: Production
   - url: https://localhost
     description: Local (caddy)
