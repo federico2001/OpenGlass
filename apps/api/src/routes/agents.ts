@@ -12,7 +12,8 @@ import {
 } from "@openglass/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { agentFullView, agentPublicView, keyView } from "../domain/agentViews.js";
+import { agentFullView, agentPublicView, domainVerificationView, keyView } from "../domain/agentViews.js";
+import { domainFromHomepage, generateVerificationToken, verificationFileUrl } from "../domain/domainVerification.js";
 import { keyFingerprint } from "../domain/fingerprint.js";
 import { generateToken, hashToken } from "../domain/tokens.js";
 import { parseOrError, sendError } from "../errors.js";
@@ -73,6 +74,7 @@ function agentCardFor(agent: AgentDoc, deps: ServerDeps) {
       status: agent.status,
       claimed: agent.ownerId !== null,
       verifiedBadge: agent.verifiedBadge ?? false,
+      domainVerified: agent.domainVerification?.status === "verified",
       fingerprint: keyFingerprint(primaryKey.publicKey),
       keys: activeKeys.map((k) => ({ kid: k.kid, alg: k.alg, publicKey: k.publicKey })),
       profileUrl,
@@ -130,9 +132,56 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
   app.patch("/v1/agents/me", { preHandler: verifyAgentRequest(deps.db) }, async (req, reply) => {
     const body = parseOrError(PatchBody, req.body, reply);
     if (!body) return;
-    const updated = await agents.update(req.agent!.doc._id, { ...body });
+    const agent = req.agent!.doc;
+    // A domain verification proves control of one specific domain — if meta.homepage is
+    // changing, it no longer applies to whatever homepage comes next.
+    const homepageChanged = body.meta !== undefined && body.meta.homepage !== agent.meta.homepage;
+    const updated = await agents.update(agent._id, { ...body, ...(homepageChanged ? { domainVerification: null } : {}) });
     return { agent: agentFullView(updated!) };
   });
+
+  app.post(
+    "/v1/agents/me/domain-verification",
+    { preHandler: [verifyAgentRequest(deps.db), rateLimit(deps.db, "domain_verification", (req) => req.agent!.doc._id)] },
+    async (req, reply) => {
+      const agent = req.agent!.doc;
+      const domain = domainFromHomepage(agent.meta.homepage);
+      if (!domain) {
+        return sendError(
+          reply,
+          422,
+          "domain_invalid",
+          "meta.homepage must be set to a real https:// URL (not an IP address or localhost) before requesting domain verification",
+        );
+      }
+      const token = generateVerificationToken();
+      const domainVerification = { domain, token, status: "pending" as const, requestedAt: new Date(), verifiedAt: null };
+      const updated = await agents.update(agent._id, { domainVerification });
+      return reply.code(201).send({
+        domainVerification: domainVerificationView(updated!.domainVerification!),
+        verifyUrl: verificationFileUrl(domain),
+        instructions: `Publish a file at ${verificationFileUrl(domain)} whose contents are exactly this token, on its own line: ${token}`,
+      });
+    },
+  );
+
+  app.post(
+    "/v1/agents/me/domain-verification/check",
+    { preHandler: [verifyAgentRequest(deps.db), rateLimit(deps.db, "domain_verification", (req) => req.agent!.doc._id)] },
+    async (req, reply) => {
+      const agent = req.agent!.doc;
+      const dv = agent.domainVerification ?? null;
+      if (!dv) return sendError(reply, 409, "domain_verification_not_requested", "Call POST /v1/agents/me/domain-verification first");
+      if (dv.status === "verified") return { domainVerification: domainVerificationView(dv) };
+
+      const ok = await deps.checkDomainVerification(dv.domain, dv.token);
+      if (!ok) {
+        return sendError(reply, 422, "domain_verification_failed", `Could not find the verification token at ${verificationFileUrl(dv.domain)}`);
+      }
+      const updated = await agents.update(agent._id, { domainVerification: { ...dv, status: "verified", verifiedAt: new Date() } });
+      return { domainVerification: domainVerificationView(updated!.domainVerification!) };
+    },
+  );
 
   app.post("/v1/agents/me/claim-token", { preHandler: verifyAgentRequest(deps.db) }, async (req, reply) => {
     const agent = req.agent!.doc;

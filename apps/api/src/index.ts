@@ -1,6 +1,7 @@
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { connectFromEnv, createPlatformSigner, migrate } from "@openglass/db";
 import { loadConfig } from "./config.js";
+import { checkDomainVerification } from "./domain/domainVerification.js";
 import { createX402Deps } from "./domain/x402.js";
 import { createMailer } from "./mailer.js";
 import { buildServer } from "./server.js";
@@ -47,6 +48,7 @@ const app = buildServer({
   s3Bucket: config.S3_BUCKET,
   objectLockMode: config.OBJECT_LOCK_MODE,
   x402,
+  checkDomainVerification,
 });
 
 await app.listen({ host: "0.0.0.0", port: config.PORT });

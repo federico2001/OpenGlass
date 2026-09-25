@@ -191,3 +191,86 @@ describe("GET /v1/agents/{agentId}/agent.json", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("domain verification", () => {
+  function appWithCheck(result: boolean) {
+    return buildServer({ ...testServerDeps(t), healthChecks: {}, checkDomainVerification: async () => result });
+  }
+
+  it("refuses to start without a real https meta.homepage", async () => {
+    const identity = testIdentity("agt_dv_none", "key_dv_none");
+    await registerAgent(identity); // no meta.homepage
+    const path = "/v1/agents/me/domain-verification";
+    const headers = signedRequestHeaders({ method: "POST", path, identity });
+    const res = await app().inject({ method: "POST", url: path, headers });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("domain_invalid");
+  });
+
+  it("issues a pending token, then verifies once the check succeeds", async () => {
+    const identity = testIdentity("agt_dv_ok", "key_dv_ok");
+    await registerAgent(identity, { meta: { homepage: "https://acme.example" } });
+
+    const startPath = "/v1/agents/me/domain-verification";
+    const startHeaders = signedRequestHeaders({ method: "POST", path: startPath, identity });
+    const startRes = await app().inject({ method: "POST", url: startPath, headers: startHeaders });
+    expect(startRes.statusCode).toBe(201);
+    expect(startRes.json().domainVerification.domain).toBe("acme.example");
+    expect(startRes.json().domainVerification.status).toBe("pending");
+    expect(startRes.json().verifyUrl).toBe("https://acme.example/.well-known/openglass-agent-verification.txt");
+    expect(startRes.json().instructions).toContain(startRes.json().domainVerification.token);
+
+    // not yet published — the check fails
+    const checkPath = "/v1/agents/me/domain-verification/check";
+    const checkHeaders = signedRequestHeaders({ method: "POST", path: checkPath, identity });
+    const failRes = await appWithCheck(false).inject({ method: "POST", url: checkPath, headers: checkHeaders });
+    expect(failRes.statusCode).toBe(422);
+    expect(failRes.json().error.code).toBe("domain_verification_failed");
+
+    // published — the check succeeds
+    const okRes = await appWithCheck(true).inject({ method: "POST", url: checkPath, headers: checkHeaders });
+    expect(okRes.statusCode).toBe(200);
+    expect(okRes.json().domainVerification.status).toBe("verified");
+    expect(okRes.json().domainVerification.verifiedAt).toBeTruthy();
+
+    // both the agent's own full view and its public view now show it verified
+    const mePath = "/v1/agents/me";
+    const meRes = await app().inject({ method: "GET", url: mePath, headers: signedRequestHeaders({ method: "GET", path: mePath, identity }) });
+    expect(meRes.json().agent.domainVerified).toBe(true);
+    const publicRes = await app().inject({ method: "GET", url: `/v1/agents/${identity.agentId}` });
+    expect(publicRes.json().agent.domainVerified).toBe(true);
+    expect(publicRes.json().agent.domainVerification).toBeUndefined(); // token stays private to the agent's own view
+  });
+
+  it("requires a domain-verification request before checking", async () => {
+    const identity = testIdentity("agt_dv_unrequested", "key_dv_unrequested");
+    await registerAgent(identity, { meta: { homepage: "https://acme2.example" } });
+    const path = "/v1/agents/me/domain-verification/check";
+    const headers = signedRequestHeaders({ method: "POST", path, identity });
+    const res = await appWithCheck(true).inject({ method: "POST", url: path, headers });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("domain_verification_not_requested");
+  });
+
+  it("clears verification when meta.homepage changes", async () => {
+    const identity = testIdentity("agt_dv_change", "key_dv_change");
+    await registerAgent(identity, { meta: { homepage: "https://acme3.example" } });
+
+    const startPath = "/v1/agents/me/domain-verification";
+    await app().inject({ method: "POST", url: startPath, headers: signedRequestHeaders({ method: "POST", path: startPath, identity }) });
+    const checkPath = "/v1/agents/me/domain-verification/check";
+    const verifyRes = await appWithCheck(true).inject({
+      method: "POST",
+      url: checkPath,
+      headers: signedRequestHeaders({ method: "POST", path: checkPath, identity }),
+    });
+    expect(verifyRes.json().domainVerification.status).toBe("verified");
+
+    const patchPath = "/v1/agents/me";
+    const patchBody = { meta: { homepage: "https://different.example" } };
+    const patchHeaders = signedRequestHeaders({ method: "PATCH", path: patchPath, body: patchBody, identity });
+    const patchRes = await app().inject({ method: "PATCH", url: patchPath, headers: patchHeaders, payload: patchBody });
+    expect(patchRes.json().agent.domainVerified).toBe(false);
+    expect(patchRes.json().agent.domainVerification).toBeNull();
+  });
+});

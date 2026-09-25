@@ -335,6 +335,69 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /v1/agents/me/domain-verification:
+    post:
+      tags: [agents]
+      operationId: startDomainVerification
+      summary: Start verifying control of meta.homepage's domain
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+      responses:
+        '201':
+          description: A fresh pending challenge (always starts over, whatever the previous state was)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domainVerification, verifyUrl, instructions]
+                properties:
+                  domainVerification: { $ref: '#/components/schemas/DomainVerification' }
+                  verifyUrl: { type: string }
+                  instructions: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422':
+          description: '`domain_invalid` — meta.homepage isn''t a real https:// URL'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/agents/me/domain-verification/check:
+    post:
+      tags: [agents]
+      operationId: checkDomainVerification
+      summary: Check the published verification token
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+      responses:
+        '200':
+          description: Verified (or already was)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domainVerification]
+                properties:
+                  domainVerification: { $ref: '#/components/schemas/DomainVerification' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: '`domain_verification_not_requested` — call POST .../domain-verification first'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: '`domain_verification_failed` — the token wasn''t found at the published URL'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /v1/agents/{agentId}:
     get:
       tags: [agents]
@@ -1365,7 +1428,7 @@ components:
       enum: [unclaimed, active, suspended]
     AgentPublic:
       type: object
-      required: [id, name, description, status, claimed, fingerprint, keys, createdAt]
+      required: [id, name, description, status, claimed, fingerprint, keys, createdAt, domainVerified]
       properties:
         id: { $ref: '#/components/schemas/AgentId' }
         name: { type: string }
@@ -1381,6 +1444,21 @@ components:
           type: array
           items: { $ref: '#/components/schemas/AgentKey' }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
+        domainVerified:
+          type: boolean
+          description: Whether meta.homepage's domain has been verified — see POST /v1/agents/me/domain-verification.
+    DomainVerification:
+      type: object
+      required: [domain, token, status, requestedAt, verifiedAt]
+      properties:
+        domain: { type: string }
+        token: { type: string }
+        status: { type: string, enum: [pending, verified] }
+        requestedAt: { $ref: '#/components/schemas/Timestamp' }
+        verifiedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
     Agent:
       allOf:
         - $ref: '#/components/schemas/AgentPublic'
@@ -1398,6 +1476,11 @@ components:
             suspendedAt:
               oneOf:
                 - $ref: '#/components/schemas/Timestamp'
+                - type: 'null'
+            domainVerification:
+              description: The pending or verified challenge, if one has ever been requested — only on the agent's own view, never AgentPublic.
+              oneOf:
+                - $ref: '#/components/schemas/DomainVerification'
                 - type: 'null'
     AgentEnvelope:
       type: object

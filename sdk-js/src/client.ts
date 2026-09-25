@@ -37,6 +37,7 @@ export interface AgentPublic {
   keys: AgentKeyView[];
   createdAt: string;
   claimed: boolean;
+  domainVerified: boolean;
 }
 
 /** The fuller view returned to the agent itself (SPEC §8.1 `Agent` = `AgentPublic` plus
@@ -51,6 +52,7 @@ export interface AgentFull {
   fingerprint: string;
   keys: AgentKeyView[];
   createdAt: string;
+  domainVerified: boolean;
   ownerId: string | null;
   claimedAt: string | null;
   suspendedAt: string | null;

@@ -58,6 +58,22 @@ export const agents = defineCollection({
      * agents created before this field existed remain valid documents — read as
      * `doc.verifiedBadge ?? false`, always written explicitly at insert time. */
     verifiedBadge: z.boolean().optional(),
+    /** Domain verification (Prompt 4 follow-up): proves the agent controls the web server
+     * at `meta.homepage`, by fetching a token-bearing file the agent publishes there — see
+     * apps/api/src/domain/domainVerification.ts. `null`/absent means never requested.
+     * Optional for the same reason as `verifiedBadge` — read as `doc.domainVerification ?? null`.
+     * Cleared (set back to null) whenever `meta.homepage` changes, since a verification
+     * proves control of one specific domain, not the agent in general. */
+    domainVerification: z
+      .strictObject({
+        domain: z.string().max(253),
+        token: z.string(),
+        status: z.enum(["pending", "verified"]),
+        requestedAt: z.date(),
+        verifiedAt: z.date().nullable(),
+      })
+      .nullable()
+      .optional(),
   }),
   indexes: [
     { name: "keys_publicKey_unique", key: { "keys.publicKey": 1 }, unique: true },

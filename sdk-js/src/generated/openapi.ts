@@ -199,6 +199,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/me/domain-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start verifying control of meta.homepage's domain */
+        post: operations["startDomainVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/me/domain-verification/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the published verification token */
+        post: operations["checkDomainVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agentId}": {
         parameters: {
             query?: never;
@@ -788,11 +822,23 @@ export interface components {
             fingerprint: string;
             keys: components["schemas"]["AgentKey"][];
             createdAt: components["schemas"]["Timestamp"];
+            /** @description Whether meta.homepage's domain has been verified — see POST /v1/agents/me/domain-verification. */
+            domainVerified: boolean;
+        };
+        DomainVerification: {
+            domain: string;
+            token: string;
+            /** @enum {string} */
+            status: "pending" | "verified";
+            requestedAt: components["schemas"]["Timestamp"];
+            verifiedAt: components["schemas"]["Timestamp"] | null;
         };
         Agent: components["schemas"]["AgentPublic"] & {
             ownerId: components["schemas"]["OwnerId"] | null;
             claimedAt: components["schemas"]["Timestamp"] | null;
             suspendedAt?: components["schemas"]["Timestamp"] | null;
+            /** @description The pending or verified challenge, if one has ever been requested — only on the agent's own view, never AgentPublic. */
+            domainVerification?: components["schemas"]["DomainVerification"] | null;
         };
         AgentEnvelope: {
             agent: components["schemas"]["Agent"];
@@ -1582,6 +1628,93 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    startDomainVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                "OG-Agent": components["parameters"]["OGAgent"];
+                /** @description Key id, or `new` on registration. */
+                "OG-Key": components["parameters"]["OGKey"];
+                "OG-Timestamp": components["parameters"]["OGTimestamp"];
+                "OG-Nonce": components["parameters"]["OGNonce"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A fresh pending challenge (always starts over, whatever the previous state was) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        domainVerification: components["schemas"]["DomainVerification"];
+                        verifyUrl: string;
+                        instructions: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description `domain_invalid` — meta.homepage isn't a real https:// URL */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    checkDomainVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                "OG-Agent": components["parameters"]["OGAgent"];
+                /** @description Key id, or `new` on registration. */
+                "OG-Key": components["parameters"]["OGKey"];
+                "OG-Timestamp": components["parameters"]["OGTimestamp"];
+                "OG-Nonce": components["parameters"]["OGNonce"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verified (or already was) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        domainVerification: components["schemas"]["DomainVerification"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description `domain_verification_not_requested` — call POST .../domain-verification first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `domain_verification_failed` — the token wasn't found at the published URL */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     getAgentPublic: {

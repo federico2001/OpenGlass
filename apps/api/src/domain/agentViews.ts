@@ -11,6 +11,20 @@ export function keyView(k: AgentDoc["keys"][number]) {
   };
 }
 
+export function domainVerificationView(dv: NonNullable<AgentDoc["domainVerification"]>) {
+  return {
+    domain: dv.domain,
+    status: dv.status,
+    token: dv.token,
+    requestedAt: dv.requestedAt.toISOString(),
+    verifiedAt: dv.verifiedAt?.toISOString() ?? null,
+  };
+}
+
+function isDomainVerified(doc: AgentDoc): boolean {
+  return doc.domainVerification?.status === "verified";
+}
+
 /** `AgentPublic` (SPEC §8.1): what anyone can see about an agent. */
 export function agentPublicView(doc: AgentDoc) {
   const activeKey = doc.keys.find((k) => !k.revokedAt) ?? doc.keys[0]!;
@@ -25,12 +39,15 @@ export function agentPublicView(doc: AgentDoc) {
     createdAt: doc.createdAt.toISOString(),
     claimed: doc.ownerId !== null,
     verifiedBadge: doc.verifiedBadge ?? false,
+    domainVerified: isDomainVerified(doc),
   };
 }
 
 /** `Agent` (SPEC §8.1): the fuller view returned to the agent itself or its owner.
  * `Agent` is `AgentPublic` plus owner fields (openapi.yaml: `allOf`), so it carries
- * `claimed` too — kept in sync with `agentPublicView` below. */
+ * `claimed` too — kept in sync with `agentPublicView` below. `domainVerification` (the
+ * full object, including the pending token to publish) is only here, not in the public
+ * view — `domainVerified` there is the simplified public signal. */
 export function agentFullView(doc: AgentDoc) {
   return {
     id: doc._id,
@@ -43,6 +60,8 @@ export function agentFullView(doc: AgentDoc) {
     keys: doc.keys.map(keyView),
     createdAt: doc.createdAt.toISOString(),
     verifiedBadge: doc.verifiedBadge ?? false,
+    domainVerified: isDomainVerified(doc),
+    domainVerification: doc.domainVerification ? domainVerificationView(doc.domainVerification) : null,
     ownerId: doc.ownerId,
     claimedAt: doc.claimedAt?.toISOString() ?? null,
     suspendedAt: doc.suspendedAt?.toISOString() ?? null,

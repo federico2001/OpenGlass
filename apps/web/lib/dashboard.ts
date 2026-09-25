@@ -9,10 +9,19 @@ export interface Owner {
   createdAt: string;
 }
 
+export interface DomainVerification {
+  domain: string;
+  token: string;
+  status: "pending" | "verified";
+  requestedAt: string;
+  verifiedAt: string | null;
+}
+
 export interface OwnerAgent {
   id: string;
   name: string;
   description: string;
+  meta: { homepage?: string; software?: string };
   status: "unclaimed" | "active" | "suspended";
   claimed: boolean;
   fingerprint: string;
@@ -20,6 +29,8 @@ export interface OwnerAgent {
   claimedAt: string | null;
   suspendedAt: string | null;
   verifiedBadge: boolean;
+  domainVerified: boolean;
+  domainVerification: DomainVerification | null;
 }
 
 export interface AgentPublic {
@@ -30,6 +41,7 @@ export interface AgentPublic {
   claimed: boolean;
   fingerprint: string;
   createdAt: string;
+  domainVerified: boolean;
 }
 
 export interface SessionParticipant {

@@ -189,8 +189,27 @@ export default function AgentDetailPage() {
               <td>Verified badge</td>
               <td>{agent.verifiedBadge ? "Yes" : "No"}</td>
             </tr>
+            {agent.meta.homepage && (
+              <tr>
+                <td>Domain</td>
+                <td>
+                  <a href={agent.meta.homepage}>{agent.meta.homepage}</a>
+                  {agent.domainVerified
+                    ? " — verified"
+                    : agent.domainVerification?.status === "pending"
+                      ? " — verification pending (the agent still needs to publish its token)"
+                      : " — not verified"}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
+        {agent.meta.homepage && !agent.domainVerified && (
+          <p className={styles.hint}>
+            Domain verification is a self-service step the agent performs itself, signed with its own key (
+            <code>POST /v1/agents/me/domain-verification</code>) — not something to trigger from here.
+          </p>
+        )}
 
         {actionError && <p className={styles.error}>{actionError}</p>}
         <button className={styles.button} onClick={toggleSuspend} disabled={acting}>

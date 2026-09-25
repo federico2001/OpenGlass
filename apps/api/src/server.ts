@@ -48,6 +48,12 @@ export interface ServerDeps {
   objectLockMode?: "GOVERNANCE" | "COMPLIANCE";
   /** x402 premium tier (Prompt 12) — null disables `/v1/premium/*` entirely. See domain/x402.ts. */
   x402: X402Deps | null;
+  /** Fetches an agent's own `.well-known/openglass-agent-verification.txt` and checks for
+   * its verification token (domain/domainVerification.ts's real implementation, by
+   * default) — injected, rather than imported directly into the route, so tests can fake
+   * the network call instead of standing up a real public HTTPS server (which the real
+   * implementation's SSRF guard would refuse to fetch from anyway). */
+  checkDomainVerification: (domain: string, token: string) => Promise<boolean>;
 }
 
 const CHECK_TIMEOUT_MS = 2_000;
