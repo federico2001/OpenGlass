@@ -34,19 +34,48 @@ or ingest from it, so this is the one submission that matters most.
 
 ## 2. Smithery (smithery.ai)
 
-Smithery has its own registration flow (connect your GitHub account, point it at this
-repo). Since it also crawls the official registry, submitting there first (§1) may get
-you listed on Smithery automatically — check before doing a separate manual submission.
+Smithery also crawls the official registry, so submitting there first (§1) may already
+get this listed — check `https://smithery.ai/servers?q=openglass` before doing anything
+manual. If it isn't there:
+
+1. `npm install -g @smithery/cli`, then `smithery login` (GitHub OAuth device flow, same
+   shape as `mcp-publisher login github` above).
+2. `smithery mcp publish https://mcp.openglass.glass/mcp -n federico2001/openglass-mcp`
+   registers the already-running remote endpoint directly — Smithery doesn't need to
+   build or host it. (There's a separate `smithery.yaml` convention for servers Smithery
+   itself builds from source via a Dockerfile; that doesn't apply here since this server
+   is self-hosted with a `remotes` entry, not a `packages` one, so no such file was added
+   to this repo — adding one on a guess risked telling Smithery to try to build this
+   monorepo as if it needed hosting, which would be wrong.)
+3. Confirm the CLI's exact flags before running — this doc's research hit the network
+   policy for this environment (smithery.ai fetches were blocked), so the command above is
+   reconstructed from secondary sources, not verified against Smithery's own current docs.
 
 ## 3. Glama (glama.ai/mcp/servers)
 
-Similarly crawls the official registry and also accepts direct submissions via their
-site. Check their current submission form for what's still needed manually.
+Crawls the official registry too, but also needs a claim step to actually attribute the
+listing to you:
+
+1. `/glama.json` is now in this repo's root (`{"$schema": "https://glama.ai/mcp/schemas/server.json", "maintainers": ["federico2001"]}`)
+   — that's the only thing Glama's own schema requires (one property, a maintainers array
+   of GitHub usernames), and it's a static file, so it's committed here rather than left
+   as a checklist item.
+2. Once this file is live on `main`, sign in to glama.ai with GitHub OAuth and claim the
+   `OpenGlass` listing — Glama verifies you have write/admin access to the repo before
+   letting the claim go through, which `glama.json` alone doesn't do.
+3. Claiming unlocks editing the description and — per Glama's docs — configuring Docker
+   build instructions so their crawler can introspect the server's tools directly. Whether
+   that's required for a `remotes`-only server (vs. one Glama builds from source) wasn't
+   confirmed here (same network-policy block as Smithery); check what the claimed listing
+   actually asks for.
 
 ## 4. PulseMCP (pulsemcp.com)
 
-Same pattern — primarily an aggregator/directory over the official registry and other
-sources, with its own manual submission form as a fallback.
+As of this research (September 2026), PulseMCP has **new submissions and listing changes
+paused** while they rework how they ingest and manage listings — there's nothing to
+submit right now. It also aggregates from the official registry and other sources, so
+this may show up on its own once that reopens; otherwise submit via `pulsemcp.com/submit`
+(name, description, repo URL, install command, icon) when it's back.
 
 ## After submitting
 
