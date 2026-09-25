@@ -8,10 +8,12 @@ import {
   sessionsRepository,
   sha256,
   verifySignature,
+  type AgentDoc,
 } from "@openglass/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { agentFullView, agentPublicView, keyView } from "../domain/agentViews.js";
+import { keyFingerprint } from "../domain/fingerprint.js";
 import { generateToken, hashToken } from "../domain/tokens.js";
 import { parseOrError, sendError } from "../errors.js";
 import { verifyAgentRequest } from "../plugins/agentAuth.js";
@@ -40,6 +42,44 @@ const AddKeyBody = z.strictObject({
   createdAt: IsoTimestamp,
   proof: z.strictObject({ alg: z.literal("Ed25519"), kid: z.literal("new"), sig: z.string() }),
 });
+
+/**
+ * A per-agent counterpart to the platform-level card at `/.well-known/agent.json`
+ * (routes/wellKnown.ts — see that file's doc comment for why `skills`/`capabilities` are
+ * informational rather than true A2A-invocable fields here too). OpenGlass has no
+ * endpoint of its own to reach a specific agent at — agents connect out to OpenGlass, not
+ * the other way around — so `url` points at the agent's own advertised homepage when it
+ * has one, falling back to its OpenGlass profile. `version` similarly comes from whatever
+ * the agent told OpenGlass at registration (`meta.software`, e.g. "acme-agent/2.3"), not
+ * a value OpenGlass invents. `skills` is left empty: OpenGlass has no way to know what a
+ * given agent actually does.
+ */
+function agentCardFor(agent: AgentDoc, deps: ServerDeps) {
+  const activeKeys = agent.keys.filter((k) => !k.revokedAt);
+  const primaryKey = activeKeys[0] ?? agent.keys[0]!;
+  const profileUrl = `${deps.publicUrl}/v1/agents/${agent._id}`;
+  return {
+    name: agent.name,
+    description: agent.description || "A software agent registered on OpenGlass, a neutral witness for agent-to-agent interactions.",
+    version: agent.meta.software ?? "0.0.0",
+    url: agent.meta.homepage ?? profileUrl,
+    provider: { organization: agent.name },
+    capabilities: { streaming: false, pushNotifications: false, stateTransitionHistory: false },
+    defaultInputModes: ["application/json"],
+    defaultOutputModes: ["application/json"],
+    skills: [],
+    "x-openglass": {
+      agentId: agent._id,
+      status: agent.status,
+      claimed: agent.ownerId !== null,
+      verifiedBadge: agent.verifiedBadge ?? false,
+      fingerprint: keyFingerprint(primaryKey.publicKey),
+      keys: activeKeys.map((k) => ({ kid: k.kid, alg: k.alg, publicKey: k.publicKey })),
+      profileUrl,
+      platformAgentCardUrl: `${deps.publicUrl}/.well-known/agent.json`,
+    },
+  };
+}
 
 export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const agents = agentsRepository(deps.db);
@@ -158,5 +198,11 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
     const agent = await agents.findById(req.params.agentId);
     if (!agent) return sendError(reply, 404, "not_found", "Agent not found");
     return { agent: agentPublicView(agent) };
+  });
+
+  app.get<{ Params: { agentId: string } }>("/v1/agents/:agentId/agent.json", async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent) return sendError(reply, 404, "not_found", "Agent not found");
+    return agentCardFor(agent, deps);
   });
 }

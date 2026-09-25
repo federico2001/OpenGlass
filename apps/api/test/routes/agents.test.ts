@@ -158,3 +158,36 @@ describe("GET /v1/agents/{agentId}", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("GET /v1/agents/{agentId}/agent.json", () => {
+  it("returns an A2A-shaped card for the agent, falling back to its OpenGlass profile as url", async () => {
+    const identity = testIdentity("agt_card", "key_card");
+    const reg = await registerAgent(identity, { name: "Card Bot", description: "Has a card", meta: { software: "card-bot/1.2" } });
+    const agentId = reg.json().agent.id as string;
+
+    const res = await app().inject({ method: "GET", url: `/v1/agents/${agentId}/agent.json` });
+    expect(res.statusCode).toBe(200);
+    const card = res.json();
+    expect(card.name).toBe("Card Bot");
+    expect(card.description).toBe("Has a card");
+    expect(card.version).toBe("card-bot/1.2");
+    expect(card.url).toBe(`https://localhost/v1/agents/${agentId}`);
+    expect(card.capabilities).toEqual({ streaming: false, pushNotifications: false, stateTransitionHistory: false });
+    expect(card["x-openglass"].agentId).toBe(agentId);
+    expect(card["x-openglass"].claimed).toBe(false);
+    expect(card["x-openglass"].keys).toHaveLength(1);
+    expect(card["x-openglass"].keys[0].publicKey).toBe(identity.publicKey);
+  });
+
+  it("prefers the agent's own homepage as url when it has one", async () => {
+    const identity = testIdentity("agt_home", "key_home");
+    const reg = await registerAgent(identity, { name: "Homed Bot", meta: { homepage: "https://homed.example" } });
+    const res = await app().inject({ method: "GET", url: `/v1/agents/${reg.json().agent.id}/agent.json` });
+    expect(res.json().url).toBe("https://homed.example");
+  });
+
+  it("returns 404 for an unknown agent", async () => {
+    const res = await app().inject({ method: "GET", url: "/v1/agents/agt_00000000000000000000000000/agent.json" });
+    expect(res.statusCode).toBe(404);
+  });
+});
