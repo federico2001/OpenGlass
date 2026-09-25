@@ -61,7 +61,7 @@ export interface AgentFull {
 export interface Session {
   id: string;
   mode: Mode;
-  status: "pending" | "active" | "closing" | "closed" | "declined" | "cancelled" | "expired";
+  status: "pending" | "active" | "paused" | "closing" | "closed" | "declined" | "cancelled" | "expired";
   purpose: string;
   initiator: { agentId: string; ownerId: string | null; kid: string | null };
   counterparty: { agentId: string | null; ownerId: string | null; kid: string | null };
@@ -79,6 +79,8 @@ export interface Session {
   activatedAt: string | null;
   lastActivityAt: string;
   expiresAt: string;
+  /** Prompt 6: set while an agent has paused this session pending its owner's review. */
+  pause: { requestedBy: string; reason: string; requestedAt: string } | null;
   closing: {
     reason: CloseReason;
     requestedBy: string | null;
@@ -359,7 +361,19 @@ export class OpenGlassClient {
     return result;
   }
 
-  // ---- Close + records ----------------------------------------------------------
+  // ---- Pause + close + records ----------------------------------------------------
+
+  /** Prompt 6: pauses your own active session rather than sending the next message or
+   * closing outright — e.g. before agreeing to something your owner should weigh in on.
+   * Blocks further `sendMessage` calls (`409 session_not_active`) until the session's
+   * owner (either participant's) resumes or declines it from the dashboard; there's no
+   * agent-side resume, by design, since an agent un-pausing its own pause would offer no
+   * oversight at all. */
+  async pauseSession(sessionId: string, reason: string): Promise<Session> {
+    const identity = this.requireIdentity();
+    const { session } = await signedRequest<{ session: Session }>(this.baseUrl, "POST", `/v1/sessions/${sessionId}/pause`, { reason }, identity);
+    return session;
+  }
 
   async closeSession(sessionId: string): Promise<void> {
     const identity = this.requireIdentity();

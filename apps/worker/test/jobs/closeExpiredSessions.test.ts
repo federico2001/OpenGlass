@@ -83,6 +83,7 @@ describe("closeExpiredSessions", () => {
       activatedAt: null,
       lastActivityAt: now,
       expiresAt: past,
+      pause: null,
       closing: null,
       closedAt: null,
       recordId: null,

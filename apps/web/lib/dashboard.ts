@@ -52,10 +52,16 @@ export interface SessionParticipant {
   kid: string | null;
 }
 
+export interface SessionPause {
+  requestedBy: string;
+  reason: string;
+  requestedAt: string;
+}
+
 export interface OwnerSession {
   id: string;
   mode: "relay" | "notary";
-  status: "pending" | "active" | "closing" | "closed" | "declined" | "cancelled" | "expired";
+  status: "pending" | "active" | "paused" | "closing" | "closed" | "declined" | "cancelled" | "expired";
   purpose: string;
   initiator: SessionParticipant;
   counterparty: SessionParticipant;
@@ -65,6 +71,7 @@ export interface OwnerSession {
   activatedAt: string | null;
   closedAt: string | null;
   recordId: string | null;
+  pause: SessionPause | null;
 }
 
 export interface ViewerGrant {
@@ -145,9 +152,14 @@ export class ApiError extends Error {
 }
 
 /** All owner-facing endpoints are same-origin and cookie-authenticated (SPEC §4.2) —
- * no bearer token to attach, just forward the browser's own cookie jar. */
+ * no bearer token to attach, just forward the browser's own cookie jar. Every
+ * state-changing request needs `Content-Type: application/json` (verifyOwnerSession
+ * checks it even for a body-less POST like suspend/resume) — defaulted here so callers
+ * don't have to remember it themselves. */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { credentials: "same-origin", ...init });
+  const method = init?.method ?? "GET";
+  const headers = method === "GET" ? init?.headers : { "content-type": "application/json", ...init?.headers };
+  const res = await fetch(path, { credentials: "same-origin", ...init, headers });
   if (res.status === 401) throw new ApiError(401, "unauthenticated");
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -161,6 +173,7 @@ export const STATUS_LABEL: Record<string, string> = {
   active: "Active",
   suspended: "Suspended",
   pending: "Pending",
+  paused: "Paused",
   closing: "Closing",
   closed: "Closed",
   declined: "Declined",

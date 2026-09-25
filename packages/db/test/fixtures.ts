@@ -38,7 +38,7 @@ export const validDocs: Record<string, Record<string, unknown>> = {
     inviteId: `inv_${U}`, offer, offerSignature: sig(`key_${U}`), accept, acceptSignature: sig(`key_${U2}`),
     genesisHash: hash, genesisSignature: sig("plat_2026a"), head: { seq: 0, hash: null }, messageCount: 0,
     idleTimeoutSec: 86400, createdAt: now, activatedAt: now, lastActivityAt: now, expiresAt: now,
-    closing: null, closedAt: null, recordId: null,
+    pause: null, closing: null, closedAt: null, recordId: null,
   },
   invites: {
     _id: `inv_${U}`, sessionId: `ses_${U}`, fromAgentId: `agt_${U}`, kind: "open", toAgentId: null,

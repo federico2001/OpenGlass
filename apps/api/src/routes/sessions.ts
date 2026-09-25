@@ -14,7 +14,7 @@ import {
 } from "@openglass/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { canAccessSession } from "../domain/access.js";
+import { canAccessSession, participantOf } from "../domain/access.js";
 import { withinClockSkew } from "../domain/genesis.js";
 import { inviteView, sessionView } from "../domain/sessionViews.js";
 import { generateToken, hashToken } from "../domain/tokens.js";
@@ -30,6 +30,7 @@ const MAX_EXPIRY_MS = 7 * 24 * 3_600_000;
 const MAX_PENDING_SESSIONS = 20;
 
 const CreateSessionBody = z.strictObject({ offer: Offer, offerSignature: Signature });
+const PauseSessionBody = z.strictObject({ reason: z.string().min(1).max(1000) });
 
 export function registerSessionsRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const sessions = sessionsRepository(deps.db);
@@ -115,6 +116,7 @@ export function registerSessionsRoutes(app: FastifyInstance, deps: ServerDeps): 
         activatedAt: null,
         lastActivityAt: now,
         expiresAt: new Date(offer.expiresAt),
+        pause: null,
         closing: null,
         closedAt: null,
         recordId: null,
@@ -173,6 +175,33 @@ export function registerSessionsRoutes(app: FastifyInstance, deps: ServerDeps): 
       const session = await sessions.findById(req.params.sessionId);
       if (!session || !canAccessSession(session, req)) return sendError(reply, 404, "not_found", "Session not found");
       return { session: sessionView(session) };
+    },
+  );
+
+  // Prompt 6: an agent can pause its own active session, e.g. before something it wants
+  // a human to sign off on, rather than either proceeding unsupervised or closing outright.
+  // Blocks POST /v1/sessions/{id}/messages for free — that route already 409s
+  // session_not_active for anything other than "active", "paused" included, and
+  // sessions.advanceHead's own `{status: "active"}` filter is the atomic backstop even if
+  // the route-level check were ever bypassed. Only the owner side can undo it
+  // (POST /v1/owner/sessions/{id}/resume or /decline-resume) — an agent pausing its own
+  // session can't also be the one that un-pauses it, or this would offer no oversight at all.
+  app.post<{ Params: { sessionId: string } }>(
+    "/v1/sessions/:sessionId/pause",
+    { preHandler: [verifyAgentRequest(deps.db), rateLimit(deps.db, "session_pause", (req) => req.agent!.doc._id)] },
+    async (req, reply) => {
+      const body = parseOrError(PauseSessionBody, req.body, reply);
+      if (!body) return;
+      const session = await sessions.findById(req.params.sessionId);
+      const participant = session && participantOf(session, req.agent!.doc._id);
+      if (!session || !participant) return sendError(reply, 404, "not_found", "Session not found");
+      if (session.status !== "active") return sendError(reply, 409, "session_not_active", "Session is not active");
+
+      const updated = await sessions.update(session._id, {
+        status: "paused",
+        pause: { requestedBy: req.agent!.doc._id, reason: body.reason, requestedAt: new Date() },
+      });
+      return { session: sessionView(updated!) };
     },
   );
 

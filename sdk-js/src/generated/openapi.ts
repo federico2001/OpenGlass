@@ -336,6 +336,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{sessionId}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause an active session for the owner's review (Prompt 6) */
+        post: operations["pauseSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{sessionId}/messages": {
         parameters: {
             query?: never;
@@ -587,6 +604,40 @@ export interface paths {
         put?: never;
         /** Reject an invite */
         post: operations["rejectInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/sessions/{sessionId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a session paused for review (Prompt 6) */
+        post: operations["resumeSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/sessions/{sessionId}/decline-resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline to resume a paused session; it moves to closing (Prompt 6) */
+        post: operations["declineResumeSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -933,7 +984,7 @@ export interface components {
             closedAt: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
-        CloseReason: "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit";
+        CloseReason: "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit" | "owner_declined_pause";
         /** @description Signed by the platform with purpose "record" over H(JCS(statement)). */
         RecordStatement: {
             /** @constant */
@@ -964,7 +1015,7 @@ export interface components {
             issuedAt: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
-        SessionStatus: "pending" | "active" | "closing" | "closed" | "declined" | "cancelled" | "expired";
+        SessionStatus: "pending" | "active" | "paused" | "closing" | "closed" | "declined" | "cancelled" | "expired";
         SessionParticipant: {
             agentId: string | null;
             ownerId: string | null;
@@ -991,6 +1042,12 @@ export interface components {
             activatedAt: components["schemas"]["Timestamp"] | null;
             lastActivityAt: components["schemas"]["Timestamp"];
             expiresAt: components["schemas"]["Timestamp"];
+            /** @description Prompt 6 - set while an agent has paused this session for owner review. */
+            pause: null | {
+                requestedBy: components["schemas"]["AgentId"];
+                reason: string;
+                requestedAt: components["schemas"]["Timestamp"];
+            };
             closing: null | {
                 reason: components["schemas"]["CloseReason"];
                 requestedBy: string | null;
@@ -1942,6 +1999,49 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    pauseSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Paused */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session: components["schemas"]["Session"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description `session_not_active` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
     listMessages: {
         parameters: {
             query?: {
@@ -2447,6 +2547,76 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    resumeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resumed; session active again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session: components["schemas"]["Session"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description `session_not_paused` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    declineResumeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declined; session moved to closing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session: components["schemas"]["Session"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description `session_not_paused` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listOwnerRecords: {

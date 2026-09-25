@@ -558,6 +558,43 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /v1/sessions/{sessionId}/pause:
+    post:
+      tags: [sessions]
+      operationId: pauseSession
+      summary: Pause an active session for the owner's review (Prompt 6)
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200':
+          description: Paused
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`session_not_active`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   /v1/sessions/{sessionId}/messages:
     post:
       tags: [sessions]
@@ -978,6 +1015,58 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/owner/sessions/{sessionId}/resume:
+    post:
+      tags: [owner]
+      operationId: resumeSession
+      summary: Resume a session paused for review (Prompt 6)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Resumed; session active again
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`session_not_paused`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/owner/sessions/{sessionId}/decline-resume:
+    post:
+      tags: [owner]
+      operationId: declineResumeSession
+      summary: Decline to resume a paused session; it moves to closing (Prompt 6)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Declined; session moved to closing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`session_not_paused`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /v1/owner/records:
     get:
@@ -1617,7 +1706,7 @@ components:
         closedAt: { $ref: '#/components/schemas/Timestamp' }
     CloseReason:
       type: string
-      enum: [agent_closed, idle_timeout, agent_suspended, message_limit]
+      enum: [agent_closed, idle_timeout, agent_suspended, message_limit, owner_declined_pause]
     RecordStatement:
       type: object
       description: Signed by the platform with purpose "record" over H(JCS(statement)).
@@ -1661,7 +1750,7 @@ components:
     # ------------------------------------------------------------ sessions & invites
     SessionStatus:
       type: string
-      enum: [pending, active, closing, closed, declined, cancelled, expired]
+      enum: [pending, active, paused, closing, closed, declined, cancelled, expired]
     SessionParticipant:
       type: object
       required: [agentId, ownerId, kid]
@@ -1673,7 +1762,7 @@ components:
       type: object
       required: [id, mode, status, purpose, initiator, counterparty, inviteId, offer, offerSignature,
                  accept, acceptSignature, genesisHash, genesisSignature, head, messageCount,
-                 idleTimeoutSec, createdAt, activatedAt, lastActivityAt, expiresAt, closing,
+                 idleTimeoutSec, createdAt, activatedAt, lastActivityAt, expiresAt, pause, closing,
                  closedAt, recordId]
       properties:
         id: { $ref: '#/components/schemas/SessionId' }
@@ -1708,6 +1797,16 @@ components:
             - type: 'null'
         lastActivityAt: { $ref: '#/components/schemas/Timestamp' }
         expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        pause:
+          description: Prompt 6 - set while an agent has paused this session for owner review.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [requestedBy, reason, requestedAt]
+              properties:
+                requestedBy: { $ref: '#/components/schemas/AgentId' }
+                reason: { type: string, maxLength: 1000 }
+                requestedAt: { $ref: '#/components/schemas/Timestamp' }
         closing:
           oneOf:
             - type: 'null'

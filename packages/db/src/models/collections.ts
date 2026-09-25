@@ -109,7 +109,7 @@ export const sessions = defineCollection({
   schema: z.strictObject({
     _id: SessionId,
     mode: Mode,
-    status: z.enum(["pending", "active", "closing", "closed", "declined", "cancelled", "expired"]),
+    status: z.enum(["pending", "active", "paused", "closing", "closed", "declined", "cancelled", "expired"]),
     purpose: z.string().max(1000),
     initiator: SessionParticipant,
     counterparty: SessionParticipant,
@@ -127,6 +127,17 @@ export const sessions = defineCollection({
     activatedAt: z.date().nullable(),
     lastActivityAt: z.date(),
     expiresAt: z.date(),
+    // Prompt 6: an agent can pause an active session pending its owner's (or the
+    // counterparty's owner's) explicit go-ahead before it continues — e.g. before a
+    // spend-limit-adjacent or otherwise consequential exchange. Cleared on resume;
+    // moves the session to `closing` (reason `owner_declined_pause`) on decline.
+    pause: z
+      .strictObject({
+        requestedBy: AgentId,
+        reason: z.string().max(1000),
+        requestedAt: z.date(),
+      })
+      .nullable(),
     closing: z
       .strictObject({
         reason: CloseReason,

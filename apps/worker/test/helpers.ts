@@ -142,6 +142,7 @@ export async function buildActiveSession(
     activatedAt: now,
     lastActivityAt: now,
     expiresAt: new Date(now.getTime() + offer.idleTimeoutSec * 1000),
+    pause: null,
     closing: null,
     closedAt: null,
     recordId: null,

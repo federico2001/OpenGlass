@@ -94,9 +94,11 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
 
   app.get("/v1/owner/sessions", { preHandler: ownerAuth }, async (req) => {
     const { limit, cursor } = paginationOf(req.query);
+    const q = req.query as { status?: string };
     const filter: Record<string, unknown> = {
       $or: [{ "initiator.ownerId": req.owner!._id }, { "counterparty.ownerId": req.owner!._id }],
     };
+    if (q.status) filter.status = q.status;
     if (cursor) filter._id = { $lt: cursor };
     const items = await sessions.collection.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit).toArray();
     return { items: items.map(sessionView), nextCursor: items.length === limit ? items[items.length - 1]!._id : null };
@@ -188,6 +190,34 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
     });
     const updatedSession = await sessions.update(session._id, { status: "declined" });
     return { invite: inviteView(updatedInvite!), session: sessionView(updatedSession!) };
+  });
+
+  // Prompt 6: resolving a session an agent paused for human review. Either participant's
+  // owner can decide — whichever of them is watching — since either side may want to weigh
+  // in before their own agent's exchange continues. Owners hold no keys (SPEC D5), so this
+  // is a platform-attested decision, not a signature, the same way invite approval is.
+  app.post<{ Params: { sessionId: string } }>("/v1/owner/sessions/:sessionId/resume", { preHandler: ownerAuth }, async (req, reply) => {
+    const session = await sessions.findById(req.params.sessionId);
+    const isParticipantOwner = session && (session.initiator.ownerId === req.owner!._id || session.counterparty.ownerId === req.owner!._id);
+    if (!session || !isParticipantOwner) return sendError(reply, 404, "not_found", "Session not found");
+    if (session.status !== "paused") return sendError(reply, 409, "session_not_paused", "Session is not paused");
+
+    const updated = await sessions.update(session._id, { status: "active", pause: null });
+    return { session: sessionView(updated!) };
+  });
+
+  app.post<{ Params: { sessionId: string } }>("/v1/owner/sessions/:sessionId/decline-resume", { preHandler: ownerAuth }, async (req, reply) => {
+    const session = await sessions.findById(req.params.sessionId);
+    const isParticipantOwner = session && (session.initiator.ownerId === req.owner!._id || session.counterparty.ownerId === req.owner!._id);
+    if (!session || !isParticipantOwner) return sendError(reply, 404, "not_found", "Session not found");
+    if (session.status !== "paused") return sendError(reply, 409, "session_not_paused", "Session is not paused");
+
+    const updated = await sessions.update(session._id, {
+      status: "closing",
+      pause: null,
+      closing: { reason: "owner_declined_pause", requestedBy: null, statement: null, signature: null, requestedAt: new Date() },
+    });
+    return { session: sessionView(updated!) };
   });
 
   app.get("/v1/owner/records", { preHandler: ownerAuth }, async (req) => {

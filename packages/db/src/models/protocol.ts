@@ -53,7 +53,7 @@ export const CloseStatement = z.strictObject({
 });
 export type CloseStatement = z.infer<typeof CloseStatement>;
 
-export const CloseReason = z.enum(["agent_closed", "idle_timeout", "agent_suspended", "message_limit"]);
+export const CloseReason = z.enum(["agent_closed", "idle_timeout", "agent_suspended", "message_limit", "owner_declined_pause"]);
 
 export const RecordStatement = z.strictObject({
   v: z.literal(1),
