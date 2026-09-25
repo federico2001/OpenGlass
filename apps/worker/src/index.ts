@@ -5,6 +5,7 @@ import { buildHealthServer } from "./health.js";
 import { closeExpiredSessions } from "./jobs/closeExpiredSessions.js";
 import { closeSuspendedAgentSessions } from "./jobs/closeSuspendedAgentSessions.js";
 import { issueRecords } from "./jobs/issueRecords.js";
+import { recordActivitySnapshot } from "./jobs/recordActivitySnapshot.js";
 import { createMailer } from "./mailer.js";
 
 // The api container owns migrations; the worker only connects.
@@ -29,9 +30,11 @@ async function sweep(): Promise<void> {
     const expiry = await closeExpiredSessions(conn.db);
     const suspended = await closeSuspendedAgentSessions(conn.db);
     const records = await issueRecords({ db: conn.db, s3, s3Bucket: config.S3_BUCKET, signer, mailer, publicUrl: config.PUBLIC_URL, log });
+    const snapshot = await recordActivitySnapshot(conn.db, { log });
     if (expiry.expired || expiry.idleClosed || suspended.closed || suspended.cancelled || records.issued || records.skipped) {
       log("sweep", { ...expiry, ...suspended, ...records });
     }
+    if (snapshot.written) log("activity snapshot written");
   } catch (err) {
     log("sweep failed", { err: err instanceof Error ? err.message : String(err) });
   }
