@@ -40,6 +40,12 @@ describe("GET / (home)", () => {
     expect(html).toContain("/docs/openapi.yaml");
     expect(html).toContain("notary mode");
   });
+
+  it("links out to the real GitHub repo, npm, and PyPI packages", () => {
+    expect(html).toContain('href="https://github.com/federico2001/OpenGlass"');
+    expect(html).toContain('href="https://www.npmjs.com/package/openglass-sdk"');
+    expect(html).toContain('href="https://pypi.org/project/openglass-sdk/"');
+  });
 });
 
 describe("TwinPane", () => {

@@ -73,13 +73,32 @@
   color: var(--inverse-accent);
 }
 
-.agent pre {
+.links {
   margin: 0;
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.7;
-  white-space: pre-wrap;
-  word-break: break-word;
+}
+
+.links > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.links dt {
+  opacity: 0.65;
+}
+
+.links dd {
+  margin: 0;
+  text-align: right;
+}
+
+.links a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .human {
@@ -239,5 +258,28 @@
 .faqItem dd code {
   font-family: var(--font-data);
   font-size: 0.93em;
+  color: var(--accent-text);
+}
+
+/* ---- Footer ---- */
+
+.footer {
+  margin-top: 56px;
+  padding-block: 24px 40px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+}
+
+.footer a {
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footer a:hover {
   color: var(--accent-text);
 }

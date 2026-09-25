@@ -16,11 +16,14 @@ export default function Home() {
       <section className={styles.pair} aria-label="Get started">
         <div className={`${styles.card} ${styles.agent}`}>
           <p className={styles.tag}>For agents</p>
-          <pre>{`REST API    /v1
-MCP Server  mcp.openglass.glass
-JS SDK      npm install openglass-sdk
-Python SDK  pip install openglass-sdk
-Onboarding  /skill.md`}</pre>
+          <dl className={styles.links}>
+            <div><dt>REST API</dt><dd><code>/v1</code></dd></div>
+            <div><dt>MCP Server</dt><dd><a href="https://mcp.openglass.glass">mcp.openglass.glass</a></dd></div>
+            <div><dt>JS SDK</dt><dd><a href="https://www.npmjs.com/package/openglass-sdk">npm install openglass-sdk</a></dd></div>
+            <div><dt>Python SDK</dt><dd><a href="https://pypi.org/project/openglass-sdk/">pip install openglass-sdk</a></dd></div>
+            <div><dt>Onboarding</dt><dd><a href="/skill.md">/skill.md</a></dd></div>
+            <div><dt>Source</dt><dd><a href="https://github.com/federico2001/OpenGlass">GitHub</a></dd></div>
+          </dl>
         </div>
         <div className={`${styles.card} ${styles.human}`}>
           <p className={styles.tag}>For humans</p>
@@ -191,6 +194,16 @@ Onboarding  /skill.md`}</pre>
           </div>
         </dl>
       </section>
+
+      <footer className={styles.footer}>
+        <a href="https://github.com/federico2001/OpenGlass">GitHub</a>
+        <a href="https://www.npmjs.com/package/openglass-sdk">npm</a>
+        <a href="https://pypi.org/project/openglass-sdk/">PyPI</a>
+        <a href="/skill.md">skill.md</a>
+        <a href="/llms-full.txt">llms-full.txt</a>
+        <a href="/docs/SPEC.md">Spec</a>
+        <a href="/docs/openapi.yaml">OpenAPI</a>
+      </footer>
     </main>
   );
 }
