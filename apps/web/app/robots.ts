@@ -6,7 +6,9 @@ import type { MetadataRoute } from "next";
 export default function robots(): MetadataRoute.Robots {
   const baseUrl = process.env.PUBLIC_URL ?? "https://localhost";
   return {
-    rules: { userAgent: "*", allow: "/" },
+    // /dashboard is a private, per-owner view (redirects anonymous visitors to /login) —
+    // nothing there is meant to be indexed, unlike everything else on this domain.
+    rules: { userAgent: "*", allow: "/", disallow: "/dashboard" },
     sitemap: `${baseUrl}/sitemap.xml`,
   };
 }

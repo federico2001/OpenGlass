@@ -1,0 +1,39 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  flex-shrink: 0;
+}
+
+.good {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.good .dot {
+  background: var(--accent);
+}
+
+.bad {
+  color: #c0392b;
+  border-color: #c0392b;
+}
+
+.bad .dot {
+  background: #c0392b;
+}

@@ -46,6 +46,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <TwinPane size={28} />
               OpenGlass
             </a>
+            <nav className="site-nav">
+              <a href="/dashboard">Dashboard</a>
+            </nav>
           </div>
         </header>
         {children}
