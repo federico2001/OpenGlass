@@ -11,7 +11,7 @@ export function registerVerifyRoutes(app: FastifyInstance, deps: ServerDeps): vo
   app.post("/v1/verify", { preHandler: rateLimit(deps.db, "verify", (req) => req.ip) }, async (req, reply) => {
     const bundle = parseOrError(RecordBundle, req.body, reply);
     if (!bundle) return;
-    const trusted = await trustedPlatformKeys(deps.signer);
+    const trusted = await trustedPlatformKeys(deps.signer, deps.platformKeyValidFrom);
     const result = verifyBundle(bundle, trusted);
     return {
       valid: result.valid,

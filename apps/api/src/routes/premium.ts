@@ -1,6 +1,7 @@
 import { GetObjectCommand, GetObjectRetentionCommand, PutObjectRetentionCommand } from "@aws-sdk/client-s3";
 import { findRecordById, type RecordDoc } from "@openglass/db";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { Db } from "mongodb";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { sendError } from "../errors.js";
 import { verifyAgentOrOwner } from "../plugins/agentOrOwnerAuth.js";
@@ -16,6 +17,28 @@ function canAccessRecord(record: RecordDoc, req: { agent?: { doc: { _id: string 
   if (req.agent && record.participantAgentIds.includes(req.agent.doc._id)) return true;
   if (req.owner && record.participantOwnerIds.includes(req.owner._id)) return true;
   return false;
+}
+
+/** Matches the two record-scoped premium routes and captures `recordId`. */
+export const RECORD_SCOPED_PREMIUM_ROUTE = /^\/v1\/premium\/records\/([^/?]+)\/(?:pdf|extend-retention)(?:$|\?)/;
+
+/**
+ * x402's `paymentMiddleware` runs in `onRequest` and gates purely on the route pattern —
+ * it has no idea whether the record behind `:recordId` actually exists, so a nonexistent
+ * one would still prompt for payment before either handler's own 404 check ever runs.
+ * Registered before `paymentMiddleware` in server.ts (Fastify hooks run in registration
+ * order), this short-circuits with 404 first, so an agent is never asked to pay for a
+ * record that was never there. It deliberately checks existence only, not access — the
+ * handlers still 404 on a record that exists but isn't the caller's, matching SPEC §8.1's
+ * "don't confirm existence" rule for anyone who isn't a participant.
+ */
+export function requireExistingRecordForPremiumRoutes(db: Db): (req: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  return async (req, reply) => {
+    const match = RECORD_SCOPED_PREMIUM_ROUTE.exec(req.raw.url ?? "");
+    if (!match) return;
+    const record = await findRecordById(db, decodeURIComponent(match[1]!));
+    if (!record) return sendError(reply, 404, "not_found", "Record not found");
+  };
 }
 
 /**
@@ -44,17 +67,28 @@ export function registerPremiumRoutes(app: FastifyInstance, deps: ServerDeps): v
       const record = await findRecordById(deps.db, req.params.recordId);
       if (!record || !canAccessRecord(record, req)) return sendError(reply, 404, "not_found", "Record not found");
 
+      // S3 Object Lock never lets an object's retention Mode change once set — COMPLIANCE
+      // can't be downgraded to GOVERNANCE by anyone, and even GOVERNANCE can only be
+      // widened (a longer RetainUntilDate), not switched. So this always reuses whatever
+      // mode the object already carries; it never decides the mode itself. The only object
+      // with no existing retention is one uploaded before Object Lock was enabled on the
+      // bucket, which can't happen for records this platform issued itself.
+      const current = await deps.s3.send(
+        new GetObjectRetentionCommand({ Bucket: deps.s3Bucket, Key: record.evidence.s3Key }),
+      ).catch(() => null);
+      const mode = current?.Retention?.Mode ?? deps.objectLockMode ?? "COMPLIANCE";
+
       const retainUntil = new Date();
       retainUntil.setFullYear(retainUntil.getFullYear() + EXTENDED_RETENTION_YEARS);
       await deps.s3.send(
         new PutObjectRetentionCommand({
           Bucket: deps.s3Bucket,
           Key: record.evidence.s3Key,
-          Retention: { Mode: "GOVERNANCE", RetainUntilDate: retainUntil },
+          Retention: { Mode: mode, RetainUntilDate: retainUntil },
           BypassGovernanceRetention: false,
         }),
       );
-      return { recordId: record._id, retentionMode: "GOVERNANCE", retainUntilDate: retainUntil.toISOString() };
+      return { recordId: record._id, retentionMode: mode, retainUntilDate: retainUntil.toISOString() };
     },
   );
 

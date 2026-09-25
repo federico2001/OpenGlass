@@ -20,7 +20,7 @@ import {
 import type { Db } from "mongodb";
 import type { Mailer } from "../mailer.js";
 import { emailRecordIssuedOwners } from "./notifyOwners.js";
-import { trustedPlatformKeys } from "./platformKeys.js";
+import { PLATFORM_KEY_GENESIS_DATE, trustedPlatformKeys } from "./platformKeys.js";
 
 function evidenceMessageOf(m: MessageDoc): EvidenceMessage {
   return {
@@ -90,6 +90,8 @@ export interface IssueRecordsDeps {
   s3: S3Client;
   s3Bucket: string;
   signer: PlatformSigner;
+  /** See apps/api/src/domain/platformKeys.ts — must match the api container's value. */
+  platformKeyValidFrom?: string;
   mailer: Mailer;
   publicUrl: string;
   log?: (message: string, meta?: Record<string, unknown>) => void;
@@ -122,7 +124,7 @@ export async function issueRecords(deps: IssueRecordsDeps): Promise<{ issued: nu
     const statementHash = hex(statementHashBytes);
     const platformSignature = await deps.signer.sign("record", statementHashBytes);
 
-    const trusted = await trustedPlatformKeys(deps.signer);
+    const trusted = await trustedPlatformKeys(deps.signer, deps.platformKeyValidFrom ?? PLATFORM_KEY_GENESIS_DATE);
     const bundle: RecordBundle = { v: 1, type: "openglass.bundle", record: { statement, statementHash, platformSignature }, evidence, platformKeys: trusted };
     const verification = verifyBundle(bundle, trusted);
     if (!verification.valid) {

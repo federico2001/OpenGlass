@@ -21,7 +21,10 @@ export interface OpenGlassStackProps extends StackProps {
   acmeEmail: string;
   /** Set false if the account already has the token.actions.githubusercontent.com provider. */
   createGithubOidcProvider?: boolean;
-  /** Default retention on the records bucket. GOVERNANCE can be bypassed by privileged users; COMPLIANCE can't. */
+  /** Default retention on the records bucket. GOVERNANCE can be bypassed by privileged users;
+   * COMPLIANCE can't, even by the account root — the plan calls for irreversible tamper
+   * evidence, so that's the default. Pass "GOVERNANCE" explicitly only for a throwaway/dev
+   * stack where you might need to delete the bucket. */
   objectLockMode?: "GOVERNANCE" | "COMPLIANCE";
   objectLockDays?: number;
   monthlyBudgetUsd?: number;
@@ -65,9 +68,9 @@ export class OpenGlassStack extends Stack {
       versioned: true,
       objectLockEnabled: true,
       objectLockDefaultRetention:
-        props.objectLockMode === "COMPLIANCE"
-          ? s3.ObjectLockRetention.compliance(Duration.days(lockDays))
-          : s3.ObjectLockRetention.governance(Duration.days(lockDays)),
+        props.objectLockMode === "GOVERNANCE"
+          ? s3.ObjectLockRetention.governance(Duration.days(lockDays))
+          : s3.ObjectLockRetention.compliance(Duration.days(lockDays)),
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,

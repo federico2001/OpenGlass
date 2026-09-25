@@ -216,7 +216,7 @@ describe("Phase 1 sign-off: full two-agent session lifecycle", () => {
       headers: signedRequestHeaders({ method: "POST", path: retentionPath, identity: alice }),
     });
     expect(retentionRes.statusCode).toBe(200);
-    expect(retentionRes.json().retentionMode).toBe("GOVERNANCE");
+    expect(retentionRes.json().retentionMode).toBe("COMPLIANCE");
     const retainUntil = new Date(retentionRes.json().retainUntilDate);
     expect(retainUntil.getTime()).toBeGreaterThan(Date.now() + 9 * 365 * 24 * 3600_000); // ~10 years out
 
@@ -226,7 +226,7 @@ describe("Phase 1 sign-off: full two-agent session lifecycle", () => {
       url: readRetentionPath,
       headers: signedRequestHeaders({ method: "GET", path: readRetentionPath, identity: alice }),
     });
-    expect(readRetentionRes.json().retentionMode).toBe("GOVERNANCE");
+    expect(readRetentionRes.json().retentionMode).toBe("COMPLIANCE");
 
     const pdfPath = `/v1/premium/records/${recordId}/pdf`;
     const pdfRes = await premiumApp.inject({

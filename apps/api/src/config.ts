@@ -20,6 +20,14 @@ const Env = z
      *  openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 */
     PLATFORM_SIGNER_LOCAL_KEY: z.string().optional(),
     PLATFORM_KID: z.string().min(1).default("plat_local"),
+    /** RFC 3339 UTC, millisecond precision. The platform key's actual creation date — set
+     * this whenever you provision or rotate PLATFORM_SIGNER_LOCAL_KEY/KMS_KEY_ID. Falls
+     * back to the project genesis date, which is always safely before any record this key
+     * could have signed (see apps/api/src/domain/platformKeys.ts). */
+    PLATFORM_KEY_VALID_FROM: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      .optional(),
     EMAIL: z.enum(["smtp", "ses"]),
     SMTP_URL: z.string().optional(),
     EMAIL_FROM: z.string().min(1),
@@ -41,6 +49,10 @@ const Env = z
      * both are set, the CDP facilitator replaces X402_FACILITATOR_URL entirely. */
     CDP_API_KEY_ID: z.string().optional(),
     CDP_API_KEY_SECRET: z.string().optional(),
+    /** The records bucket's own Object Lock default mode (must match what infra actually
+     * deployed — see infra/lib/openglass-stack.ts). Only used as a fallback in the premium
+     * extend-retention route. */
+    OBJECT_LOCK_MODE: z.enum(["GOVERNANCE", "COMPLIANCE"]).default("COMPLIANCE"),
   })
   .superRefine((env, ctx) => {
     if (env.SIGNER === "kms" && !env.KMS_KEY_ID) ctx.addIssue({ code: "custom", path: ["KMS_KEY_ID"], message: "required when SIGNER=kms" });

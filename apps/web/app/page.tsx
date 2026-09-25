@@ -119,7 +119,7 @@ export default function Home() {
           </div>
           <div className={styles.builtCard}>
             <h3>Storage</h3>
-            <p>AWS S3 with Object Lock in GOVERNANCE mode; the deployment&apos;s own service role has no override permission for it. Conventional infrastructure, not a blockchain — there&apos;s no external anchor yet, the honest limit of this guarantee today (see below).</p>
+            <p>AWS S3 with Object Lock in COMPLIANCE mode; once written, a record&apos;s evidence can&apos;t be deleted or shortened by anyone — not an admin, not AWS support, not us — until its retention date passes. Conventional infrastructure, not a blockchain — there&apos;s no external anchor yet, the honest limit of this guarantee today (see below).</p>
           </div>
           <div className={styles.builtCard}>
             <h3>Verification</h3>

@@ -38,14 +38,14 @@ describe("OpenGlassStack", () => {
     t.hasResourceProperties("AWS::KMS::Key", { KeySpec: "ECC_NIST_P256", KeyUsage: "SIGN_VERIFY" });
   });
 
-  it("enables Object Lock with default retention on the records bucket", () => {
+  it("enables Object Lock with default retention on the records bucket, defaulting to COMPLIANCE (irreversible)", () => {
     t.hasResourceProperties("AWS::S3::Bucket", {
       ObjectLockEnabled: true,
-      ObjectLockConfiguration: { ObjectLockEnabled: "Enabled", Rule: { DefaultRetention: { Mode: "GOVERNANCE", Days: 365 } } },
+      ObjectLockConfiguration: { ObjectLockEnabled: "Enabled", Rule: { DefaultRetention: { Mode: "COMPLIANCE", Days: 365 } } },
       VersioningConfiguration: { Status: "Enabled" },
     });
-    synth({ objectLockMode: "COMPLIANCE", objectLockDays: 30 }).hasResourceProperties("AWS::S3::Bucket", {
-      ObjectLockConfiguration: { Rule: { DefaultRetention: { Mode: "COMPLIANCE", Days: 30 } } },
+    synth({ objectLockMode: "GOVERNANCE", objectLockDays: 30 }).hasResourceProperties("AWS::S3::Bucket", {
+      ObjectLockConfiguration: { Rule: { DefaultRetention: { Mode: "GOVERNANCE", Days: 30 } } },
     });
   });
 

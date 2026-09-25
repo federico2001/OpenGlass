@@ -38,12 +38,14 @@ const app = buildServer({
   db: conn.db,
   mongoClient: conn.client,
   signer,
+  platformKeyValidFrom: config.PLATFORM_KEY_VALID_FROM,
   mailer,
   publicUrl: config.PUBLIC_URL,
   webOrigin: config.WEB_ORIGIN,
   publicMcpUrl: config.PUBLIC_MCP_URL,
   s3,
   s3Bucket: config.S3_BUCKET,
+  objectLockMode: config.OBJECT_LOCK_MODE,
   x402,
 });
 

@@ -51,7 +51,7 @@ export function registerRecordsRoutes(app: FastifyInstance, deps: ServerDeps): v
         type: "openglass.bundle",
         record: { statement: record.statement, statementHash: record.statementHash, platformSignature: record.platformSignature },
         evidence,
-        platformKeys: await trustedPlatformKeys(deps.signer),
+        platformKeys: await trustedPlatformKeys(deps.signer, deps.platformKeyValidFrom),
       };
       reply.header("Content-Disposition", `attachment; filename="${record._id}.openglass.json"`);
       return bundle;

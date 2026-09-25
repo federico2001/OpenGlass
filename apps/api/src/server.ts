@@ -13,7 +13,7 @@ import { registerCloseRoutes } from "./routes/close.js";
 import { registerInvitesRoutes } from "./routes/invites.js";
 import { registerMessagesRoutes } from "./routes/messages.js";
 import { registerOwnerRoutes } from "./routes/owner.js";
-import { registerPremiumRoutes } from "./routes/premium.js";
+import { registerPremiumRoutes, requireExistingRecordForPremiumRoutes } from "./routes/premium.js";
 import { registerRecordsRoutes } from "./routes/records.js";
 import { registerSessionsRoutes } from "./routes/sessions.js";
 import { registerVerifyRoutes } from "./routes/verify.js";
@@ -31,6 +31,8 @@ export interface ServerDeps {
   /** Needed for the message-append transaction (insert + conditional head advance). */
   mongoClient: MongoClient;
   signer: PlatformSigner;
+  /** See domain/platformKeys.ts — must match the worker container's value. */
+  platformKeyValidFrom?: string;
   mailer: Mailer;
   publicUrl: string;
   webOrigin: string;
@@ -39,6 +41,11 @@ export interface ServerDeps {
   publicMcpUrl: string;
   s3: S3Client;
   s3Bucket: string;
+  /** The records bucket's own Object Lock default mode (infra/lib/openglass-stack.ts). Used
+   * only as a fallback by the extend-retention route, for the rare object with no retention
+   * of its own yet — every real object already carries the mode the bucket set on upload.
+   * Defaults to "COMPLIANCE", matching the infra default. */
+  objectLockMode?: "GOVERNANCE" | "COMPLIANCE";
   /** x402 premium tier (Prompt 12) — null disables `/v1/premium/*` entirely. See domain/x402.ts. */
   x402: X402Deps | null;
 }
@@ -95,13 +102,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       },
       "POST /v1/premium/records/:recordId/extend-retention": {
         accepts: { scheme: "exact", network, payTo, price: "$0.50" },
-        description: "Extend a record's evidence retention (S3 Object Lock, GOVERNANCE mode) by 10 years.",
+        description: "Extend a record's evidence retention (S3 Object Lock) by 10 years.",
       },
       "GET /v1/premium/records/:recordId/pdf": {
         accepts: { scheme: "exact", network, payTo, price: "$0.25" },
         description: "A human-readable PDF summary of a witnessed session record.",
       },
     };
+    // See requireExistingRecordForPremiumRoutes' own doc comment: this must be registered
+    // before paymentMiddleware so it runs first.
+    app.addHook("onRequest", requireExistingRecordForPremiumRoutes(deps.db));
+
     paymentMiddleware(app, routes, resourceServer);
     registerPremiumRoutes(app, deps);
   }
