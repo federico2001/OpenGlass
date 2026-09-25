@@ -4,6 +4,6 @@
 .git
 .github
 infra
-docs
-*.md
+docs/brand
+/*.md
 .env*

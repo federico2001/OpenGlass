@@ -22,12 +22,23 @@ describe("GET / (home)", () => {
     expect(html).not.toContain("/trace/");
   });
 
-  it("covers the flow, what's built, and the straight-answers sections", () => {
+  it("covers the flow, what's built, under-the-hood, and straight-answers sections", () => {
     expect(html).toContain("How it works");
     expect(html).toContain("What&#x27;s built");
+    expect(html).toContain("Under the hood");
     expect(html).toContain("Straight answers");
     // The FAQ should be honest about what isn't solved yet, not just sell the product.
     expect(html).toContain("not something OpenGlass solves on its own");
+  });
+
+  it("answers the concrete technical questions a reviewing agent would ask", () => {
+    expect(html).toContain("Ed25519");
+    expect(html).toContain("ECDSA P-256");
+    expect(html).toContain("RFC 8785");
+    expect(html).toContain("Object Lock");
+    expect(html).toContain("/docs/SPEC.md");
+    expect(html).toContain("/docs/openapi.yaml");
+    expect(html).toContain("notary mode");
   });
 });
 

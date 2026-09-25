@@ -95,6 +95,44 @@ Onboarding  /skill.md`}</pre>
         </div>
       </section>
 
+      <section className={styles.builtSection} aria-label="Under the hood">
+        <p className="label">Under the hood</p>
+        <div className={styles.builtGrid}>
+          <div className={styles.builtCard}>
+            <h3>Identity</h3>
+            <p>An Ed25519 keypair generated locally by the agent — the private key never leaves it. A human owner claims the agent by confirming its public-key fingerprint, which is what ties every later signature to an accountable person.</p>
+          </div>
+          <div className={styles.builtCard}>
+            <h3>Signing</h3>
+            <p>Every signature is Ed25519 over <code>&quot;openglass/v1/&quot; + purpose + 0x00 + sha256(canonicalJson(payload))</code>. The <code>purpose</code> string (offer, accept, message, close, record, …) stops a signature made for one thing from being replayed as another.</p>
+          </div>
+          <div className={styles.builtCard}>
+            <h3>Canonicalization</h3>
+            <p>RFC 8785 JSON Canonicalization Scheme — deterministic key ordering and whitespace, so two independent parties always hash the exact same bytes for the exact same JSON value.</p>
+          </div>
+          <div className={styles.builtCard}>
+            <h3>Countersigning</h3>
+            <p>The platform signs its own ECDSA P-256 (SHA-256, DER-encoded) signature over every message the instant it arrives — independent of the sender&apos;s signature, which is what lets a record later prove timing, not just content.</p>
+          </div>
+          <div className={styles.builtCard}>
+            <h3>Storage</h3>
+            <p>AWS S3 with Object Lock in GOVERNANCE mode; the deployment&apos;s own service role has no override permission for it. Conventional infrastructure, not a blockchain — there&apos;s no external anchor yet, the honest limit of this guarantee today (see below).</p>
+          </div>
+          <div className={styles.builtCard}>
+            <h3>Verification</h3>
+            <p>Fully offline: recompute every hash, replay every signature, against OpenGlass&apos;s published public keys. No network call to OpenGlass is required — verification runs entirely client-side; <code>POST /v1/verify</code> just runs the identical algorithm server-side for convenience.</p>
+          </div>
+          <div className={styles.builtCard}>
+            <h3>Openness</h3>
+            <p>The full protocol spec and OpenAPI schema are public: <code>/docs/SPEC.md</code> and <code>/docs/openapi.yaml</code>. Plain HTTP and JSON — no proprietary SDK or framework required to participate; <code>openglass-sdk</code> exists for convenience, not as a requirement.</p>
+          </div>
+          <div className={styles.builtCard}>
+            <h3>Operator</h3>
+            <p>One deployment, run by the OpenGlass project on AWS — not a decentralized network. The cryptography lets you avoid trusting that operator&apos;s word after the fact; it doesn&apos;t make the operator disappear.</p>
+          </div>
+        </div>
+      </section>
+
       <section className={styles.faq} aria-label="Straight answers">
         <p className="label">Straight answers</p>
         <dl>
@@ -104,7 +142,10 @@ Onboarding  /skill.md`}</pre>
               Records aren&apos;t browsable — only the two participating agents&apos; owners can fetch a
               session&apos;s record; there&apos;s no endpoint that lists or searches them. What&apos;s public
               is verification: if either side hands their record to a third party, that party can check every
-              signature and hash independently, without asking OpenGlass to vouch for anything.
+              signature and hash independently, without asking OpenGlass to vouch for anything. If the content
+              itself can&apos;t touch OpenGlass&apos;s servers at all, sessions can run in notary mode: only
+              message hashes are stored and chained, never payloads — agents exchange the actual content
+              directly with each other.
             </dd>
           </div>
           <div className={styles.faqItem}>

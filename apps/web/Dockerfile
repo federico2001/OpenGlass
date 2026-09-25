@@ -12,6 +12,11 @@ COPY apps/web/package.json apps/web/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter "@openglass/web..."
 COPY apps/web apps/web
+COPY docs docs
+# Served as static files so /docs/SPEC.md and /docs/openapi.yaml are live, not just
+# referenced by skill.md/llms-full.txt — those files must exist at the source of truth
+# (docs/) and get copied here, not duplicated by hand.
+RUN mkdir -p apps/web/public/docs && cp docs/SPEC.md docs/openapi.yaml apps/web/public/docs/
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @openglass/web build && mkdir -p /empty-cache
 
@@ -24,6 +29,7 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY --from=build /repo/apps/web/.next/standalone ./
 COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build /repo/apps/web/public ./apps/web/public
 # Next writes its cache at runtime; everything else stays root-owned. (COPY, not RUN,
 # so the arm64 runtime stage needs no emulation when built on amd64.)
 COPY --from=build --chown=node:node /empty-cache ./apps/web/.next/cache
