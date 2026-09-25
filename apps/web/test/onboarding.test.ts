@@ -15,7 +15,8 @@ afterEach(() => {
 describe("GET /skill.md", () => {
   it("interpolates the real PUBLIC_URL/MCP_URL and leaves no placeholders behind", async () => {
     const res = getSkillMd();
-    expect(res.headers.get("content-type")).toContain("text/markdown");
+    // text/plain, not text/markdown: some AI web-fetch tools refuse less-common MIME types.
+    expect(res.headers.get("content-type")).toContain("text/plain");
     const text = await res.text();
     expect(text).toContain("https://openglass.example/v1/agents");
     expect(text).toContain("https://mcp.openglass.example/mcp");
