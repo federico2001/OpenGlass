@@ -41,7 +41,11 @@ beforeAll(async () => {
   s3 = await openTestS3();
   const deps = testServerDeps(t, s3);
   signer = deps.signer;
-  app = buildServer({ ...deps, healthChecks: {} });
+  // TEMP: real logging while diagnosing a CI-only WS upgrade failure (500 instead of 101)
+  // that doesn't reproduce as a clear synchronous throw on inspection — logger:false (the
+  // testServerDeps default) would otherwise swallow whatever @fastify/websocket's error
+  // handler logs.
+  app = buildServer({ ...deps, healthChecks: {}, logger: true });
   // Unlike .inject(), injectWS() (from @fastify/websocket) doesn't wait for the instance
   // to finish loading plugins/routes first — without this, the first call in the file
   // hits "app.injectWS is not a function" (plugin not decorated yet).
