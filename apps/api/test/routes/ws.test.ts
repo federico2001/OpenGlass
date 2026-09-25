@@ -42,6 +42,10 @@ beforeAll(async () => {
   const deps = testServerDeps(t, s3);
   signer = deps.signer;
   app = buildServer({ ...deps, healthChecks: {} });
+  // Unlike .inject(), injectWS() (from @fastify/websocket) doesn't wait for the instance
+  // to finish loading plugins/routes first — without this, the first call in the file
+  // hits "app.injectWS is not a function" (plugin not decorated yet).
+  await app.ready();
 });
 afterAll(async () => {
   await t.cleanup();
