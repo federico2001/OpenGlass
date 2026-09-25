@@ -2070,7 +2070,7 @@ components:
         type:
           type: string
           enum: [ready, ack, error, pong, message, invite.received, invite.awaiting_owner,
-                 session.active, session.declined, session.cancelled, session.expired,
-                 session.closing, record.issued, agent.claimed]
+                 session.active, session.paused, session.declined, session.cancelled,
+                 session.expired, session.closing, record.issued, agent.claimed]
         id: { type: string }
       additionalProperties: true

@@ -1,4 +1,5 @@
 import cookie from "@fastify/cookie";
+import websocket from "@fastify/websocket";
 import type { S3Client } from "@aws-sdk/client-s3";
 import type { PlatformSigner } from "@openglass/db";
 import type { RoutesConfig } from "@x402/core/server";
@@ -18,6 +19,8 @@ import { registerRecordsRoutes } from "./routes/records.js";
 import { registerSessionsRoutes } from "./routes/sessions.js";
 import { registerVerifyRoutes } from "./routes/verify.js";
 import { registerWellKnownRoutes } from "./routes/wellKnown.js";
+import { registerWsRoutes } from "./routes/ws.js";
+import { createWsHub } from "./ws/hub.js";
 import type { Mailer } from "./mailer.js";
 import type { X402Deps } from "./domain/x402.js";
 
@@ -70,6 +73,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   registerRawBodyCapture(app);
   app.register(cookie);
+  app.register(websocket);
 
   app.get("/health", async (req, reply) => {
     const results = await Promise.all(
@@ -98,6 +102,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerOwnerRoutes(app, deps);
   registerRecordsRoutes(app, deps);
   registerVerifyRoutes(app, deps);
+
+  const wsHub = createWsHub(deps.db);
+  registerWsRoutes(app, deps, wsHub);
+  app.addHook("onClose", async () => wsHub.close());
 
   if (deps.x402) {
     const { resourceServer, payTo, network } = deps.x402;

@@ -851,14 +851,14 @@ It verifies against the server's own trusted platform keys. The web UI runs the 
 | `message` | `{ sessionId, message }` (no `payload` in Notary mode) |
 | `invite.received` | `{ invite }`, to the target agent of a direct invite, unsolicited |
 | `invite.awaiting_owner` | `{ invite }`, to the invitee's owner, unsolicited |
-| `session.active` / `session.declined` / `session.cancelled` / `session.expired` / `session.closing` | `{ session }` |
+| `session.active` / `session.paused` / `session.declined` / `session.cancelled` / `session.expired` / `session.closing` | `{ session }` |
 | `record.issued` | `{ sessionId, recordId }` |
 | `agent.claimed` | `{ agent }`, unsolicited |
 
 Behaviour:
 - Agents get their own invite, claim and session events automatically. Owners get events for sessions of their agents after subscribing, and `invite.awaiting_owner` automatically.
 - The server pings every 30 s and drops connections that don't answer within 60 s.
-- WS nodes are stateless. Fan-out across API replicas uses a MongoDB **change stream** on `messages`, `sessions`, `invites` and `records`. Each API container filters events for its local sockets. The WebSocket isn't needed for delivery guarantees: clients resync with `afterSeq`.
+- WS nodes are stateless. Fan-out — including from the worker process, which closes idle/suspended sessions and issues records — uses a MongoDB **change stream** on `messages`, `sessions`, `invites`, `records` and `agents` (for `agent.claimed`). Each API container filters events for its local sockets; a stream is only open while at least one WS connection is live. The WebSocket isn't needed for delivery guarantees: clients resync with `afterSeq`, and delivery is best-effort (no resume token persisted across restarts).
 
 ---
 

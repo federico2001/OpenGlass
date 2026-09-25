@@ -21,17 +21,21 @@ declare module "fastify" {
  * SPEC §4.2: owners authenticate via the `og_session` cookie. State-changing requests
  * must additionally send a matching `Origin` and `Content-Type: application/json`
  * (`webOrigin` is the configured web app origin — `checkOrigin` is skipped for `GET`).
+ * `requireOriginAlways` extends the Origin check to GET too — used only for `GET /v1/ws`
+ * (SPEC §9), since a WS upgrade opens a live, stateful connection unlike an ordinary read.
  */
-export function verifyOwnerSession(db: Db, opts: { webOrigin: string }) {
+export function verifyOwnerSession(db: Db, opts: { webOrigin: string; requireOriginAlways?: boolean }) {
   const owners = ownersRepository(db);
   const webSessions = webSessionsRepository(db);
   const viewerGrants = viewerGrantsRepository(db);
 
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    if (req.method !== "GET") {
+    if (req.method !== "GET" || opts.requireOriginAlways) {
       if (req.headers.origin !== opts.webOrigin) {
         return sendError(reply, 403, "origin_not_allowed", "Origin header does not match the configured web origin");
       }
+    }
+    if (req.method !== "GET") {
       const contentType = req.headers["content-type"];
       if (!contentType?.startsWith("application/json")) {
         return sendError(reply, 400, "bad_request", "Content-Type must be application/json");

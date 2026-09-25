@@ -1225,7 +1225,7 @@ export interface components {
         };
         WsServerFrame: {
             /** @enum {string} */
-            type: "ready" | "ack" | "error" | "pong" | "message" | "invite.received" | "invite.awaiting_owner" | "session.active" | "session.declined" | "session.cancelled" | "session.expired" | "session.closing" | "record.issued" | "agent.claimed";
+            type: "ready" | "ack" | "error" | "pong" | "message" | "invite.received" | "invite.awaiting_owner" | "session.active" | "session.paused" | "session.declined" | "session.cancelled" | "session.expired" | "session.closing" | "record.issued" | "agent.claimed";
             id?: string;
         } & {
             [key: string]: unknown;
