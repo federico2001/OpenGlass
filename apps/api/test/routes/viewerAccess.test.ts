@@ -188,7 +188,11 @@ describe("viewer read access", () => {
     const { sessionId, genesisHash } = await activateSession(agentA, agentB);
     const { sessionId: otherSessionId } = await activateSession(agentB, agentC); // agentA has no part in this one
 
-    const viewerEmail = `viewer_${newId("own").slice(-6)}@example.com`;
+    // Lowercased at generation, matching what the invite route itself stores (it lowercases
+    // any email it's given) — ULID suffixes are uppercase Crockford base32, so leaving this
+    // mixed-case would silently mismatch the owner doc insertTestOwner creates below against
+    // the grant's stored (lowercased) viewerEmail.
+    const viewerEmail = `viewer_${newId("own").slice(-6)}@example.com`.toLowerCase();
     const ownerACookie = await createOwnerSessionCookie(t.db, ownerA._id);
     expect((await inviteViewer(agentA.agentId, ownerACookie, viewerEmail, "Auditor")).statusCode).toBe(201);
 
