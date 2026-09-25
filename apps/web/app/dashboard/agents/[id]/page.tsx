@@ -3,7 +3,16 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { StatusBadge } from "../../../../components/StatusBadge";
-import { ApiError, apiFetch, formatDate, type AgentPublic, type OwnerAgent, type OwnerSession, type ViewerGrant } from "../../../../lib/dashboard";
+import {
+  ApiError,
+  apiFetch,
+  formatDate,
+  formatUsdCents,
+  type AgentPublic,
+  type OwnerAgent,
+  type OwnerSession,
+  type ViewerGrant,
+} from "../../../../lib/dashboard";
 import styles from "./page.module.css";
 
 export default function AgentDetailPage() {
@@ -22,6 +31,10 @@ export default function AgentDetailPage() {
   const [invitingViewer, setInvitingViewer] = useState(false);
   const [revokingViewerId, setRevokingViewerId] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
+
+  const [spendLimitInput, setSpendLimitInput] = useState("");
+  const [settingSpendLimit, setSettingSpendLimit] = useState(false);
+  const [spendLimitError, setSpendLimitError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,6 +139,46 @@ export default function AgentDetailPage() {
       setViewerError(err instanceof Error ? err.message : "Could not revoke this viewer.");
     } finally {
       setRevokingViewerId(null);
+    }
+  }
+
+  async function setSpendLimit(e: FormEvent) {
+    e.preventDefault();
+    if (!agent) return;
+    setSettingSpendLimit(true);
+    setSpendLimitError(null);
+    try {
+      const dollars = Number(spendLimitInput);
+      if (!Number.isFinite(dollars) || dollars < 0) throw new Error("Enter a non-negative dollar amount.");
+      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}/spend-limit`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spendLimitUsdCents: Math.round(dollars * 100) }),
+      });
+      setAgent(res.agent);
+      setSpendLimitInput("");
+    } catch (err) {
+      setSpendLimitError(err instanceof Error ? err.message : "Could not set the spend limit.");
+    } finally {
+      setSettingSpendLimit(false);
+    }
+  }
+
+  async function clearSpendLimit() {
+    if (!agent) return;
+    setSettingSpendLimit(true);
+    setSpendLimitError(null);
+    try {
+      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}/spend-limit`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spendLimitUsdCents: null }),
+      });
+      setAgent(res.agent);
+    } catch (err) {
+      setSpendLimitError(err instanceof Error ? err.message : "Could not clear the spend limit.");
+    } finally {
+      setSettingSpendLimit(false);
     }
   }
 
@@ -275,6 +328,39 @@ export default function AgentDetailPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className={styles.section} aria-label="Spend limit on this agent's paid purchases">
+        <p className="label">Spend limit</p>
+        <p className={styles.hint}>
+          Caps what this agent can spend on paid (x402) features — a verified badge, extended record retention, PDF
+          exports. Enforced before payment: a purchase that would go over the cap is refused with no charge.
+        </p>
+        <p className={styles.hint}>
+          Spent so far: <strong>{formatUsdCents(agent.totalSpendUsdCents)}</strong>
+          {agent.spendLimitUsdCents !== null && <> of a {formatUsdCents(agent.spendLimitUsdCents)} limit</>}
+          {agent.spendLimitUsdCents === null && <> — no limit set</>}
+        </p>
+        <form onSubmit={setSpendLimit} className={styles.viewerForm}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Limit in USD, e.g. 5.00"
+            value={spendLimitInput}
+            onChange={(e) => setSpendLimitInput(e.target.value)}
+            className={styles.viewerInput}
+          />
+          <button type="submit" className={styles.smallButton} disabled={settingSpendLimit || !spendLimitInput}>
+            {settingSpendLimit ? "Saving…" : "Set limit"}
+          </button>
+          {agent.spendLimitUsdCents !== null && (
+            <button type="button" className={styles.smallButtonGhost} onClick={clearSpendLimit} disabled={settingSpendLimit}>
+              Remove limit
+            </button>
+          )}
+        </form>
+        {spendLimitError && <p className={styles.error}>{spendLimitError}</p>}
       </section>
 
       <section className={styles.section} aria-label="Sessions involving this agent">

@@ -29,6 +29,11 @@ const InviteViewerBody = z.strictObject({
   label: z.string().max(100).nullable().optional(),
 });
 
+const SpendLimitBody = z.strictObject({
+  /** US cents; null clears the limit (unlimited). */
+  spendLimitUsdCents: z.int().min(0).nullable(),
+});
+
 function paginationOf(query: unknown): { limit: number; cursor?: string } {
   const q = query as { limit?: string; cursor?: string };
   return { limit: Math.min(Math.max(Number(q.limit) || 50, 1), 200), cursor: q.cursor };
@@ -132,6 +137,15 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
     const agent = await agents.findById(req.params.agentId);
     if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
     const updated = await agents.update(agent._id, { status: "active", suspendedAt: null });
+    return { agent: agentFullView(updated!) };
+  });
+
+  app.patch<{ Params: { agentId: string } }>("/v1/owner/agents/:agentId/spend-limit", { preHandler: ownerAuth }, async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+    const body = parseOrError(SpendLimitBody, req.body, reply);
+    if (!body) return;
+    const updated = await agents.update(agent._id, { spendLimitUsdCents: body.spendLimitUsdCents });
     return { agent: agentFullView(updated!) };
   });
 

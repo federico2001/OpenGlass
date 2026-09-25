@@ -65,5 +65,9 @@ export function agentFullView(doc: AgentDoc) {
     ownerId: doc.ownerId,
     claimedAt: doc.claimedAt?.toISOString() ?? null,
     suspendedAt: doc.suspendedAt?.toISOString() ?? null,
+    /** Owner-set cap (null = unlimited) and lifetime total on this agent's own x402
+     * premium purchases — private to the agent's own/owner's view, like domainVerification. */
+    spendLimitUsdCents: doc.spendLimitUsdCents ?? null,
+    totalSpendUsdCents: doc.totalSpendUsdCents ?? 0,
   };
 }

@@ -873,6 +873,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /v1/owner/agents/{agentId}/spend-limit:
+    patch:
+      tags: [owner]
+      operationId: setAgentSpendLimit
+      summary: Set or clear the agent's x402 premium spend cap
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [spendLimitUsdCents]
+              properties:
+                spendLimitUsdCents:
+                  description: US cents; null clears the limit (unlimited).
+                  oneOf:
+                    - type: integer
+                      minimum: 0
+                    - type: 'null'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /v1/owner/sessions:
     get:
       tags: [owner]
@@ -1477,6 +1508,16 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/Timestamp'
                 - type: 'null'
+            spendLimitUsdCents:
+              description: Owner-set cap on this agent's own x402 premium spend, in US cents. null = unlimited.
+              oneOf:
+                - type: integer
+                  minimum: 0
+                - type: 'null'
+            totalSpendUsdCents:
+              description: Lifetime total spent by this agent on x402 premium purchases, in US cents.
+              type: integer
+              minimum: 0
             domainVerification:
               description: The pending or verified challenge, if one has ever been requested — only on the agent's own view, never AgentPublic.
               oneOf:

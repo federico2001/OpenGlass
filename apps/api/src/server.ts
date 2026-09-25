@@ -13,7 +13,7 @@ import { registerCloseRoutes } from "./routes/close.js";
 import { registerInvitesRoutes } from "./routes/invites.js";
 import { registerMessagesRoutes } from "./routes/messages.js";
 import { registerOwnerRoutes } from "./routes/owner.js";
-import { registerPremiumRoutes, requireExistingRecordForPremiumRoutes } from "./routes/premium.js";
+import { registerPremiumRoutes, requireExistingRecordForPremiumRoutes, requireWithinSpendLimit } from "./routes/premium.js";
 import { registerRecordsRoutes } from "./routes/records.js";
 import { registerSessionsRoutes } from "./routes/sessions.js";
 import { registerVerifyRoutes } from "./routes/verify.js";
@@ -115,9 +115,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         description: "A human-readable PDF summary of a witnessed session record.",
       },
     };
-    // See requireExistingRecordForPremiumRoutes' own doc comment: this must be registered
-    // before paymentMiddleware so it runs first.
+    // See requireExistingRecordForPremiumRoutes' and requireWithinSpendLimit's own doc
+    // comments: both must be registered before paymentMiddleware so they run first.
     app.addHook("onRequest", requireExistingRecordForPremiumRoutes(deps.db));
+    app.addHook("onRequest", requireWithinSpendLimit(deps.db));
 
     paymentMiddleware(app, routes, resourceServer);
     registerPremiumRoutes(app, deps);

@@ -508,6 +508,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/owner/agents/{agentId}/spend-limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set or clear the agent's x402 premium spend cap */
+        patch: operations["setAgentSpendLimit"];
+        trace?: never;
+    };
     "/v1/owner/sessions": {
         parameters: {
             query?: never;
@@ -837,6 +854,10 @@ export interface components {
             ownerId: components["schemas"]["OwnerId"] | null;
             claimedAt: components["schemas"]["Timestamp"] | null;
             suspendedAt?: components["schemas"]["Timestamp"] | null;
+            /** @description Owner-set cap on this agent's own x402 premium spend, in US cents. null = unlimited. */
+            spendLimitUsdCents?: number | null;
+            /** @description Lifetime total spent by this agent on x402 premium purchases, in US cents. */
+            totalSpendUsdCents?: number;
             /** @description The pending or verified challenge, if one has ever been requested — only on the agent's own view, never AgentPublic. */
             domainVerification?: components["schemas"]["DomainVerification"] | null;
         };
@@ -2284,6 +2305,37 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Active again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setAgentSpendLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description US cents; null clears the limit (unlimited). */
+                    spendLimitUsdCents: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
             200: {
                 headers: {
                     [name: string]: unknown;

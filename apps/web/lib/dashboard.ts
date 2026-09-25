@@ -31,6 +31,8 @@ export interface OwnerAgent {
   verifiedBadge: boolean;
   domainVerified: boolean;
   domainVerification: DomainVerification | null;
+  spendLimitUsdCents: number | null;
+  totalSpendUsdCents: number;
 }
 
 export interface AgentPublic {
@@ -175,4 +177,8 @@ export function formatDate(iso: string | null): string {
 export function shortHash(hash: string | null): string {
   if (!hash) return "—";
   return `${hash.slice(0, 8)}…${hash.slice(-5)}`;
+}
+
+export function formatUsdCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
 }

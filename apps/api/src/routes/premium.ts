@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Db } from "mongodb";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { canAccessRecord } from "../domain/access.js";
+import { EXTEND_RETENTION_PRICE_CENTS, PDF_PRICE_CENTS, VERIFIED_BADGE_PRICE_CENTS, formatUsd, premiumRoutePriceCents, wouldExceedSpendLimit } from "../domain/spendLimits.js";
 import { sendError } from "../errors.js";
 import { verifyAgentOrOwner } from "../plugins/agentOrOwnerAuth.js";
 import { requireClaimed } from "../plugins/requireClaimed.js";
@@ -37,6 +38,54 @@ export function requireExistingRecordForPremiumRoutes(db: Db): (req: FastifyRequ
 }
 
 /**
+ * An owner can cap how much an agent spends on its own x402 premium purchases. That has to
+ * be enforced before payment settles (x402's `paymentMiddleware` runs in `onRequest`, ahead
+ * of any of this route module's own `preHandler` auth, so by the time a handler below could
+ * check anything the money has already moved) — which means this hook, registered before
+ * `paymentMiddleware`, has to identify the caller before the real signed-request
+ * verification in `verifyAgentRequest`/`verifyAgentOrOwner` gets a chance to run.
+ *
+ * It does that by reading the claimed `OG-Agent` header directly, without verifying the
+ * request's signature. That's safe *only* for this narrow purpose: the header is never
+ * trusted for anything but a spend-limit lookup, and every one of these routes still runs
+ * full signature verification afterward — spoofing this header can, at worst, cause an
+ * unrelated request to be wrongly rate-gated against someone else's limit, never let
+ * anyone spend as an agent they can't cryptographically prove they are. A request with no
+ * `OG-Agent` header (an owner calling extend-retention/pdf with their own cookie, not an
+ * agent's key) isn't governed by any agent's spend limit and passes through untouched.
+ */
+export function requireWithinSpendLimit(db: Db): (req: FastifyRequest, reply: FastifyReply) => Promise<void> {
+  const agents = agentsRepository(db);
+  return async (req, reply) => {
+    const priceCents = premiumRoutePriceCents(req.method, req.raw.url ?? "");
+    if (priceCents === null) return;
+    const header = req.headers["og-agent"];
+    const agentId = Array.isArray(header) ? header[0] : header;
+    if (!agentId) return;
+    const agent = await agents.findById(agentId);
+    if (!agent) return; // an unknown agent id: let the real auth check produce the right error
+    if (wouldExceedSpendLimit(agent, priceCents)) {
+      return sendError(
+        reply,
+        403,
+        "spend_limit_exceeded",
+        `This agent's owner-set spend limit (${formatUsd(agent.spendLimitUsdCents!)}) would be exceeded by this ${formatUsd(priceCents)} purchase`,
+        { spendLimitUsdCents: agent.spendLimitUsdCents, totalSpendUsdCents: agent.totalSpendUsdCents ?? 0, priceCents },
+      );
+    }
+  };
+}
+
+/** Adds `priceCents` to the agent's tracked lifetime spend — called once payment has
+ * cleared and the handler is actually about to perform the paid action. Only ever called
+ * with a verified agent identity (`req.agent`, set by `verifyAgentRequest`/
+ * `verifyAgentOrOwner`), never for an owner-authenticated call — owners aren't governed by
+ * a spend limit on themselves. */
+async function recordAgentSpend(db: Db, agentId: string, currentTotalCents: number, priceCents: number): Promise<void> {
+  await agentsRepository(db).update(agentId, { totalSpendUsdCents: currentTotalCents + priceCents });
+}
+
+/**
  * The actual business logic behind each `/v1/premium/*` route. These are registered as
  * ordinary Fastify routes — payment gating itself lives entirely in the `@x402/fastify`
  * `paymentMiddleware` hooks registered in `server.ts`, which run in Fastify's `onRequest`
@@ -50,7 +99,11 @@ export function registerPremiumRoutes(app: FastifyInstance, deps: ServerDeps): v
     "/v1/premium/agents/me/verified-badge",
     { preHandler: [verifyAgentRequest(deps.db), requireClaimed] },
     async (req) => {
-      const updated = await agents.update(req.agent!.doc._id, { verifiedBadge: true });
+      const before = req.agent!.doc;
+      const updated = await agents.update(before._id, {
+        verifiedBadge: true,
+        totalSpendUsdCents: (before.totalSpendUsdCents ?? 0) + VERIFIED_BADGE_PRICE_CENTS,
+      });
       return { agent: agentFullView(updated!) };
     },
   );
@@ -83,6 +136,7 @@ export function registerPremiumRoutes(app: FastifyInstance, deps: ServerDeps): v
           BypassGovernanceRetention: false,
         }),
       );
+      if (req.agent) await recordAgentSpend(deps.db, req.agent.doc._id, req.agent.doc.totalSpendUsdCents ?? 0, EXTEND_RETENTION_PRICE_CENTS);
       return { recordId: record._id, retentionMode: mode, retainUntilDate: retainUntil.toISOString() };
     },
   );
@@ -118,6 +172,7 @@ export function registerPremiumRoutes(app: FastifyInstance, deps: ServerDeps): v
       const evidence = JSON.parse(Buffer.from(evidenceBytes).toString("utf8"));
 
       const pdfBytes = await buildRecordPdf(record, evidence);
+      if (req.agent) await recordAgentSpend(deps.db, req.agent.doc._id, req.agent.doc.totalSpendUsdCents ?? 0, PDF_PRICE_CENTS);
       reply.header("content-type", "application/pdf");
       reply.header("Content-Disposition", `attachment; filename="${record._id}.pdf"`);
       return reply.send(Buffer.from(pdfBytes));

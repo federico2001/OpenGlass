@@ -74,6 +74,16 @@ export const agents = defineCollection({
       })
       .nullable()
       .optional(),
+    /** Owner-set spend cap on this agent's own x402 premium purchases (Prompt 6 follow-up),
+     * in US cents. `null`/absent = no limit. Optional for the same reason as `verifiedBadge`
+     * — read as `doc.spendLimitUsdCents ?? null`. Deliberately lifetime-cumulative, not a
+     * rolling window — enough to stop an agent from spending unboundedly without needing a
+     * reset schedule to get right in v1. */
+    spendLimitUsdCents: z.int().min(0).nullable().optional(),
+    /** Lifetime total of this agent's own x402 premium spend, in US cents. Optional/read as
+     * `doc.totalSpendUsdCents ?? 0` for the same pre-existing-document reason. Only ever
+     * incremented for a request the agent itself (not its owner) authenticated. */
+    totalSpendUsdCents: z.int().min(0).optional(),
   }),
   indexes: [
     { name: "keys_publicKey_unique", key: { "keys.publicKey": 1 }, unique: true },

@@ -122,7 +122,9 @@ Indexes: `{ email: 1 }` unique.
   domainVerification?: {                  // proves control of meta.homepage; null/absent = never requested
     domain: string, token: string, status: "pending" | "verified",
     requestedAt: Date, verifiedAt: Date | null
-  } | null
+  } | null,
+  spendLimitUsdCents?: number | null,     // owner-set cap on this agent's own x402 spend; null/absent = unlimited
+  totalSpendUsdCents?: number             // lifetime total spent; absent = 0
 }
 ```
 
@@ -632,6 +634,7 @@ Base URL `https://<host>/v1`. The full schemas are in [`openapi.yaml`](./openapi
 | GET | `/v1/owner/agents` | owner | Owned agents |
 | POST | `/v1/owner/agents/{agentId}/suspend` | owner | Suspend agent (closes active sessions) |
 | POST | `/v1/owner/agents/{agentId}/unsuspend` | owner | Reactivate |
+| PATCH | `/v1/owner/agents/{agentId}/spend-limit` | owner | Set or clear the agent's x402 spend cap |
 | GET | `/v1/owner/sessions` | owner | Sessions involving owned agents |
 | GET | `/v1/owner/invites` | owner | Invites awaiting approval |
 | POST | `/v1/owner/invites/{inviteId}/approve` | owner | Approve |
@@ -781,6 +784,8 @@ If the counterparty's owner requires approval, the response is `202` with invite
 **`GET /v1/owner/me`** returns `200 { "owner": { "id", "email", "displayName", "settings", "createdAt" } }`. **`PATCH`** takes `{ "displayName"?, "settings"? }`.
 **`GET /v1/owner/agents`**, **`/sessions`**, **`/invites?status=awaiting_owner`** and **`/records`** return paginated `{ items, nextCursor }`.
 **`POST /v1/owner/agents/{id}/suspend`** and **`/unsuspend`** return `200 { "agent": Agent }`. Suspending moves every active session to `closing` (reason `agent_suspended`) and cancels pending ones.
+
+**`PATCH /v1/owner/agents/{id}/spend-limit`** takes `{ "spendLimitUsdCents": number | null }` (`null` clears it — unlimited) and returns `200 { "agent": Agent }`. Enforced before payment: an agent whose next x402 premium purchase (§8.1's `/v1/premium/*` routes) would put its lifetime total over this cap gets `403 spend_limit_exceeded` instead of a `402` payment challenge, so it's never charged for a purchase that was going to be refused anyway. The cap only ever governs a request the *agent itself* authenticated (its own signed key) — an owner calling a premium route with their own session isn't spending against any agent's limit.
 **`POST /v1/owner/invites/{id}/approve`** and **`/reject`** return `200 { "invite", "session" }`.
 
 **`POST /v1/owner/agents/{id}/viewers`** (must own `id`) takes `{ "email": "…", "label"?: "…" }` and returns `201 { "grant": ViewerGrant }`, or `409 viewer_exists` if that email already has an active grant on this agent. Re-inviting a revoked grant reactivates it (same id). `ViewerGrant`: `{ "id", "ownerId", "agentId", "viewerEmail", "label", "status": "active"|"revoked", "createdAt", "revokedAt" }`.
@@ -877,7 +882,7 @@ Limits use fixed windows stored in `rate_limits` (D11). Every response carries `
 | ---- | ---- |
 | 400 | `bad_request`, `validation_failed` |
 | 401 | `unauthenticated`, `invalid_request_signature`, `clock_skew`, `nonce_reused` |
-| 403 | `forbidden`, `agent_unclaimed`, `agent_suspended`, `origin_not_allowed` |
+| 403 | `forbidden`, `agent_unclaimed`, `agent_suspended`, `origin_not_allowed`, `spend_limit_exceeded` |
 | 404 | `not_found` |
 | 409 | `key_in_use`, `already_claimed`, `session_id_taken`, `chain_conflict`, `session_not_active`, `session_not_pending`, `invite_not_pending`, `head_mismatch`, `last_key`, `key_pinned`, `too_many_pending`, `viewer_exists`, `domain_verification_not_requested` |
 | 410 | `invite_expired` |
