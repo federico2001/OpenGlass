@@ -72,6 +72,16 @@ export const validDocs: Record<string, Record<string, unknown>> = {
   web_sessions: { _id: hash, ownerId: `own_${U}`, createdAt: now, expiresAt: now },
   request_nonces: { _id: `agt_${U}:abc`, expiresAt: now },
   rate_limits: { _id: `message_send:agt_${U}:1790000000`, count: 3, expiresAt: now },
+  activity_snapshots: {
+    _id: "2026-09-22", takenAt: now,
+    agents: { total: 10, unclaimed: 2, active: 7, suspended: 1, verifiedBadge: 1 },
+    owners: { total: 8 },
+    sessions: { total: 5, pending: 1, active: 1, closing: 0, closed: 3, declined: 0, cancelled: 0, expired: 0 },
+    messages: { total: 20 },
+    records: { total: 3 },
+    packages: { npmWeeklyDownloads: 12, pypiDailyDownloads: 2, pypiWeeklyDownloads: 9, pypiMonthlyDownloads: 30 },
+    github: { stars: 4, forks: 1, watchers: 2, openIssues: 0 },
+  },
   changelog: { _id: new ObjectId(), fileName: "20260922000000-x.js", appliedAt: now, migrationBlock: Date.now() },
   migration_lock: { _id: "migrate", holder: "h", expiresAt: now },
 };
