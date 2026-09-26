@@ -18,11 +18,16 @@ export interface VerifyResult {
 type ParticipantRef = Offer["initiator"]; // { agentId, kid, publicKey }
 
 /**
- * SPEC §7.6, ported from `packages/db/src/crypto/verifyBundle.ts`. Runs the full
+ * SPEC §7.6 / §12, ported from `packages/db/src/crypto/verifyBundle.ts`. Runs the full
  * independent-verification algorithm offline — no network access, no trusting OpenGlass's
  * word for anything. `trusted` is a list of platform keys from OUTSIDE the bundle: pin them
  * yourself, or fetch `{apiUrl}/.well-known/openglass-keys.json` over TLS.
  * `bundle.platformKeys` is only a hint and is never trusted on its own.
+ *
+ * Handles both `statement.kind` values (`"session"` — the default, for every record issued
+ * before `kind` existed — and `"attestation"`). Only step 2 (genesis) actually differs;
+ * steps 1, 3, 4 are kind-agnostic by construction — see the field-reuse notes in
+ * packages/db/src/models/protocol.ts.
  *
  * Every check is recorded and execution continues regardless, so one pass reports every
  * problem rather than stopping at the first failure.
@@ -35,6 +40,7 @@ export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): Veri
 
   const E = bundle.evidence;
   const S = bundle.record.statement;
+  const kind = S.kind ?? "session";
 
   const keyFromPlatformKey = (k: PlatformKey): VerifyingKey => ({
     alg: k.alg,
@@ -64,44 +70,58 @@ export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): Veri
     "record_signature",
   );
   require(hex(sha256(canonicalizeToBytes(E))) === S.evidenceSha256, "evidence_hash");
-  require(E.offer.sessionId === S.sessionId && E.offer.mode === S.mode, "session_mismatch");
+  require(kind === "session" ? E.offer !== null : E.open !== null, "kind_mismatch");
 
-  // 2. Genesis
-  const A = E.offer.initiator;
-  const B = E.accept.counterparty;
-  require(A.agentId !== B.agentId, "self_session");
-  require(E.offerSignature.kid === A.kid && E.acceptSignature.kid === B.kid, "kid_mismatch");
+  // 2. Genesis — the one step that actually differs by kind.
+  let genesisHashBytes: Uint8Array;
+  let keyOf: Record<string, ParticipantRef>;
+  let genesisAt: string;
 
-  const offerHashBytes = sha256(canonicalizeToBytes(E.offer));
-  require(verifySignature(agentKey(A), "offer", offerHashBytes, E.offerSignature), "offer_signature");
-  require(E.accept.offerHash === hex(offerHashBytes), "offer_hash");
-  require(E.accept.sessionId === E.offer.sessionId, "session_mismatch");
-  require(E.offer.counterparty === null || E.offer.counterparty.agentId === B.agentId, "counterparty_mismatch");
-  require(
-    verifySignature(agentKey(B), "accept", sha256(canonicalizeToBytes(E.accept)), E.acceptSignature),
-    "accept_signature",
-  );
+  if (kind === "session") {
+    const offer = E.offer!;
+    const accept = E.accept!;
+    const offerSignature = E.offerSignature!;
+    const acceptSignature = E.acceptSignature!;
+    require(offer.sessionId === S.sessionId && offer.mode === S.mode, "session_mismatch");
 
-  const genesisHashBytes = sha256(
-    canonicalizeToBytes({
-      offer: E.offer,
-      offerSignature: E.offerSignature,
-      accept: E.accept,
-      acceptSignature: E.acceptSignature,
-    }),
-  );
+    const A = offer.initiator;
+    const B = accept.counterparty;
+    require(A.agentId !== B.agentId, "self_session");
+    require(offerSignature.kid === A.kid && acceptSignature.kid === B.kid, "kid_mismatch");
+
+    const offerHashBytes = sha256(canonicalizeToBytes(offer));
+    require(verifySignature(agentKey(A), "offer", offerHashBytes, offerSignature), "offer_signature");
+    require(accept.offerHash === hex(offerHashBytes), "offer_hash");
+    require(accept.sessionId === offer.sessionId, "session_mismatch");
+    require(offer.counterparty === null || offer.counterparty.agentId === B.agentId, "counterparty_mismatch");
+    require(verifySignature(agentKey(B), "accept", sha256(canonicalizeToBytes(accept)), acceptSignature), "accept_signature");
+
+    genesisHashBytes = sha256(canonicalizeToBytes({ offer, offerSignature, accept, acceptSignature }));
+    genesisAt = accept.acceptedAt;
+    keyOf = { [A.agentId]: A, [B.agentId]: B };
+    require(participantsMatch(S.participants, A, B), "participants");
+  } else {
+    const open = E.open!;
+    const openSignature = E.openSignature!;
+    require(open.attestationId === S.sessionId && open.mode === S.mode, "session_mismatch");
+
+    const A = open.attestor;
+    require(openSignature.kid === A.kid, "kid_mismatch");
+    require(verifySignature(agentKey(A), "attestation_open", sha256(canonicalizeToBytes(open)), openSignature), "open_signature");
+
+    genesisHashBytes = sha256(canonicalizeToBytes({ open, openSignature }));
+    genesisAt = open.createdAt;
+    keyOf = { [A.agentId]: A };
+    require(attestorMatches(S.participants, A), "participants");
+  }
+
   const g = hex(genesisHashBytes);
   require(g === E.genesisHash && g === S.genesisHash, "genesis_hash");
-  require(
-    verifySignature(plat(E.genesisSignature, E.accept.acceptedAt), "genesis", genesisHashBytes, E.genesisSignature),
-    "genesis_signature",
-  );
-  require(participantsMatch(S.participants, A, B), "participants");
+  require(verifySignature(plat(E.genesisSignature, genesisAt), "genesis", genesisHashBytes, E.genesisSignature), "genesis_signature");
 
-  // 3. Chain
-  const keyOf: Record<string, ParticipantRef> = { [A.agentId]: A, [B.agentId]: B };
+  // 3. Chain — identical for both kinds; operates on the generic `prev`/`keyOf` from step 2.
   let prev = g;
-  let lastReceived = E.accept.acceptedAt;
+  let lastReceived = genesisAt;
   E.messages.forEach((m, i) => {
     const env = m.envelope;
     const seq = i + 1;
@@ -135,7 +155,7 @@ export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): Veri
     lastReceived = m.receivedAt;
   });
 
-  // 4. Head and close
+  // 4. Head and close — identical for both kinds.
   require(S.headSeq === E.messages.length && S.messageCount === E.messages.length, "head_seq");
   require(S.headHash === (E.messages.length ? prev : null), "head_hash");
   if (E.close) {
@@ -161,7 +181,7 @@ function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
 }
 
 function participantsMatch(
-  participants: { role: "initiator" | "counterparty"; agentId: string; kid: string }[],
+  participants: { role: "initiator" | "counterparty" | "attestor"; agentId: string; kid: string }[],
   a: ParticipantRef,
   b: ParticipantRef,
 ): boolean {
@@ -170,4 +190,12 @@ function participantsMatch(
   return (
     !!init && !!cp && init.agentId === a.agentId && init.kid === a.kid && cp.agentId === b.agentId && cp.kid === b.kid
   );
+}
+
+function attestorMatches(
+  participants: { role: "initiator" | "counterparty" | "attestor"; agentId: string; kid: string }[],
+  a: ParticipantRef,
+): boolean {
+  const att = participants.find((p) => p.role === "attestor");
+  return !!att && att.agentId === a.agentId && att.kid === a.kid;
 }

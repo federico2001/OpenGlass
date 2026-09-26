@@ -102,6 +102,8 @@ export async function buildTestBundle(opts: { tamper?: (bundle: RecordBundle) =>
     offerSignature,
     accept,
     acceptSignature,
+    open: null,
+    openSignature: null,
     genesisHash,
     genesisSignature,
     messages: [

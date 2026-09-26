@@ -42,7 +42,7 @@ describe("verifyBundle (SPEC §7.6)", () => {
   it("catches a forged offer signature", async () => {
     const { bundle } = await buildTestBundle({
       tamper: (b) => {
-        b.evidence.offerSignature.sig = b.evidence.offerSignature.sig.slice(0, -4) + "AAAA";
+        b.evidence.offerSignature!.sig = b.evidence.offerSignature!.sig.slice(0, -4) + "AAAA";
       },
     });
     const result = verifyBundle(bundle, bundle.platformKeys);

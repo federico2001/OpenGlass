@@ -1,4 +1,4 @@
-import { Accept, CloseStatement, MessageEnvelope, Offer, RecordBundle, Signature } from "@openglass/db";
+import { Accept, AttestationOpen, CloseStatement, MessageEnvelope, Offer, RecordBundle, Signature } from "@openglass/db";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
@@ -283,6 +283,112 @@ export function registerTools(server: McpServer, api: ApiClient): void {
     async ({ recordId, bundle, auth }) =>
       guarded(async () => {
         const res = await api.get(`/v1/records/${recordId}${bundle ? "/bundle" : ""}`, toAuth(auth));
+        return toolJson(res);
+      }),
+  );
+
+  server.registerTool(
+    "open_attestation",
+    {
+      title: "Open a one-party attestation",
+      description:
+        "Log something your agent itself did — a high-risk tool call, a decision — with no counterparty " +
+        "to invite or accept (SPEC §12). Build and sign an `open` (AttestationOpen, purpose " +
+        '"attestation_open") yourself; this tool only relays it (POST /v1/attestations). Unlike ' +
+        "start_session, this activates immediately: there's no invite, no accept, nothing to wait on. " +
+        "`open.attestor` must be your own claimed agentId/kid. The resulting record can still be fetched " +
+        "and verified with get_record/verify_agent exactly like a session's, once closed.",
+      inputSchema: {
+        open: AttestationOpen,
+        openSignature: Signature,
+        idleTimeoutSec: z.number().int().min(60).max(604800).optional(),
+        auth: RequestAuthSchema,
+      },
+    },
+    async ({ open, openSignature, idleTimeoutSec, auth }) =>
+      guarded(async () => {
+        const res = await api.post("/v1/attestations", { open, openSignature, idleTimeoutSec }, toAuth(auth));
+        return toolJson(res);
+      }),
+  );
+
+  server.registerTool(
+    "send_attestation_event",
+    {
+      title: "Append an event to an attestation",
+      description:
+        "Append a signed, hash-chained event to your own active attestation " +
+        "(POST /v1/attestations/{id}/events) — the one-party counterpart to send_message. Same two " +
+        'modes: `mode: "prepare"` (auth = a signed GET of the attestation) returns the current head so ' +
+        'you know exactly what to build and sign next; `mode: "submit"` (auth = a signed POST) then ' +
+        "appends your envelope/hash/signature/payload. Build them yourself per SPEC §7.3/§12 — this tool " +
+        "only relays them. The sender is always your own attestor key; there's no counterparty to pin " +
+        "against.",
+      inputSchema: {
+        mode: z.enum(["prepare", "submit"]),
+        attestationId: z.string(),
+        envelope: MessageEnvelope.optional().describe("Required for mode=submit."),
+        hash: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/)
+          .optional()
+          .describe("Required for mode=submit."),
+        signature: Signature.optional().describe("Required for mode=submit — the event signature, not the request auth."),
+        payload: z.unknown().optional().describe("Required for mode=submit in relay-mode attestations; must be omitted in notary mode."),
+        auth: RequestAuthSchema,
+      },
+    },
+    async ({ mode, attestationId, envelope, hash, signature, payload, auth }) =>
+      guarded(async () => {
+        if (mode === "prepare") {
+          const res = (await api.get(`/v1/attestations/${attestationId}`, toAuth(auth))) as {
+            attestation: { mode: "relay" | "notary"; genesisHash: string; head: { seq: number; hash: string | null } };
+          };
+          const { head, genesisHash, mode: attestationMode } = res.attestation;
+          return toolJson({
+            attestationId,
+            attestationMode,
+            nextSeq: head.seq + 1,
+            prevHash: head.hash ?? genesisHash,
+            hint: "Build the MessageEnvelope with this seq/prevHash, hash it, sign it, then call again with mode=submit.",
+          });
+        }
+        if (!envelope || !hash || !signature) return toolError("mode=submit requires envelope, hash, and signature.");
+        const res = await api.post(`/v1/attestations/${attestationId}/events`, { envelope, hash, signature, payload }, toAuth(auth));
+        return toolJson(res);
+      }),
+  );
+
+  server.registerTool(
+    "close_attestation",
+    {
+      title: "Close an attestation",
+      description:
+        "Close your own active attestation (POST /v1/attestations/{id}/close), which starts record " +
+        'issuance exactly like close_session. `mode: "prepare"` (auth = a signed GET) returns the ' +
+        'current head to close at. `mode: "submit"` (auth = a signed POST) submits your signed ' +
+        "CloseStatement, built per SPEC §7.4/§12.",
+      inputSchema: {
+        mode: z.enum(["prepare", "submit"]),
+        attestationId: z.string(),
+        statement: CloseStatement.optional().describe("Required for mode=submit."),
+        signature: Signature.optional().describe("Required for mode=submit."),
+        auth: RequestAuthSchema,
+      },
+    },
+    async ({ mode, attestationId, statement, signature, auth }) =>
+      guarded(async () => {
+        if (mode === "prepare") {
+          const res = (await api.get(`/v1/attestations/${attestationId}`, toAuth(auth))) as { attestation: { head: { seq: number; hash: string | null } } };
+          return toolJson({
+            attestationId,
+            headSeq: res.attestation.head.seq,
+            headHash: res.attestation.head.hash,
+            hint: "Sign a CloseStatement at this head, then call again with mode=submit.",
+          });
+        }
+        if (!statement || !signature) return toolError("mode=submit requires statement and signature.");
+        const res = await api.post(`/v1/attestations/${attestationId}/close`, { statement, signature }, toAuth(auth));
         return toolJson(res);
       }),
   );

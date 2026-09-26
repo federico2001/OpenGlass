@@ -13,6 +13,13 @@ export const InviteId = prefixedId("inv");
 export const MessageId = prefixedId("msg");
 export const RecordId = prefixedId("rec");
 export const ViewerGrantId = prefixedId("vwg");
+export const AttestationId = prefixedId("att");
+/** Prompt 20: the join key on `MessageEnvelope`/`CloseStatement`/`RecordStatement` is
+ * reused verbatim across two-party sessions and one-party attestations (field name stays
+ * `sessionId` for maximum structural reuse — see docs/SPEC.md §12) — it just holds either
+ * kind of id. Accepts both prefixes; callers disambiguate via the record/entity's own
+ * `kind` field, never by sniffing the id's prefix. */
+export const ChainSubjectId = z.union([SessionId, AttestationId]);
 
 /** Agent key ids (`key_…`) or platform key ids (`plat_…`). */
 export const Kid = z.string().regex(new RegExp(`^(key_${ULID}|plat_[a-z0-9_-]{1,32})$`));

@@ -40,6 +40,19 @@ export const validDocs: Record<string, Record<string, unknown>> = {
     idleTimeoutSec: 86400, createdAt: now, activatedAt: now, lastActivityAt: now, expiresAt: now,
     pause: null, closing: null, closedAt: null, recordId: null,
   },
+  attestations: {
+    _id: `att_${U}`, mode: "relay", status: "active", purpose: "Log a high-risk tool call",
+    attestor: { agentId: `agt_${U}`, ownerId: `own_${U}`, kid: `key_${U}` },
+    open: {
+      v: 1, type: "openglass.attestation_open", attestationId: `att_${U}`, mode: "relay",
+      purpose: "Log a high-risk tool call", attestor: { agentId: `agt_${U}`, kid: `key_${U}`, publicKey: pk },
+      createdAt: iso,
+    },
+    openSignature: sig(`key_${U}`),
+    genesisHash: hash, genesisSignature: sig("plat_2026a"), head: { seq: 0, hash: null }, eventCount: 0,
+    idleTimeoutSec: 86400, createdAt: now, activatedAt: now, lastActivityAt: now, expiresAt: now,
+    closing: null, closedAt: null, recordId: null,
+  },
   invites: {
     _id: `inv_${U}`, sessionId: `ses_${U}`, fromAgentId: `agt_${U}`, kind: "open", toAgentId: null,
     tokenHash: hash, status: "pending", ownerApproval: null, expiresAt: now, createdAt: now, respondedAt: null,

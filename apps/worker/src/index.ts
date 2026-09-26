@@ -2,8 +2,10 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { connectFromEnv, createPlatformSigner } from "@openglass/db";
 import { loadConfig } from "./config.js";
 import { buildHealthServer } from "./health.js";
+import { closeExpiredAttestations } from "./jobs/closeExpiredAttestations.js";
 import { closeExpiredSessions } from "./jobs/closeExpiredSessions.js";
 import { closeSuspendedAgentSessions } from "./jobs/closeSuspendedAgentSessions.js";
+import { issueAttestationRecords } from "./jobs/issueAttestationRecords.js";
 import { issueRecords } from "./jobs/issueRecords.js";
 import { recordActivitySnapshot } from "./jobs/recordActivitySnapshot.js";
 import { createMailer } from "./mailer.js";
@@ -28,6 +30,7 @@ const log = (message: string, meta?: Record<string, unknown>) =>
 async function sweep(): Promise<void> {
   try {
     const expiry = await closeExpiredSessions(conn.db);
+    const attestationExpiry = await closeExpiredAttestations(conn.db);
     const suspended = await closeSuspendedAgentSessions(conn.db);
     const records = await issueRecords({
       db: conn.db,
@@ -39,9 +42,27 @@ async function sweep(): Promise<void> {
       publicUrl: config.PUBLIC_URL,
       log,
     });
+    const attestationRecords = await issueAttestationRecords({
+      db: conn.db,
+      s3,
+      s3Bucket: config.S3_BUCKET,
+      signer,
+      platformKeyValidFrom: config.PLATFORM_KEY_VALID_FROM,
+      log,
+    });
     const snapshot = await recordActivitySnapshot(conn.db, { log });
-    if (expiry.expired || expiry.idleClosed || suspended.closed || suspended.cancelled || records.issued || records.skipped) {
-      log("sweep", { ...expiry, ...suspended, ...records });
+    if (
+      expiry.expired ||
+      expiry.idleClosed ||
+      attestationExpiry.idleClosed ||
+      suspended.closed ||
+      suspended.cancelled ||
+      records.issued ||
+      records.skipped ||
+      attestationRecords.issued ||
+      attestationRecords.skipped
+    ) {
+      log("sweep", { ...expiry, ...attestationExpiry, ...suspended, ...records, attestationRecords });
     }
     if (snapshot.written) log("activity snapshot written");
   } catch (err) {

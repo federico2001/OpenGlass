@@ -1,4 +1,4 @@
-import type { RecordDoc, SessionDoc } from "@openglass/db";
+import type { AttestationDoc, RecordDoc, SessionDoc } from "@openglass/db";
 
 export type SessionParticipant = SessionDoc["initiator"];
 
@@ -35,6 +35,15 @@ export function canAccessSession(session: SessionDoc, req: AccessRequest): boole
     if (session.initiator.agentId && req.viewerAgentIds.has(session.initiator.agentId)) return true;
     if (session.counterparty.agentId && req.viewerAgentIds.has(session.counterparty.agentId)) return true;
   }
+  return false;
+}
+
+/** One-party version of `canAccessSession` (Prompt 20) — the attestor agent, its owner,
+ * or a viewer grant holder on that one agent. */
+export function canAccessAttestation(attestation: AttestationDoc, req: AccessRequest): boolean {
+  if (req.agent && attestation.attestor.agentId === req.agent.doc._id) return true;
+  if (req.owner && attestation.attestor.ownerId === req.owner._id) return true;
+  if (req.viewerAgentIds && req.viewerAgentIds.has(attestation.attestor.agentId)) return true;
   return false;
 }
 

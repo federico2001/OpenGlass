@@ -1,9 +1,9 @@
 import { z } from "zod";
 import {
-  AgentId, Hash, InviteId, KeyId, MessageId, ObjectIdSchema, OwnerId, PublicKey,
+  AgentId, AttestationId, ChainSubjectId, Hash, InviteId, KeyId, MessageId, ObjectIdSchema, OwnerId, PublicKey,
   RecordId, SessionId, Signature, Kid, ViewerGrantId,
 } from "./common.js";
-import { Accept, CloseReason, CloseStatement, MessageEnvelope, Mode, Offer, RecordStatement } from "./protocol.js";
+import { Accept, AttestationOpen, CloseReason, CloseStatement, MessageEnvelope, Mode, Offer, RecordStatement } from "./protocol.js";
 import { defineCollection } from "./define.js";
 
 // Document shapes follow docs/SPEC.md §3.
@@ -169,6 +169,49 @@ export const sessions = defineCollection({
   ],
 });
 
+/** Prompt 20: one-party attestation — an agent's own signed, hash-chained, platform-
+ * countersigned record of a sequence of events, with no counterparty to accept. No
+ * `invites`/`offer`/`accept`: activates immediately on open (there's no one else who
+ * needs to agree). Everything downstream (events, close, record issuance, verification)
+ * reuses the same mechanisms as a session — see the field-reuse notes in protocol.ts. */
+export const attestations = defineCollection({
+  name: "attestations",
+  schema: z.strictObject({
+    _id: AttestationId,
+    mode: Mode,
+    status: z.enum(["active", "closing", "closed"]),
+    purpose: z.string().max(1000),
+    attestor: z.strictObject({ agentId: AgentId, ownerId: OwnerId, kid: Kid }),
+    open: AttestationOpen,
+    openSignature: Signature,
+    genesisHash: Hash,
+    genesisSignature: Signature,
+    head: z.strictObject({ seq: z.int().min(0), hash: Hash.nullable() }),
+    eventCount: z.int().min(0),
+    idleTimeoutSec: z.int().min(60).max(604800),
+    createdAt: z.date(),
+    activatedAt: z.date(),
+    lastActivityAt: z.date(),
+    expiresAt: z.date(),
+    closing: z
+      .strictObject({
+        reason: CloseReason,
+        requestedBy: AgentId.nullable(),
+        statement: CloseStatement.nullable(),
+        signature: Signature.nullable(),
+        requestedAt: z.date(),
+      })
+      .nullable(),
+    closedAt: z.date().nullable(),
+    recordId: RecordId.nullable(),
+  }),
+  indexes: [
+    { name: "attestor_agent_createdAt", key: { "attestor.agentId": 1, createdAt: -1 } },
+    { name: "attestor_owner_createdAt", key: { "attestor.ownerId": 1, createdAt: -1 } },
+    { name: "status_expiresAt", key: { status: 1, expiresAt: 1 } },
+  ],
+});
+
 export const invites = defineCollection({
   name: "invites",
   schema: z.strictObject({
@@ -209,7 +252,10 @@ export const messages = defineCollection({
   appendOnly: true,
   schema: z.strictObject({
     _id: MessageId,
-    sessionId: SessionId,
+    /** Holds an attestation id for an attestation's events (Prompt 20) — see the
+     * field-reuse note on `MessageEnvelope` in protocol.ts. Same collection, same
+     * indexes, same append-only rules either way. */
+    sessionId: ChainSubjectId,
     seq: z.int().min(1).max(10000),
     envelope: MessageEnvelope,
     hash: Hash,
@@ -230,13 +276,16 @@ export const records = defineCollection({
   appendOnly: true,
   schema: z.strictObject({
     _id: RecordId,
-    sessionId: SessionId,
+    /** Holds an attestation id when `statement.kind === "attestation"` — see the
+     * field-reuse note on `RecordStatement` in protocol.ts. */
+    sessionId: ChainSubjectId,
     statement: RecordStatement,
     statementHash: Hash,
     platformSignature: Signature,
     evidence: z.strictObject({ s3Key: z.string().min(1), sha256: Hash, bytes: z.int().min(0) }),
-    participantAgentIds: z.array(AgentId).min(2).max(2),
-    participantOwnerIds: z.array(OwnerId).min(2).max(2),
+    /** 2 for a session record, 1 for an attestation record. */
+    participantAgentIds: z.array(AgentId).min(1).max(2),
+    participantOwnerIds: z.array(OwnerId).min(1).max(2),
     createdAt: z.date(),
   }),
   indexes: [
@@ -376,7 +425,7 @@ export const migrationLock = defineCollection({
 });
 
 export const allCollections = [
-  owners, agents, sessions, invites, messages, records, viewerGrants,
+  owners, agents, sessions, attestations, invites, messages, records, viewerGrants,
   loginTokens, webSessions, requestNonces, rateLimits, activitySnapshots,
   changelog, migrationLock,
 ] as const;
@@ -384,6 +433,7 @@ export const allCollections = [
 export type OwnerDoc = z.infer<typeof owners.schema>;
 export type AgentDoc = z.infer<typeof agents.schema>;
 export type SessionDoc = z.infer<typeof sessions.schema>;
+export type AttestationDoc = z.infer<typeof attestations.schema>;
 export type InviteDoc = z.infer<typeof invites.schema>;
 export type MessageDoc = z.infer<typeof messages.schema>;
 export type RecordDoc = z.infer<typeof records.schema>;

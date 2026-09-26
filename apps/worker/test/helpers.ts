@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import {
   agentsRepository,
+  attestationsRepository,
   base64UrlEncode,
   canonicalizeToBytes,
   generateEd25519KeyPair,
@@ -15,6 +16,7 @@ import {
   signEd25519,
   sigInput,
   type AgentDoc,
+  type AttestationDoc,
   type MessageDoc,
   type OwnerDoc,
   type PlatformSigner,
@@ -184,4 +186,93 @@ export async function buildActiveSession(
   return { session: sessionDoc, initiator, counterparty, messages };
 }
 
-export type { AgentDoc, OwnerDoc, Party };
+/** One-party counterpart to `buildActiveSession` (Prompt 20) — inserts a fully valid,
+ * real-crypto ACTIVE attestation (open + genesis genuinely signed) directly via the
+ * repository. */
+export async function buildActiveAttestation(
+  db: Db,
+  opts: { signer: PlatformSigner; eventCount?: number; idleTimeoutSec?: number },
+): Promise<{ attestation: AttestationDoc; attestor: Party; events: MessageDoc[] }> {
+  const attestor = await insertClaimedAgent(db, `att_${newId("agt").slice(-8)}`);
+  const attestationId = newId("att");
+  const now = new Date();
+  const iso = (offsetMs = 0) => new Date(now.getTime() + offsetMs).toISOString();
+
+  const open = {
+    v: 1 as const,
+    type: "openglass.attestation_open" as const,
+    attestationId,
+    mode: "relay" as const,
+    purpose: "Test attestation",
+    attestor: { agentId: attestor.agentId, kid: attestor.kid, publicKey: attestor.publicKey },
+    createdAt: iso(),
+  };
+  const openSignature = {
+    alg: "Ed25519" as const,
+    kid: attestor.kid,
+    sig: base64UrlEncode(signEd25519(sigInput("attestation_open", sha256(canonicalizeToBytes(open))), attestor.privateKey)),
+  };
+
+  const genesisHashBytes = sha256(canonicalizeToBytes({ open, openSignature }));
+  const genesisHash = hex(genesisHashBytes);
+  const genesisSignature = await opts.signer.sign("genesis", genesisHashBytes);
+
+  const idleTimeoutSec = opts.idleTimeoutSec ?? 86400;
+  const attestationDoc: AttestationDoc = {
+    _id: attestationId,
+    mode: "relay",
+    status: "active",
+    purpose: open.purpose,
+    attestor: { agentId: attestor.agentId, ownerId: attestor.ownerId, kid: attestor.kid },
+    open,
+    openSignature,
+    genesisHash,
+    genesisSignature,
+    head: { seq: 0, hash: null },
+    eventCount: 0,
+    idleTimeoutSec,
+    createdAt: now,
+    activatedAt: now,
+    lastActivityAt: now,
+    expiresAt: new Date(now.getTime() + idleTimeoutSec * 1000),
+    closing: null,
+    closedAt: null,
+    recordId: null,
+  };
+
+  const events: MessageDoc[] = [];
+  let prevHash = genesisHash;
+  const count = opts.eventCount ?? 0;
+  for (let i = 1; i <= count; i++) {
+    const payload = { text: `event ${i}` };
+    const payloadHash = hex(sha256(canonicalizeToBytes(payload)));
+    const envelope = {
+      v: 1 as const,
+      type: "openglass.message" as const,
+      sessionId: attestationId,
+      seq: i,
+      prevHash,
+      sender: { agentId: attestor.agentId, kid: attestor.kid },
+      contentType: "application/json",
+      payloadHash,
+      sentAt: iso(2000 + i),
+    };
+    const hashBytes = sha256(Buffer.concat([hexToBytes(prevHash), canonicalizeToBytes(envelope)]));
+    const hash = hex(hashBytes);
+    const signature = { alg: "Ed25519" as const, kid: attestor.kid, sig: base64UrlEncode(signEd25519(sigInput("message", hashBytes), attestor.privateKey)) };
+    const receivedAt = new Date(now.getTime() + 2000 + i);
+    const countersignDigest = sha256(canonicalizeToBytes({ hash, agentSig: signature.sig, receivedAt: receivedAt.toISOString() }));
+    const platformSignature = await opts.signer.sign("countersign", countersignDigest);
+    const eventDoc: MessageDoc = { _id: newId("msg"), sessionId: attestationId, seq: i, envelope, hash, signature, receivedAt, platformSignature, payload };
+    await insertMessage(db, eventDoc);
+    events.push(eventDoc);
+    prevHash = hash;
+    attestationDoc.head = { seq: i, hash };
+    attestationDoc.eventCount = i;
+  }
+
+  await attestationsRepository(db).insert(attestationDoc);
+  return { attestation: attestationDoc, attestor, events };
+}
+
+export type { AgentDoc, AttestationDoc, OwnerDoc, Party };

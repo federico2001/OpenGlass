@@ -64,16 +64,39 @@ export interface CloseStatement {
   closedAt: string;
 }
 
-export type CloseReason = "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit";
+export type CloseReason = "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit" | "owner_declined_pause";
 
+/** A one-party attestation's opening statement (SPEC §12) — the counterpart to offer+accept
+ * for an attestor with no counterparty to accept. */
+export interface AttestationOpen {
+  v: 1;
+  type: "openglass.attestation_open";
+  attestationId: string;
+  mode: Mode;
+  purpose: string;
+  attestor: ParticipantKeyRef;
+  createdAt: string;
+}
+
+/** `kind` discriminates a two-party session record from a one-party attestation record;
+ * absent means "session" (every record issued before this field existed). `sessionId`
+ * holds the attestation id when `kind === "attestation"` — same field, reused, so
+ * `verifyBundle` and everything downstream needs no separate code path for it. */
 export interface RecordStatement {
   v: 1;
   type: "openglass.record";
+  kind?: "session" | "attestation";
   recordId: string;
   sessionId: string;
   mode: Mode;
   purpose: string;
-  participants: { role: "initiator" | "counterparty"; agentId: string; ownerId: string; kid: string; publicKey: string }[];
+  participants: {
+    role: "initiator" | "counterparty" | "attestor";
+    agentId: string;
+    ownerId: string;
+    kid: string;
+    publicKey: string;
+  }[];
   genesisHash: string;
   headSeq: number;
   headHash: string | null;
@@ -96,13 +119,17 @@ export interface EvidenceMessage {
   payload?: unknown;
 }
 
+/** `offer`/`accept` (session) and `open` (attestation) are mutually exclusive — exactly
+ * one pair is populated, matching the record's `kind`. */
 export interface Evidence {
   v: 1;
   type: "openglass.evidence";
-  offer: Offer;
-  offerSignature: Signature;
-  accept: Accept;
-  acceptSignature: Signature;
+  offer: Offer | null;
+  offerSignature: Signature | null;
+  accept: Accept | null;
+  acceptSignature: Signature | null;
+  open: AttestationOpen | null;
+  openSignature: Signature | null;
   genesisHash: string;
   genesisSignature: Signature;
   messages: EvidenceMessage[];

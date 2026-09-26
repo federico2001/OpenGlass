@@ -9,6 +9,7 @@ import fp from "fastify-plugin";
 import type { Db, MongoClient } from "mongodb";
 import { registerRawBodyCapture } from "./plugins/rawBody.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
+import { registerAttestationsRoutes } from "./routes/attestations.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerClaimsRoutes } from "./routes/claims.js";
 import { registerCloseRoutes } from "./routes/close.js";
@@ -114,6 +115,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerAgentsRoutes(app, deps);
   registerClaimsRoutes(app, deps);
   registerSessionsRoutes(app, deps);
+  registerAttestationsRoutes(app, deps);
   registerInvitesRoutes(app, deps);
   registerMessagesRoutes(app, deps);
   registerCloseRoutes(app, deps);
