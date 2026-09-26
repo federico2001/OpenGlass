@@ -31,6 +31,10 @@ MinIO no longer publishes official images, so compose uses the maintained commun
 
 [`examples/witnessed-negotiation`](examples/witnessed-negotiation) is a runnable, end-to-end demo: two agents register, get claimed, negotiate a purchase order over a witnessed session, close it, and independently verify the resulting record — against the real API, not a mock. See [`examples/README.md`](examples/README.md).
 
+## Risk policy
+
+[`/spec/openglass-policy`](spec/openglass-policy) is a small, versioned, vendor-neutral YAML format for classifying an agent's action as `low`/`medium`/`high` risk — deciding *when* an action is worth a witnessed record, separate from the attestation mechanism itself (`docs/SPEC.md` §12). Reference evaluators: [`core-js`](core-js) (`@openglass/core`) and [`core-py`](core-py) (`openglass-core`), kept in sync by a shared set of test vectors. See [`docs/POLICY.md`](docs/POLICY.md) for the guide.
+
 ## Develop and test
 
 ```sh

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openglass.glass/spec/openglass-policy/v1/schema.json",
+  "title": "OpenGlass Policy v1",
+  "description": "A versioned, vendor-neutral format for classifying agent actions by risk. A policy is a flat list of rules matched in order against one event; the highest risk level among matched rules wins, falling back to defaultRisk when nothing matches. See ../README.md for the full guide.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "rules"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "openglass-policy/v1" },
+    "kind": { "const": "Policy" },
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "A short, kebab-case identifier, e.g. \"default\"."
+        },
+        "description": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "defaultRisk": {
+      "$ref": "#/$defs/riskLevel",
+      "default": "low",
+      "description": "The risk level for an event that matches no rule. Defaults to \"low\" if omitted."
+    },
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rule" },
+      "description": "Rule ids must be unique within a policy; this is enforced by the reference evaluators, not expressible in JSON Schema alone."
+    }
+  },
+  "$defs": {
+    "riskLevel": { "enum": ["low", "medium", "high"] },
+    "rule": {
+      "type": "object",
+      "required": ["id", "risk", "when"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Unique, kebab-case within the policy. Stable across policy edits — downstream systems may key off it."
+        },
+        "description": { "type": "string", "maxLength": 2000 },
+        "risk": { "$ref": "#/$defs/riskLevel" },
+        "when": { "$ref": "#/$defs/condition" },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 500 },
+          "description": "Human-readable explanations surfaced in the evaluation result when this rule matches."
+        }
+      }
+    },
+    "condition": {
+      "description": "A leaf match against one field, or a boolean combination of sub-conditions. Exactly one of the leaf shape or {all}/{any}/{not} must be used.",
+      "oneOf": [
+        { "$ref": "#/$defs/leafCondition" },
+        { "$ref": "#/$defs/allCondition" },
+        { "$ref": "#/$defs/anyCondition" },
+        { "$ref": "#/$defs/notCondition" }
+      ]
+    },
+    "leafCondition": {
+      "type": "object",
+      "required": ["field", "op"],
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string",
+          "pattern": "^(attr|field):.+$",
+          "description": "\"attr:<key>\" does an exact-key lookup in the event's OpenTelemetry GenAI attributes (keys are flat and may themselves contain dots, e.g. \"attr:gen_ai.tool.name\"). \"field:<path>\" does a dotted-path lookup into the event's plain fields (e.g. \"field:payload.amountUsd\")."
+        },
+        "op": {
+          "enum": ["equals", "not_equals", "in", "not_in", "matches", "contains", "gt", "gte", "lt", "lte", "exists", "not_exists"]
+        },
+        "value": {
+          "description": "Required for every op except exists/not_exists. \"in\"/\"not_in\" take an array; \"matches\" takes a regular expression string (case-insensitive with an inline (?i) flag); the rest take a scalar."
+        }
+      }
+    },
+    "allCondition": {
+      "type": "object",
+      "required": ["all"],
+      "additionalProperties": false,
+      "properties": { "all": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } } }
+    },
+    "anyCondition": {
+      "type": "object",
+      "required": ["any"],
+      "additionalProperties": false,
+      "properties": { "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } } }
+    },
+    "notCondition": {
+      "type": "object",
+      "required": ["not"],
+      "additionalProperties": false,
+      "properties": { "not": { "$ref": "#/$defs/condition" } }
+    }
+  }
+}

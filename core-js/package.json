@@ -1,0 +1,33 @@
+{
+  "name": "@openglass/core",
+  "version": "0.1.0",
+  "description": "OpenGlass integration core: the reference openglass-policy evaluator, and (soon) the shared runtime an integration builds on.",
+  "keywords": ["openglass", "ai-agents", "risk-policy", "opentelemetry", "gen-ai"],
+  "homepage": "https://github.com/federico2001/OpenGlass/tree/main/core-js",
+  "repository": { "type": "git", "url": "https://github.com/federico2001/OpenGlass", "directory": "core-js" },
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./policy": { "types": "./dist/policy/index.d.ts", "import": "./dist/policy/index.js" }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "yaml": "^2.6.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "ajv": "^8.17.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}
