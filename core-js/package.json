@@ -10,7 +10,9 @@
   "engines": { "node": ">=20" },
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./policy": { "types": "./dist/policy/index.d.ts", "import": "./dist/policy/index.js" }
+    "./policy": { "types": "./dist/policy/index.d.ts", "import": "./dist/policy/index.js" },
+    "./attest": { "types": "./dist/attest/index.d.ts", "import": "./dist/attest/index.js" },
+    "./testing": { "types": "./dist/testing/index.d.ts", "import": "./dist/testing/index.js" }
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,6 +23,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "openglass-sdk": "^0.1.0",
     "yaml": "^2.6.0",
     "zod": "^4.6.5"
   },

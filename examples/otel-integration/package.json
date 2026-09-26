@@ -1,0 +1,19 @@
+{
+  "name": "openglass-example-otel-integration",
+  "private": true,
+  "type": "module",
+  "description": "An agent instrumented with plain OpenTelemetry GenAI spans gets its risky tool calls automatically witnessed by OpenGlass, with no OpenGlass-specific code in the agent itself.",
+  "scripts": {
+    "start": "node --experimental-strip-types run.ts"
+  },
+  "dependencies": {
+    "openglass-sdk": "^0.1.0",
+    "@openglass/core": "file:../../core-js",
+    "openglass-otel": "file:../../otel-js",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace-base": "^2.11.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

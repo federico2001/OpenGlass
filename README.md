@@ -35,6 +35,10 @@ MinIO no longer publishes official images, so compose uses the maintained commun
 
 [`/spec/openglass-policy`](spec/openglass-policy) is a small, versioned, vendor-neutral YAML format for classifying an agent's action as `low`/`medium`/`high` risk — deciding *when* an action is worth a witnessed record, separate from the attestation mechanism itself (`docs/SPEC.md` §12). Reference evaluators: [`core-js`](core-js) (`@openglass/core`) and [`core-py`](core-py) (`openglass-core`), kept in sync by a shared set of test vectors. See [`docs/POLICY.md`](docs/POLICY.md) for the guide.
 
+## Integrations
+
+[`otel-js`](otel-js)/[`otel-py`](otel-py) (`openglass-otel`) plug into an already-OpenTelemetry-instrumented agent: a `SpanProcessor` reads GenAI spans, classifies each against an `openglass-policy`, and opens an attestation for the risky ones — no OpenGlass-specific code in the agent itself. See [`examples/otel-integration`](examples/otel-integration) for a runnable demo. [`/integrations/_template`](integrations/_template) is the starting point for a framework-specific integration, including the conformance tests every integration must pass.
+
 ## Develop and test
 
 ```sh
