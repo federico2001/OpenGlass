@@ -41,6 +41,13 @@ MinIO no longer publishes official images, so compose uses the maintained commun
 
 The public [`/integrations`](https://openglass.glass/integrations) page is the request board: a card per framework (from a static catalog, [`apps/api/data/integrations.yaml`](apps/api/data/integrations.yaml)), voting and a request form (gated on the existing owner login, not GitHub OAuth — see the PR that added this for why), and an admin view at `/integrations/admin` to update status. Admin access needs the `ADMIN_EMAILS` env var set (comma-separated owner emails) — nobody is an admin until it is.
 
+[`scripts/adoption-review.ts`](scripts/adoption-review.ts) is a runnable report over that board's live data (vote leaderboard, the 3 frameworks to prioritize next, new requests) — run it yourself or from your own cron, whenever you want it, rather than it running unattended:
+
+```sh
+node --experimental-strip-types scripts/adoption-review.ts
+# optionally: OG_ADMIN_SESSION_COOKIE="og_session=..." to include the request queue (admin-only)
+```
+
 ## Develop and test
 
 ```sh
