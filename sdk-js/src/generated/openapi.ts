@@ -199,6 +199,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/me/domain-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start verifying control of meta.homepage's domain */
+        post: operations["startDomainVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/me/domain-verification/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the published verification token */
+        post: operations["checkDomainVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agentId}": {
         parameters: {
             query?: never;
@@ -296,6 +330,23 @@ export interface paths {
         put?: never;
         /** Cancel a pending offer (initiator only) */
         post: operations["cancelSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/{sessionId}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause an active session for the owner's review (Prompt 6) */
+        post: operations["pauseSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -474,6 +525,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/owner/agents/{agentId}/spend-limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set or clear the agent's x402 premium spend cap */
+        patch: operations["setAgentSpendLimit"];
+        trace?: never;
+    };
     "/v1/owner/sessions": {
         parameters: {
             query?: never;
@@ -542,6 +610,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/owner/sessions/{sessionId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a session paused for review (Prompt 6) */
+        post: operations["resumeSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/sessions/{sessionId}/decline-resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline to resume a paused session; it moves to closing (Prompt 6) */
+        post: operations["declineResumeSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/owner/records": {
         parameters: {
             query?: never;
@@ -551,6 +653,92 @@ export interface paths {
         };
         /** List records of the owner's agents */
         get: operations["listOwnerRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/agents/{agentId}/viewers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List viewer grants (active and revoked) for an owned agent */
+        get: operations["listAgentViewers"];
+        put?: never;
+        /** Invite a human to read-only access on an owned agent */
+        post: operations["inviteViewer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/agents/{agentId}/viewers/{grantId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a viewer grant (idempotent) */
+        post: operations["revokeViewer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/viewer-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agents the caller has been granted read-only viewer access to */
+        get: operations["listViewerAccess"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/viewer-access/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sessions of agents the caller can view */
+        get: operations["listViewerAccessSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/viewer-access/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Records of agents the caller can view */
+        get: operations["listViewerAccessRecords"];
         put?: never;
         post?: never;
         delete?: never;
@@ -702,11 +890,27 @@ export interface components {
             fingerprint: string;
             keys: components["schemas"]["AgentKey"][];
             createdAt: components["schemas"]["Timestamp"];
+            /** @description Whether meta.homepage's domain has been verified — see POST /v1/agents/me/domain-verification. */
+            domainVerified: boolean;
+        };
+        DomainVerification: {
+            domain: string;
+            token: string;
+            /** @enum {string} */
+            status: "pending" | "verified";
+            requestedAt: components["schemas"]["Timestamp"];
+            verifiedAt: components["schemas"]["Timestamp"] | null;
         };
         Agent: components["schemas"]["AgentPublic"] & {
             ownerId: components["schemas"]["OwnerId"] | null;
             claimedAt: components["schemas"]["Timestamp"] | null;
             suspendedAt?: components["schemas"]["Timestamp"] | null;
+            /** @description Owner-set cap on this agent's own x402 premium spend, in US cents. null = unlimited. */
+            spendLimitUsdCents?: number | null;
+            /** @description Lifetime total spent by this agent on x402 premium purchases, in US cents. */
+            totalSpendUsdCents?: number;
+            /** @description The pending or verified challenge, if one has ever been requested — only on the agent's own view, never AgentPublic. */
+            domainVerification?: components["schemas"]["DomainVerification"] | null;
         };
         AgentEnvelope: {
             agent: components["schemas"]["Agent"];
@@ -780,7 +984,7 @@ export interface components {
             closedAt: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
-        CloseReason: "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit";
+        CloseReason: "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit" | "owner_declined_pause";
         /** @description Signed by the platform with purpose "record" over H(JCS(statement)). */
         RecordStatement: {
             /** @constant */
@@ -811,7 +1015,7 @@ export interface components {
             issuedAt: components["schemas"]["Timestamp"];
         };
         /** @enum {string} */
-        SessionStatus: "pending" | "active" | "closing" | "closed" | "declined" | "cancelled" | "expired";
+        SessionStatus: "pending" | "active" | "paused" | "closing" | "closed" | "declined" | "cancelled" | "expired";
         SessionParticipant: {
             agentId: string | null;
             ownerId: string | null;
@@ -838,6 +1042,12 @@ export interface components {
             activatedAt: components["schemas"]["Timestamp"] | null;
             lastActivityAt: components["schemas"]["Timestamp"];
             expiresAt: components["schemas"]["Timestamp"];
+            /** @description Prompt 6 - set while an agent has paused this session for owner review. */
+            pause: null | {
+                requestedBy: components["schemas"]["AgentId"];
+                reason: string;
+                requestedAt: components["schemas"]["Timestamp"];
+            };
             closing: null | {
                 reason: components["schemas"]["CloseReason"];
                 requestedBy: string | null;
@@ -924,6 +1134,22 @@ export interface components {
             };
             createdAt: components["schemas"]["Timestamp"];
         };
+        ViewerGrant: {
+            id: string;
+            ownerId: components["schemas"]["OwnerId"];
+            agentId: components["schemas"]["AgentId"];
+            /** Format: email */
+            viewerEmail: string;
+            label: string | null;
+            /** @enum {string} */
+            status: "active" | "revoked";
+            createdAt: components["schemas"]["Timestamp"];
+            revokedAt: null | components["schemas"]["Timestamp"];
+        };
+        ViewerAccessItem: {
+            grant: components["schemas"]["ViewerGrant"];
+            agent: null | components["schemas"]["AgentPublic"];
+        };
         EvidenceMessage: {
             envelope: components["schemas"]["MessageEnvelope"];
             hash: components["schemas"]["Hash"];
@@ -999,7 +1225,7 @@ export interface components {
         };
         WsServerFrame: {
             /** @enum {string} */
-            type: "ready" | "ack" | "error" | "pong" | "message" | "invite.received" | "invite.awaiting_owner" | "session.active" | "session.declined" | "session.cancelled" | "session.expired" | "session.closing" | "record.issued" | "agent.claimed";
+            type: "ready" | "ack" | "error" | "pong" | "message" | "invite.received" | "invite.awaiting_owner" | "session.active" | "session.paused" | "session.declined" | "session.cancelled" | "session.expired" | "session.closing" | "record.issued" | "agent.claimed";
             id?: string;
         } & {
             [key: string]: unknown;
@@ -1109,6 +1335,7 @@ export interface components {
         InviteId: string;
         RecordId: string;
         ClaimTokenParam: string;
+        GrantId: string;
         Cursor: string;
         Limit: number;
         SessionStatusFilter: components["schemas"]["SessionStatus"];
@@ -1481,6 +1708,93 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    startDomainVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                "OG-Agent": components["parameters"]["OGAgent"];
+                /** @description Key id, or `new` on registration. */
+                "OG-Key": components["parameters"]["OGKey"];
+                "OG-Timestamp": components["parameters"]["OGTimestamp"];
+                "OG-Nonce": components["parameters"]["OGNonce"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A fresh pending challenge (always starts over, whatever the previous state was) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        domainVerification: components["schemas"]["DomainVerification"];
+                        verifyUrl: string;
+                        instructions: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description `domain_invalid` — meta.homepage isn't a real https:// URL */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    checkDomainVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                "OG-Agent": components["parameters"]["OGAgent"];
+                /** @description Key id, or `new` on registration. */
+                "OG-Key": components["parameters"]["OGKey"];
+                "OG-Timestamp": components["parameters"]["OGTimestamp"];
+                "OG-Nonce": components["parameters"]["OGNonce"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Verified (or already was) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        domainVerification: components["schemas"]["DomainVerification"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description `domain_verification_not_requested` — call POST .../domain-verification first */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `domain_verification_failed` — the token wasn't found at the published URL */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getAgentPublic: {
         parameters: {
             query?: never;
@@ -1683,6 +1997,49 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    pauseSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Paused */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session: components["schemas"]["Session"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description `session_not_active` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
         };
     };
     listMessages: {
@@ -2060,6 +2417,37 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    setAgentSpendLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description US cents; null clears the limit (unlimited). */
+                    spendLimitUsdCents: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listOwnerSessions: {
         parameters: {
             query?: {
@@ -2161,6 +2549,76 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    resumeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resumed; session active again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session: components["schemas"]["Session"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description `session_not_paused` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    declineResumeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Declined; session moved to closing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        session: components["schemas"]["Session"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description `session_not_paused` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listOwnerRecords: {
         parameters: {
             query?: {
@@ -2174,6 +2632,172 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Records for the owner's agents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Record"][];
+                        nextCursor: components["schemas"]["NextCursor"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listAgentViewers: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Viewer grants for this agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ViewerGrant"][];
+                        nextCursor: components["schemas"]["NextCursor"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    inviteViewer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                    label?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Grant created (or reactivated, if it was previously revoked) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        grant: components["schemas"]["ViewerGrant"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    revokeViewer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+                grantId: components["parameters"]["GrantId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked (or already was) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        grant: components["schemas"]["ViewerGrant"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listViewerAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active grants made out to the caller's own email */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ViewerAccessItem"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listViewerAccessSessions: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions of every agent the caller holds an active viewer grant for */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listViewerAccessRecords: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records of every agent the caller holds an active viewer grant for */
             200: {
                 headers: {
                     [name: string]: unknown;

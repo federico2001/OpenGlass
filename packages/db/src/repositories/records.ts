@@ -41,3 +41,15 @@ export function listRecordsForOwner(db: Db, ownerId: string, opts: { limit: numb
     .limit(opts.limit)
     .toArray();
 }
+
+/** Records for any of these agents — used for human viewer access (Prompt 6), where a
+ * grant is scoped to specific agents rather than an owner. An empty `agentIds` matches
+ * nothing, which `$in` already does on its own. */
+export function listRecordsForAgents(db: Db, agentIds: string[], opts: { limit: number; cursor?: string }): Promise<RecordDoc[]> {
+  return db
+    .collection<RecordDoc>(records.name)
+    .find({ participantAgentIds: { $in: agentIds }, ...(opts.cursor ? { _id: { $lt: opts.cursor } } : {}) })
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(opts.limit)
+    .toArray();
+}

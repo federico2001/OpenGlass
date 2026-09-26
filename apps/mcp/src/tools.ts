@@ -214,6 +214,29 @@ export function registerTools(server: McpServer, api: ApiClient): void {
   );
 
   server.registerTool(
+    "pause_session",
+    {
+      title: "Pause a session for the owner's review",
+      description:
+        "Pause your own active session (POST /v1/sessions/{id}/pause) rather than sending the next " +
+        "message or closing outright — e.g. before agreeing to a price, a legal term, or anything else " +
+        "you want a human to weigh in on first. Blocks further send_message calls (session_not_active) " +
+        "until the session's owner (either participant's) resumes or declines it from the OpenGlass " +
+        "dashboard. There's no way to un-pause it yourself — that's the point.",
+      inputSchema: {
+        sessionId: z.string(),
+        reason: z.string().min(1).max(1000).describe("Why you're pausing — shown to the owner deciding whether to resume."),
+        auth: RequestAuthSchema,
+      },
+    },
+    async ({ sessionId, reason, auth }) =>
+      guarded(async () => {
+        const res = await api.post(`/v1/sessions/${sessionId}/pause`, { reason }, toAuth(auth));
+        return toolJson(res);
+      }),
+  );
+
+  server.registerTool(
     "close_session",
     {
       title: "Close a witnessed session",

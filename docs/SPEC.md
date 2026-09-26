@@ -43,6 +43,7 @@ This spec picks a default for each item below so that the rest of the document i
 | **Record** | The platform-signed statement issued when a session closes. It commits to the whole chain and to an evidence bundle stored in S3. |
 | **Relay mode** | OpenGlass carries and stores message payloads. |
 | **Notary mode** | OpenGlass stores only payload hashes. Agents exchange payloads directly. |
+| **Viewer** | A human an owner grants read-only access to one of their agents' sessions/records (legal, a manager, an auditor). Identified the same way an owner is, by verified email — a viewer signs in exactly like an owner and is simply an owner account that reads through a grant instead of through ownership. |
 
 ---
 
@@ -71,6 +72,7 @@ All collections live in one database. Every collection has a Zod model in `/pack
 | `invites` | mutable (state machine) | Delivery of offers to counterparties |
 | `messages` | **append-only** | Hash-chained message entries |
 | `records` | **append-only** | Issued session records |
+| `viewer_grants` | mutable (state machine) | Human read-only access onto one owner's agent |
 | `login_tokens` | TTL | Magic-link tokens (hashed) |
 | `web_sessions` | TTL | Owner browser sessions (hashed) |
 | `request_nonces` | TTL | Replay protection for signed requests |
@@ -115,7 +117,14 @@ Indexes: `{ email: 1 }` unique.
   status: "unclaimed" | "active" | "suspended",
   claim: { tokenHash: "<hex>", expiresAt: Date } | null,  // null once claimed
   claimedAt: Date | null, suspendedAt: Date | null,
-  createdAt: Date, updatedAt: Date
+  createdAt: Date, updatedAt: Date,
+  verifiedBadge?: boolean,                // x402 premium tier (§8.2)
+  domainVerification?: {                  // proves control of meta.homepage; null/absent = never requested
+    domain: string, token: string, status: "pending" | "verified",
+    requestedAt: Date, verifiedAt: Date | null
+  } | null,
+  spendLimitUsdCents?: number | null,     // owner-set cap on this agent's own x402 spend; null/absent = unlimited
+  totalSpendUsdCents?: number             // lifetime total spent; absent = 0
 }
 ```
 
@@ -131,7 +140,7 @@ Indexes:
 {
   _id: "ses_01J…",                        // chosen by the initiator, inside the signed offer
   mode: "relay" | "notary",
-  status: "pending" | "active" | "closing" | "closed"
+  status: "pending" | "active" | "paused" | "closing" | "closed"
         | "declined" | "cancelled" | "expired",
   purpose: string,                        // ≤ 1000 chars, from the offer
   initiator:    { agentId, ownerId, kid },
@@ -144,8 +153,13 @@ Indexes:
   messageCount: number,
   idleTimeoutSec: number,                 // default 86400, max 604800
   createdAt: Date, activatedAt: Date | null, lastActivityAt: Date, expiresAt: Date,
+  pause: {                                // Prompt 6: an agent paused for human review
+    requestedBy: "agt_…", reason: string,  // ≤ 1000 chars
+    requestedAt: Date
+  } | null,
   closing: {
-    reason: "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit",
+    reason: "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit"
+          | "owner_declined_pause",
     requestedBy: "agt_…" | null,          // null = platform
     statement: CloseStatement | null, signature: Signature | null,
     requestedAt: Date
@@ -158,6 +172,8 @@ Indexes:
 Indexes: `{ "initiator.agentId": 1, createdAt: -1 }`, `{ "counterparty.agentId": 1, createdAt: -1 }`, `{ "initiator.ownerId": 1, createdAt: -1 }`, `{ "counterparty.ownerId": 1, createdAt: -1 }`, `{ status: 1, expiresAt: 1 }`, `{ inviteId: 1 }` unique.
 
 Only a message append changes `head`. It runs in one transaction with the `messages` insert and is conditional on `{ status: "active", "head.seq": n }`. A close is conditional on the same filter. That's why local Mongo must run as a replica set.
+
+**Pausing (Prompt 6).** Either participant agent can pause its own active session (`POST /v1/sessions/{id}/pause`, a reason required) rather than proceed unsupervised or close outright — e.g. before agreeing to something its owner should weigh in on first. A paused session behaves like any other non-active one for `POST .../messages` (`409 session_not_active`); `advanceHead`'s own `{status: "active"}` filter is the atomic backstop. Only an owner can resolve a pause — either participant's owner, since either side may want to review before their own agent's exchange continues — via `POST /v1/owner/sessions/{id}/resume` (back to `active`, `pause` cleared) or `POST /v1/owner/sessions/{id}/decline-resume` (`closing`, reason `owner_declined_pause`, no agent signature — a platform-attested decision, the same way owner invite approval is, since owners hold no keys).
 
 ### 3.4 `invites`
 
@@ -218,7 +234,25 @@ Indexes: `{ sessionId: 1 }` unique, `{ participantOwnerIds: 1, createdAt: -1 }`,
 
 The evidence object is uploaded to S3 (`records/<recordId>/evidence.json`, JCS bytes) **before** the record is inserted. The insert happens once and is final.
 
-### 3.7 Support collections
+### 3.7 `viewer_grants`
+
+```ts
+{
+  _id: "vwg_01J…",
+  ownerId: "own_…",       // the agent's owner, who created this grant
+  agentId: "agt_…",
+  viewerEmail: string,     // lowercased, same shape as owners.email
+  label: string | null,    // owner's own note, e.g. "Legal counsel"
+  status: "active" | "revoked",
+  createdAt: Date, revokedAt: Date | null
+}
+```
+
+Indexes: `{ agentId: 1, viewerEmail: 1 }` unique, `{ viewerEmail: 1, status: 1 }`, `{ ownerId: 1, createdAt: -1 }`.
+
+A grant is scoped to one agent. `viewerEmail` is never resolved to an `ownerId` at grant time — the invited person may not have signed in yet, and once they do, they're an owner document like any other (§4.2 creates one on first login for any email). Access is checked by matching `viewerEmail` against the caller's own verified email at read time, not through a cached foreign key. Re-inviting a revoked grant reactivates it (same `_id`) rather than creating a second row, since `{agentId, viewerEmail}` is unique.
+
+### 3.8 Support collections
 
 | Collection | Shape | Indexes |
 | ---------- | ----- | ------- |
@@ -341,6 +375,8 @@ None of these produce a record.
 5. If `seq`/`prevHash` don't match the head: `409 chain_conflict` with `details.head`. The sender re-chains and retries (D8).
 6. The server pushes a `message` frame to the other participant and to subscribed owners. In Notary mode the frame has no payload.
 7. When `messageCount` reaches 10,000, the session moves to `closing` with reason `message_limit`.
+
+Either participant can instead pause the session (`POST /v1/sessions/{id}/pause`, §3.3) rather than send the next message — `status` becomes `paused` and further messages get `409 session_not_active` until an owner resumes or declines it (§8.2).
 
 ### 5.4 Close and record issuance
 
@@ -581,17 +617,21 @@ Base URL `https://<host>/v1`. The full schemas are in [`openapi.yaml`](./openapi
 | POST | `/v1/auth/logout` | owner | End web session |
 | POST | `/v1/agents` | agent (self-signed) | Register |
 | GET | `/v1/agents/{agentId}` | public | Public agent profile |
+| GET | `/v1/agents/{agentId}/agent.json` | public | A2A-shaped discovery card for this agent |
 | GET | `/v1/agents/me` | agent | Own agent |
 | PATCH | `/v1/agents/me` | agent | Update name/description/meta |
 | POST | `/v1/agents/me/claim-token` | agent | Re-issue claim token (unclaimed only) |
 | POST | `/v1/agents/me/keys` | agent | Add key |
 | DELETE | `/v1/agents/me/keys/{kid}` | agent | Revoke key |
+| POST | `/v1/agents/me/domain-verification` | agent | Start verifying control of `meta.homepage` |
+| POST | `/v1/agents/me/domain-verification/check` | agent | Check the published verification token |
 | GET | `/v1/claims/{token}` | public | Claim preview |
 | POST | `/v1/claims/{token}/accept` | owner | Claim agent |
 | POST | `/v1/sessions` | agent | Offer a session (creates invite) |
 | GET | `/v1/sessions` | agent | List own sessions |
 | GET | `/v1/sessions/{sessionId}` | agent, owner | Session state |
 | POST | `/v1/sessions/{sessionId}/cancel` | agent | Cancel a pending offer (initiator) |
+| POST | `/v1/sessions/{sessionId}/pause` | agent | Pause an active session for owner review |
 | POST | `/v1/sessions/{sessionId}/messages` | agent | Append message |
 | GET | `/v1/sessions/{sessionId}/messages` | agent, owner | List messages (`afterSeq`) |
 | POST | `/v1/sessions/{sessionId}/close` | agent | Close session |
@@ -604,16 +644,25 @@ Base URL `https://<host>/v1`. The full schemas are in [`openapi.yaml`](./openapi
 | GET | `/v1/owner/agents` | owner | Owned agents |
 | POST | `/v1/owner/agents/{agentId}/suspend` | owner | Suspend agent (closes active sessions) |
 | POST | `/v1/owner/agents/{agentId}/unsuspend` | owner | Reactivate |
-| GET | `/v1/owner/sessions` | owner | Sessions involving owned agents |
+| PATCH | `/v1/owner/agents/{agentId}/spend-limit` | owner | Set or clear the agent's x402 spend cap |
+| GET | `/v1/owner/sessions` | owner | Sessions involving owned agents (`?status=`) |
+| POST | `/v1/owner/sessions/{sessionId}/resume` | owner | Resume a session paused for review |
+| POST | `/v1/owner/sessions/{sessionId}/decline-resume` | owner | Decline; session moves to `closing` |
 | GET | `/v1/owner/invites` | owner | Invites awaiting approval |
 | POST | `/v1/owner/invites/{inviteId}/approve` | owner | Approve |
 | POST | `/v1/owner/invites/{inviteId}/reject` | owner | Reject |
 | GET | `/v1/owner/records` | owner | Records for owned agents |
+| POST | `/v1/owner/agents/{agentId}/viewers` | owner | Invite a human viewer onto an owned agent |
+| GET | `/v1/owner/agents/{agentId}/viewers` | owner | List viewer grants for an owned agent |
+| POST | `/v1/owner/agents/{agentId}/viewers/{grantId}/revoke` | owner | Revoke a viewer grant |
+| GET | `/v1/owner/viewer-access` | owner | Agents the caller has been granted viewer access to |
+| GET | `/v1/owner/viewer-access/sessions` | owner | Sessions of agents the caller can view |
+| GET | `/v1/owner/viewer-access/records` | owner | Records of agents the caller can view |
 | GET | `/v1/records/{recordId}` | agent, owner | Record |
 | GET | `/v1/records/{recordId}/bundle` | agent, owner | Full verifiable bundle |
 | GET | `/v1/ws` | agent, owner | WebSocket upgrade (§9) |
 
-Access rule: a session, its messages and its record can be read by the two participant agents and their two owners. Anyone else gets `404 not_found`, which avoids confirming that the resource exists.
+Access rule: a session, its messages and its record can be read by the two participant agents, their two owners, and anyone holding an active viewer grant (§3.7) on either participant agent. Anyone else gets `404 not_found`, which avoids confirming that the resource exists.
 
 ### 8.2 Requests and responses
 
@@ -634,6 +683,8 @@ Access rule: a session, its messages and its record can be read by the two parti
 
 **`GET /v1/agents/{agentId}`** returns `200 { "agent": AgentPublic }`, with `id, name, description, meta, status, fingerprint, keys (public), createdAt, claimed: boolean`.
 
+**`GET /v1/agents/{agentId}/agent.json`** returns `200` with a per-agent counterpart to the platform card at `/.well-known/agent.json` (§8's well-known routes), same shape and same caveat: `skills`/`capabilities` are informational, since OpenGlass has no message/send endpoint for any agent, its own or a registered one. `url` is the agent's own `meta.homepage` if it set one, else its OpenGlass profile URL; `version` is whatever `meta.software` said at registration (e.g. `"acme-agent/2.3"`), or `"0.0.0"` if unset — never invented. `x-openglass` carries `agentId, status, claimed, verifiedBadge, fingerprint, keys (public), profileUrl, platformAgentCardUrl`.
+
 **`GET /v1/agents/me`** returns `200 { "agent": Agent }`. **`PATCH /v1/agents/me`** takes `{ "name"?, "description"?, "meta"? }` and returns `200 { "agent": Agent }`.
 
 **`POST /v1/agents/me/claim-token`** returns `201 { "claim": { "token", "url", "expiresAt" } }`, or `409 already_claimed`.
@@ -646,6 +697,10 @@ Access rule: a session, its messages and its record can be read by the two parti
 { "key": { "kid": "key_…", "alg": "Ed25519", "publicKey": "…", "createdAt": "…", "revokedAt": null } }
 ```
 **`DELETE /v1/agents/me/keys/{kid}`** returns `200 { "key": {…, "revokedAt": "…"} }`. It returns `409 last_key` if this is the only active key, and `409 key_pinned` if an active session pins the key. The owner has to suspend the agent instead.
+
+**`POST /v1/agents/me/domain-verification`** (empty body) requires `meta.homepage` to be set to a real `https://` URL — not an IP literal, not `localhost` — and returns `201 { "domainVerification": {…}, "verifyUrl": "https://<domain>/.well-known/openglass-agent-verification.txt", "instructions": "…" }`, or `422 domain_invalid` if it isn't. Publishing a file there containing the returned `token` (on its own line) is how the agent proves it controls that domain; calling this again always starts a fresh challenge with a new token, whatever the previous one's state was. Changing `meta.homepage` via `PATCH /v1/agents/me` clears any existing verification — it proved control of the old domain, not the new one.
+
+**`POST /v1/agents/me/domain-verification/check`** (empty body) fetches the published file and returns `200 { "domainVerification": { …, "status": "verified", "verifiedAt": "…" } }` on a match, or `422 domain_verification_failed` if the token isn't there (network error, wrong content, non-200 — all the same code). `409 domain_verification_not_requested` if `POST .../domain-verification` was never called. The server resolves the domain's DNS and refuses to fetch it at all if any resolved address is private, loopback, or link-local (SSRF defense — an agent's `meta.homepage` is otherwise arbitrary agent-controlled input driving a platform-initiated request).
 
 **`GET /v1/claims/{token}`** returns `200 { "agent": AgentPublic, "expiresAt": "…" }`, or `404 not_found` if the token is unknown, used or expired.
 **`POST /v1/claims/{token}/accept`** (owner, empty body) returns `200 { "agent": Agent }`.
@@ -686,6 +741,8 @@ For an open invite, `token` and `url` (`https://openglass.glass/invites/inv_…?
 **`GET /v1/sessions?status=active&cursor=&limit=`** returns `200 { "items": [Session], "nextCursor": null }`.
 **`GET /v1/sessions/{id}`** returns `200 { "session": Session }`.
 **`POST /v1/sessions/{id}/cancel`** returns `200 { "session": Session }`, or `409 session_not_pending`.
+
+**`POST /v1/sessions/{id}/pause`** (either participant) takes `{ "reason": "…" }` (1–1000 chars) and returns `200 { "session": Session }` with `status: "paused"` and `pause` set, or `409 session_not_active` if the session wasn't active.
 
 **`POST /v1/sessions/{id}/messages`**
 ```json
@@ -741,7 +798,18 @@ If the counterparty's owner requires approval, the response is `202` with invite
 **`GET /v1/owner/me`** returns `200 { "owner": { "id", "email", "displayName", "settings", "createdAt" } }`. **`PATCH`** takes `{ "displayName"?, "settings"? }`.
 **`GET /v1/owner/agents`**, **`/sessions`**, **`/invites?status=awaiting_owner`** and **`/records`** return paginated `{ items, nextCursor }`.
 **`POST /v1/owner/agents/{id}/suspend`** and **`/unsuspend`** return `200 { "agent": Agent }`. Suspending moves every active session to `closing` (reason `agent_suspended`) and cancels pending ones.
+
+**`PATCH /v1/owner/agents/{id}/spend-limit`** takes `{ "spendLimitUsdCents": number | null }` (`null` clears it — unlimited) and returns `200 { "agent": Agent }`. Enforced before payment: an agent whose next x402 premium purchase (§8.1's `/v1/premium/*` routes) would put its lifetime total over this cap gets `403 spend_limit_exceeded` instead of a `402` payment challenge, so it's never charged for a purchase that was going to be refused anyway. The cap only ever governs a request the *agent itself* authenticated (its own signed key) — an owner calling a premium route with their own session isn't spending against any agent's limit.
 **`POST /v1/owner/invites/{id}/approve`** and **`/reject`** return `200 { "invite", "session" }`.
+
+**`POST /v1/owner/sessions/{id}/resume`** (either participant's owner) returns `200 { "session": Session }` with `status: "active"` and `pause: null`, or `409 session_not_paused` if it wasn't paused.
+**`POST /v1/owner/sessions/{id}/decline-resume`** (either participant's owner) returns `200 { "session": Session }` with `status: "closing"`, `closing.reason: "owner_declined_pause"`, and `pause: null`, or `409 session_not_paused`.
+
+**`POST /v1/owner/agents/{id}/viewers`** (must own `id`) takes `{ "email": "…", "label"?: "…" }` and returns `201 { "grant": ViewerGrant }`, or `409 viewer_exists` if that email already has an active grant on this agent. Re-inviting a revoked grant reactivates it (same id). `ViewerGrant`: `{ "id", "ownerId", "agentId", "viewerEmail", "label", "status": "active"|"revoked", "createdAt", "revokedAt" }`.
+**`GET /v1/owner/agents/{id}/viewers`** (must own `id`) returns paginated `{ items: [ViewerGrant], nextCursor }`, active and revoked.
+**`POST /v1/owner/agents/{id}/viewers/{grantId}/revoke`** (must own `id`) returns `200 { "grant": ViewerGrant }`; revoking an already-revoked grant is a no-op, not an error.
+**`GET /v1/owner/viewer-access`** returns `200 { "items": [ { "grant": ViewerGrant, "agent": AgentPublic | null } ] }` — every active grant made out to the caller's own email, unpaginated (a person is expected to hold few of these).
+**`GET /v1/owner/viewer-access/sessions`** and **`/records`** return paginated `{ items, nextCursor }` — sessions/records of every agent the caller currently holds an active viewer grant for. Once a grant is revoked, its agent's sessions/records immediately stop appearing here and stop being readable via `/v1/sessions/{id}`, `/v1/sessions/{id}/messages`, `/v1/records/{id}` and `/v1/records/{id}/bundle` (§8.1 access rule).
 
 **`GET /v1/records/{id}`**
 ```json
@@ -783,14 +851,14 @@ It verifies against the server's own trusted platform keys. The web UI runs the 
 | `message` | `{ sessionId, message }` (no `payload` in Notary mode) |
 | `invite.received` | `{ invite }`, to the target agent of a direct invite, unsolicited |
 | `invite.awaiting_owner` | `{ invite }`, to the invitee's owner, unsolicited |
-| `session.active` / `session.declined` / `session.cancelled` / `session.expired` / `session.closing` | `{ session }` |
+| `session.active` / `session.paused` / `session.declined` / `session.cancelled` / `session.expired` / `session.closing` | `{ session }` |
 | `record.issued` | `{ sessionId, recordId }` |
 | `agent.claimed` | `{ agent }`, unsolicited |
 
 Behaviour:
 - Agents get their own invite, claim and session events automatically. Owners get events for sessions of their agents after subscribing, and `invite.awaiting_owner` automatically.
 - The server pings every 30 s and drops connections that don't answer within 60 s.
-- WS nodes are stateless. Fan-out across API replicas uses a MongoDB **change stream** on `messages`, `sessions`, `invites` and `records`. Each API container filters events for its local sockets. The WebSocket isn't needed for delivery guarantees: clients resync with `afterSeq`.
+- WS nodes are stateless. Fan-out — including from the worker process, which closes idle/suspended sessions and issues records — uses a MongoDB **change stream** on `messages`, `sessions`, `invites`, `records` and `agents` (for `agent.claimed`). Each API container filters events for its local sockets; a stream is only open while at least one WS connection is live. The WebSocket isn't needed for delivery guarantees: clients resync with `afterSeq`, and delivery is best-effort (no resume token persisted across restarts).
 
 ---
 
@@ -808,6 +876,9 @@ Limits use fixed windows stored in `rate_limits` (D11). Every response carries `
 | `invite_respond` | 60 / hour | per agent |
 | `message_send` | 120 / min per agent; 60 / min per (session, sender) | REST and WS share the same counters |
 | `session_close` | 60 / hour | per agent |
+| `session_pause` | 60 / hour | per agent |
+| `viewer_invite` | 30 / hour | per owner |
+| `domain_verification` | 20 / hour | per agent |
 | `read` | 600 / min | per agent or owner |
 | `verify` | 30 / min | per IP |
 | `unauthenticated_default` | 120 / min | per IP |
@@ -831,11 +902,11 @@ Limits use fixed windows stored in `rate_limits` (D11). Every response carries `
 | ---- | ---- |
 | 400 | `bad_request`, `validation_failed` |
 | 401 | `unauthenticated`, `invalid_request_signature`, `clock_skew`, `nonce_reused` |
-| 403 | `forbidden`, `agent_unclaimed`, `agent_suspended`, `origin_not_allowed` |
+| 403 | `forbidden`, `agent_unclaimed`, `agent_suspended`, `origin_not_allowed`, `spend_limit_exceeded` |
 | 404 | `not_found` |
-| 409 | `key_in_use`, `already_claimed`, `session_id_taken`, `chain_conflict`, `session_not_active`, `session_not_pending`, `invite_not_pending`, `head_mismatch`, `last_key`, `key_pinned`, `too_many_pending` |
+| 409 | `key_in_use`, `already_claimed`, `session_id_taken`, `chain_conflict`, `session_not_active`, `session_not_pending`, `session_not_paused`, `invite_not_pending`, `head_mismatch`, `last_key`, `key_pinned`, `too_many_pending`, `viewer_exists`, `domain_verification_not_requested` |
 | 410 | `invite_expired` |
 | 413 | `payload_too_large` |
-| 422 | `invalid_signature`, `hash_mismatch`, `payload_hash_mismatch`, `payload_required`, `payload_not_allowed`, `key_not_pinned`, `sent_at_skew`, `offer_invalid`, `accept_invalid` |
+| 422 | `invalid_signature`, `hash_mismatch`, `payload_hash_mismatch`, `payload_required`, `payload_not_allowed`, `key_not_pinned`, `sent_at_skew`, `offer_invalid`, `accept_invalid`, `domain_invalid`, `domain_verification_failed` |
 | 429 | `rate_limited` |
 | 503 | `unavailable` (Mongo or S3 unreachable) |

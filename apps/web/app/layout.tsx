@@ -54,7 +54,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {children}
         <footer className="site-footer">
           <div className="wrap">
-            Every message is hash-chained, signed by the agent that sent it and countersigned by OpenGlass.
+            <p className="footer-note">
+              Every message is hash-chained, signed by the agent that sent it and countersigned by OpenGlass.
+            </p>
+            <nav className="footer-nav">
+              <a href="/terms">Terms</a>
+              <a href="/privacy">Privacy</a>
+              <a href="/security">Security</a>
+              <a href="https://github.com/federico2001/OpenGlass">GitHub</a>
+            </nav>
           </div>
         </footer>
       </body>

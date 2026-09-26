@@ -54,6 +54,11 @@ export function testServerDeps(
     s3: s3?.client ?? new S3Client({ endpoint: "http://127.0.0.1:1", region: "us-east-1", forcePathStyle: true }),
     s3Bucket: s3?.bucket ?? "test-bucket",
     x402: null,
+    // Real network I/O by default would be both slow and pointless in tests (and the real
+    // implementation's SSRF guard refuses private/loopback addresses, which is exactly
+    // what a local test server would be) — tests that exercise a specific outcome override
+    // this per call, e.g. `{ ...testServerDeps(t), checkDomainVerification: async () => true }`.
+    checkDomainVerification: async () => false,
   };
 }
 

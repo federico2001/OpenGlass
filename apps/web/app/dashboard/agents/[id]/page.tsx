@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { StatusBadge } from "../../../../components/StatusBadge";
-import { ApiError, apiFetch, formatDate, type AgentPublic, type OwnerAgent, type OwnerSession } from "../../../../lib/dashboard";
+import {
+  ApiError,
+  apiFetch,
+  formatDate,
+  formatUsdCents,
+  type AgentPublic,
+  type OwnerAgent,
+  type OwnerSession,
+  type ViewerGrant,
+} from "../../../../lib/dashboard";
 import styles from "./page.module.css";
 
 export default function AgentDetailPage() {
@@ -15,6 +24,17 @@ export default function AgentDetailPage() {
   const [counterparties, setCounterparties] = useState<Record<string, AgentPublic>>({});
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const [viewers, setViewers] = useState<ViewerGrant[]>([]);
+  const [viewerEmail, setViewerEmail] = useState("");
+  const [viewerLabel, setViewerLabel] = useState("");
+  const [invitingViewer, setInvitingViewer] = useState(false);
+  const [revokingViewerId, setRevokingViewerId] = useState<string | null>(null);
+  const [viewerError, setViewerError] = useState<string | null>(null);
+
+  const [spendLimitInput, setSpendLimitInput] = useState("");
+  const [settingSpendLimit, setSettingSpendLimit] = useState(false);
+  const [spendLimitError, setSpendLimitError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +48,14 @@ export default function AgentDetailPage() {
         setAgent(found);
         const mine = sessionsRes.items.filter((s) => s.initiator.agentId === id || s.counterparty.agentId === id);
         setSessions(mine);
+
+        if (found) {
+          apiFetch<{ items: ViewerGrant[] }>(`/v1/owner/agents/${id}/viewers?limit=200`)
+            .then((r) => {
+              if (!cancelled) setViewers(r.items);
+            })
+            .catch(() => {});
+        }
 
         const myAgentIds = new Set(agentsRes.items.map((a) => a.id));
         const idsToResolve = new Set<string>();
@@ -73,6 +101,84 @@ export default function AgentDetailPage() {
       setActionError(err instanceof Error ? err.message : "Could not update this agent.");
     } finally {
       setActing(false);
+    }
+  }
+
+  async function inviteViewer(e: FormEvent) {
+    e.preventDefault();
+    if (!agent) return;
+    setInvitingViewer(true);
+    setViewerError(null);
+    try {
+      const res = await apiFetch<{ grant: ViewerGrant }>(`/v1/owner/agents/${agent.id}/viewers`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: viewerEmail, label: viewerLabel || null }),
+      });
+      setViewers((prev) => [res.grant, ...prev.filter((v) => v.id !== res.grant.id)]);
+      setViewerEmail("");
+      setViewerLabel("");
+    } catch (err) {
+      setViewerError(err instanceof Error ? err.message : "Could not invite this viewer.");
+    } finally {
+      setInvitingViewer(false);
+    }
+  }
+
+  async function revokeViewer(grantId: string) {
+    if (!agent) return;
+    setRevokingViewerId(grantId);
+    setViewerError(null);
+    try {
+      const res = await apiFetch<{ grant: ViewerGrant }>(`/v1/owner/agents/${agent.id}/viewers/${grantId}/revoke`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      setViewers((prev) => prev.map((v) => (v.id === res.grant.id ? res.grant : v)));
+    } catch (err) {
+      setViewerError(err instanceof Error ? err.message : "Could not revoke this viewer.");
+    } finally {
+      setRevokingViewerId(null);
+    }
+  }
+
+  async function setSpendLimit(e: FormEvent) {
+    e.preventDefault();
+    if (!agent) return;
+    setSettingSpendLimit(true);
+    setSpendLimitError(null);
+    try {
+      const dollars = Number(spendLimitInput);
+      if (!Number.isFinite(dollars) || dollars < 0) throw new Error("Enter a non-negative dollar amount.");
+      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}/spend-limit`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spendLimitUsdCents: Math.round(dollars * 100) }),
+      });
+      setAgent(res.agent);
+      setSpendLimitInput("");
+    } catch (err) {
+      setSpendLimitError(err instanceof Error ? err.message : "Could not set the spend limit.");
+    } finally {
+      setSettingSpendLimit(false);
+    }
+  }
+
+  async function clearSpendLimit() {
+    if (!agent) return;
+    setSettingSpendLimit(true);
+    setSpendLimitError(null);
+    try {
+      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}/spend-limit`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spendLimitUsdCents: null }),
+      });
+      setAgent(res.agent);
+    } catch (err) {
+      setSpendLimitError(err instanceof Error ? err.message : "Could not clear the spend limit.");
+    } finally {
+      setSettingSpendLimit(false);
     }
   }
 
@@ -136,8 +242,27 @@ export default function AgentDetailPage() {
               <td>Verified badge</td>
               <td>{agent.verifiedBadge ? "Yes" : "No"}</td>
             </tr>
+            {agent.meta.homepage && (
+              <tr>
+                <td>Domain</td>
+                <td>
+                  <a href={agent.meta.homepage}>{agent.meta.homepage}</a>
+                  {agent.domainVerified
+                    ? " — verified"
+                    : agent.domainVerification?.status === "pending"
+                      ? " — verification pending (the agent still needs to publish its token)"
+                      : " — not verified"}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
+        {agent.meta.homepage && !agent.domainVerified && (
+          <p className={styles.hint}>
+            Domain verification is a self-service step the agent performs itself, signed with its own key (
+            <code>POST /v1/agents/me/domain-verification</code>) — not something to trigger from here.
+          </p>
+        )}
 
         {actionError && <p className={styles.error}>{actionError}</p>}
         <button className={styles.button} onClick={toggleSuspend} disabled={acting}>
@@ -148,6 +273,94 @@ export default function AgentDetailPage() {
             ? "Suspended agents can't create or accept sessions until unsuspended."
             : "Suspending closes any active sessions and cancels pending offers immediately."}
         </p>
+      </section>
+
+      <section className={styles.section} aria-label="Viewers with read-only access to this agent">
+        <p className="label">Viewers ({viewers.filter((v) => v.status === "active").length})</p>
+        <p className={styles.hint}>
+          Give a human — legal, a manager, an auditor — read-only access to this agent&apos;s sessions and records. They
+          sign in the same way you did, with a one-time email link.
+        </p>
+        <form onSubmit={inviteViewer} className={styles.viewerForm}>
+          <input
+            type="email"
+            required
+            placeholder="viewer@company.com"
+            value={viewerEmail}
+            onChange={(e) => setViewerEmail(e.target.value)}
+            className={styles.viewerInput}
+          />
+          <input
+            type="text"
+            placeholder="Label (optional) — e.g. Legal counsel"
+            value={viewerLabel}
+            onChange={(e) => setViewerLabel(e.target.value)}
+            className={styles.viewerInput}
+            maxLength={100}
+          />
+          <button type="submit" className={styles.smallButton} disabled={invitingViewer}>
+            {invitingViewer ? "Inviting…" : "Invite viewer"}
+          </button>
+        </form>
+        {viewerError && <p className={styles.error}>{viewerError}</p>}
+        {viewers.length > 0 && (
+          <ul className={styles.viewerList}>
+            {viewers.map((v) => (
+              <li key={v.id} className={styles.viewerRow}>
+                <div>
+                  <p className={styles.viewerEmail}>
+                    {v.viewerEmail}
+                    {v.label && <span className={styles.viewerLabel}> · {v.label}</span>}
+                  </p>
+                  <p className={styles.hint}>
+                    {v.status === "active" ? "Invited" : "Revoked"} {formatDate(v.status === "active" ? v.createdAt : v.revokedAt)}
+                  </p>
+                </div>
+                <div className={styles.viewerRowActions}>
+                  <StatusBadge status={v.status} />
+                  {v.status === "active" && (
+                    <button className={styles.smallButtonGhost} onClick={() => revokeViewer(v.id)} disabled={revokingViewerId === v.id}>
+                      {revokingViewerId === v.id ? "Revoking…" : "Revoke"}
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className={styles.section} aria-label="Spend limit on this agent's paid purchases">
+        <p className="label">Spend limit</p>
+        <p className={styles.hint}>
+          Caps what this agent can spend on paid (x402) features — a verified badge, extended record retention, PDF
+          exports. Enforced before payment: a purchase that would go over the cap is refused with no charge.
+        </p>
+        <p className={styles.hint}>
+          Spent so far: <strong>{formatUsdCents(agent.totalSpendUsdCents)}</strong>
+          {agent.spendLimitUsdCents !== null && <> of a {formatUsdCents(agent.spendLimitUsdCents)} limit</>}
+          {agent.spendLimitUsdCents === null && <> — no limit set</>}
+        </p>
+        <form onSubmit={setSpendLimit} className={styles.viewerForm}>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Limit in USD, e.g. 5.00"
+            value={spendLimitInput}
+            onChange={(e) => setSpendLimitInput(e.target.value)}
+            className={styles.viewerInput}
+          />
+          <button type="submit" className={styles.smallButton} disabled={settingSpendLimit || !spendLimitInput}>
+            {settingSpendLimit ? "Saving…" : "Set limit"}
+          </button>
+          {agent.spendLimitUsdCents !== null && (
+            <button type="button" className={styles.smallButtonGhost} onClick={clearSpendLimit} disabled={settingSpendLimit}>
+              Remove limit
+            </button>
+          )}
+        </form>
+        {spendLimitError && <p className={styles.error}>{spendLimitError}</p>}
       </section>
 
       <section className={styles.section} aria-label="Sessions involving this agent">

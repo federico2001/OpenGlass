@@ -74,7 +74,7 @@ function agentCard(deps: ServerDeps) {
 }
 
 export function registerWellKnownRoutes(app: FastifyInstance, deps: ServerDeps): void {
-  app.get("/.well-known/openglass-keys.json", async () => ({ keys: await trustedPlatformKeys(deps.signer) }));
+  app.get("/.well-known/openglass-keys.json", async () => ({ keys: await trustedPlatformKeys(deps.signer, deps.platformKeyValidFrom) }));
 
   const card = agentCard(deps);
   app.get("/.well-known/agent.json", async () => card);

@@ -10,6 +10,7 @@ import {
   shortHash,
   type AgentPublic,
   type MessageView,
+  type Owner,
   type OwnerSession,
   type RecordSummary,
   type VerifyResult,
@@ -24,18 +25,27 @@ export default function SessionDetailPage() {
   const [messages, setMessages] = useState<MessageView[]>([]);
   const [participants, setParticipants] = useState<Record<string, AgentPublic>>({});
   const [record, setRecord] = useState<RecordSummary | null>(null);
+  const [owner, setOwner] = useState<Owner | null>(null);
 
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
+  const [resolvingPause, setResolvingPause] = useState(false);
+  const [pauseError, setPauseError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    Promise.all([apiFetch<{ session: OwnerSession }>(`/v1/sessions/${id}`), apiFetch<{ items: MessageView[] }>(`/v1/sessions/${id}/messages?limit=200`)])
-      .then(async ([sessionRes, messagesRes]) => {
+    Promise.all([
+      apiFetch<{ session: OwnerSession }>(`/v1/sessions/${id}`),
+      apiFetch<{ items: MessageView[] }>(`/v1/sessions/${id}/messages?limit=200`),
+      apiFetch<{ owner: Owner }>("/v1/owner/me").catch(() => null),
+    ])
+      .then(async ([sessionRes, messagesRes, ownerRes]) => {
         if (cancelled) return;
         setSession(sessionRes.session);
         setMessages(messagesRes.items);
+        if (ownerRes) setOwner(ownerRes.owner);
 
         const ids = [sessionRes.session.initiator.agentId, sessionRes.session.counterparty.agentId].filter((v): v is string => !!v);
         const pairs = await Promise.all(
@@ -70,6 +80,19 @@ export default function SessionDetailPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function resolvePause(decision: "resume" | "decline-resume") {
+    setResolvingPause(true);
+    setPauseError(null);
+    try {
+      const res = await apiFetch<{ session: OwnerSession }>(`/v1/owner/sessions/${id}/${decision}`, { method: "POST" });
+      setSession(res.session);
+    } catch (err) {
+      setPauseError(err instanceof Error ? err.message : "Could not update this session.");
+    } finally {
+      setResolvingPause(false);
+    }
+  }
 
   async function verifyRecord() {
     if (!session?.recordId) return;
@@ -109,6 +132,8 @@ export default function SessionDetailPage() {
 
   const initiatorName = session.initiator.agentId ? (participants[session.initiator.agentId]?.name ?? session.initiator.agentId) : "—";
   const counterpartyName = session.counterparty.agentId ? (participants[session.counterparty.agentId]?.name ?? session.counterparty.agentId) : "pending";
+  const isParticipantOwner = !!owner && (owner.id === session.initiator.ownerId || owner.id === session.counterparty.ownerId);
+  const pauseRequestedByName = session.pause ? (participants[session.pause.requestedBy]?.name ?? session.pause.requestedBy) : null;
 
   return (
     <main className={`wrap ${styles.main}`}>
@@ -123,6 +148,30 @@ export default function SessionDetailPage() {
           {session.mode === "relay" ? "Relay mode — OpenGlass stores message content" : "Notary mode — OpenGlass stores only message hashes"}
         </p>
       </section>
+
+      {session.status === "paused" && session.pause && (
+        <section className={styles.card} aria-label="Paused for human review">
+          <p className="label">Paused for review</p>
+          <p className={styles.hint}>
+            {pauseRequestedByName} paused this session and is waiting for an owner to review before it continues: “{session.pause.reason}”
+            {" — "}
+            {formatDate(session.pause.requestedAt)}.
+          </p>
+          {isParticipantOwner ? (
+            <div className={styles.buttonRow}>
+              <button className={styles.button} onClick={() => resolvePause("resume")} disabled={resolvingPause}>
+                {resolvingPause ? "Working…" : "Resume session"}
+              </button>
+              <button className={styles.secondaryButton} onClick={() => resolvePause("decline-resume")} disabled={resolvingPause}>
+                Decline &amp; close
+              </button>
+            </div>
+          ) : (
+            <p className={styles.hint}>Only an owner of one of the two participating agents can resume or close this session.</p>
+          )}
+          {pauseError && <p className={styles.error}>{pauseError}</p>}
+        </section>
+      )}
 
       <section className={styles.participants}>
         <div className={styles.participantCard}>

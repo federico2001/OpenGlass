@@ -29,7 +29,16 @@ async function sweep(): Promise<void> {
   try {
     const expiry = await closeExpiredSessions(conn.db);
     const suspended = await closeSuspendedAgentSessions(conn.db);
-    const records = await issueRecords({ db: conn.db, s3, s3Bucket: config.S3_BUCKET, signer, mailer, publicUrl: config.PUBLIC_URL, log });
+    const records = await issueRecords({
+      db: conn.db,
+      s3,
+      s3Bucket: config.S3_BUCKET,
+      signer,
+      platformKeyValidFrom: config.PLATFORM_KEY_VALID_FROM,
+      mailer,
+      publicUrl: config.PUBLIC_URL,
+      log,
+    });
     const snapshot = await recordActivitySnapshot(conn.db, { log });
     if (expiry.expired || expiry.idleClosed || suspended.closed || suspended.cancelled || records.issued || records.skipped) {
       log("sweep", { ...expiry, ...suspended, ...records });

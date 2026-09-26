@@ -187,6 +187,37 @@
   margin: 10px 0 0;
 }
 
+/* ---- Pause / resume ---- */
+
+.buttonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.secondaryButton {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  padding: 9px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.secondaryButton:hover {
+  background: var(--bg-inset);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .verifyGood,
 .verifyBad {
   margin-top: 14px;

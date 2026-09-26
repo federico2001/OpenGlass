@@ -10,7 +10,9 @@ import * as recordsRepo from "../../src/repositories/records.js";
  */
 
 const ALLOWED_MESSAGES_EXPORTS = new Set(["insertMessage", "findMessagesBySession", "findAllMessagesBySession", "findMessageByHash"]);
-const ALLOWED_RECORDS_EXPORTS = new Set(["insertRecord", "findRecordById", "findRecordBySession", "listRecordsForOwner", "DUPLICATE_KEY_ERROR_CODE"]);
+const ALLOWED_RECORDS_EXPORTS = new Set([
+  "insertRecord", "findRecordById", "findRecordBySession", "listRecordsForOwner", "listRecordsForAgents", "DUPLICATE_KEY_ERROR_CODE",
+]);
 
 describe("append-only enforcement", () => {
   it("messages.ts exports only insert/find functions (plus documented constants)", () => {

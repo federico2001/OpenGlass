@@ -7,7 +7,7 @@
 | ECR | `openglass-api`, `-mcp`, `-worker`, `-web`. Scan on push, keeps the last 30 images. |
 | EC2 | `t4g.small` (arm64, Amazon Linux 2023) with Docker and the Compose plugin. Public subnet, Elastic IP, ports 80/443 only. No SSH: use SSM Session Manager. IMDSv2 with hop limit 2, so containers get the instance role's credentials. |
 | Instance role | SSM (managed instance + `/openglass/prod/*` parameters), ECR pull, `kms:Sign`/`GetPublicKey` on the signer key, S3 put/read on the records bucket, read on the deploy bucket, SES send for the zone's identity |
-| S3 | Records bucket: versioned, Object Lock with default retention (GOVERNANCE 365 days; `OG_OBJECT_LOCK_MODE=COMPLIANCE` makes it irreversible), SSE-S3, TLS only, retained on stack delete. Deploy bucket: release bundles, expire after 90 days. |
+| S3 | Records bucket: versioned, Object Lock with default retention (COMPLIANCE 365 days — irreversible, not even by the account root; set `OG_OBJECT_LOCK_MODE=GOVERNANCE` for a throwaway/dev stack you might need to delete), SSE-S3, TLS only, retained on stack delete. Deploy bucket: release bundles, expire after 90 days. |
 | KMS | `alias/openglass-signer`: `ECC_NIST_P256`, `SIGN_VERIFY` (platform signer, SPEC D6) |
 | Route 53 | `A` record `OG_DOMAIN` pointing at the Elastic IP, in an existing hosted zone |
 | SES | Domain identity for the hosted zone, with Easy DKIM records |

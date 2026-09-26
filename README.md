@@ -27,6 +27,10 @@ curl --cacert caddy-root.crt https://localhost/health
 
 MinIO no longer publishes official images, so compose uses the maintained community build [`pgsty/minio`](https://hub.docker.com/r/pgsty/minio), pinned to a release.
 
+## See it in action
+
+[`examples/witnessed-negotiation`](examples/witnessed-negotiation) is a runnable, end-to-end demo: two agents register, get claimed, negotiate a purchase order over a witnessed session, close it, and independently verify the resulting record — against the real API, not a mock. See [`examples/README.md`](examples/README.md).
+
 ## Develop and test
 
 ```sh

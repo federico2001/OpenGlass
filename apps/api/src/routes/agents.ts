@@ -8,10 +8,13 @@ import {
   sessionsRepository,
   sha256,
   verifySignature,
+  type AgentDoc,
 } from "@openglass/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { agentFullView, agentPublicView, keyView } from "../domain/agentViews.js";
+import { agentFullView, agentPublicView, domainVerificationView, keyView } from "../domain/agentViews.js";
+import { domainFromHomepage, generateVerificationToken, verificationFileUrl } from "../domain/domainVerification.js";
+import { keyFingerprint } from "../domain/fingerprint.js";
 import { generateToken, hashToken } from "../domain/tokens.js";
 import { parseOrError, sendError } from "../errors.js";
 import { verifyAgentRequest } from "../plugins/agentAuth.js";
@@ -40,6 +43,45 @@ const AddKeyBody = z.strictObject({
   createdAt: IsoTimestamp,
   proof: z.strictObject({ alg: z.literal("Ed25519"), kid: z.literal("new"), sig: z.string() }),
 });
+
+/**
+ * A per-agent counterpart to the platform-level card at `/.well-known/agent.json`
+ * (routes/wellKnown.ts — see that file's doc comment for why `skills`/`capabilities` are
+ * informational rather than true A2A-invocable fields here too). OpenGlass has no
+ * endpoint of its own to reach a specific agent at — agents connect out to OpenGlass, not
+ * the other way around — so `url` points at the agent's own advertised homepage when it
+ * has one, falling back to its OpenGlass profile. `version` similarly comes from whatever
+ * the agent told OpenGlass at registration (`meta.software`, e.g. "acme-agent/2.3"), not
+ * a value OpenGlass invents. `skills` is left empty: OpenGlass has no way to know what a
+ * given agent actually does.
+ */
+function agentCardFor(agent: AgentDoc, deps: ServerDeps) {
+  const activeKeys = agent.keys.filter((k) => !k.revokedAt);
+  const primaryKey = activeKeys[0] ?? agent.keys[0]!;
+  const profileUrl = `${deps.publicUrl}/v1/agents/${agent._id}`;
+  return {
+    name: agent.name,
+    description: agent.description || "A software agent registered on OpenGlass, a neutral witness for agent-to-agent interactions.",
+    version: agent.meta.software ?? "0.0.0",
+    url: agent.meta.homepage ?? profileUrl,
+    provider: { organization: agent.name },
+    capabilities: { streaming: false, pushNotifications: false, stateTransitionHistory: false },
+    defaultInputModes: ["application/json"],
+    defaultOutputModes: ["application/json"],
+    skills: [],
+    "x-openglass": {
+      agentId: agent._id,
+      status: agent.status,
+      claimed: agent.ownerId !== null,
+      verifiedBadge: agent.verifiedBadge ?? false,
+      domainVerified: agent.domainVerification?.status === "verified",
+      fingerprint: keyFingerprint(primaryKey.publicKey),
+      keys: activeKeys.map((k) => ({ kid: k.kid, alg: k.alg, publicKey: k.publicKey })),
+      profileUrl,
+      platformAgentCardUrl: `${deps.publicUrl}/.well-known/agent.json`,
+    },
+  };
+}
 
 export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const agents = agentsRepository(deps.db);
@@ -90,9 +132,56 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
   app.patch("/v1/agents/me", { preHandler: verifyAgentRequest(deps.db) }, async (req, reply) => {
     const body = parseOrError(PatchBody, req.body, reply);
     if (!body) return;
-    const updated = await agents.update(req.agent!.doc._id, { ...body });
+    const agent = req.agent!.doc;
+    // A domain verification proves control of one specific domain — if meta.homepage is
+    // changing, it no longer applies to whatever homepage comes next.
+    const homepageChanged = body.meta !== undefined && body.meta.homepage !== agent.meta.homepage;
+    const updated = await agents.update(agent._id, { ...body, ...(homepageChanged ? { domainVerification: null } : {}) });
     return { agent: agentFullView(updated!) };
   });
+
+  app.post(
+    "/v1/agents/me/domain-verification",
+    { preHandler: [verifyAgentRequest(deps.db), rateLimit(deps.db, "domain_verification", (req) => req.agent!.doc._id)] },
+    async (req, reply) => {
+      const agent = req.agent!.doc;
+      const domain = domainFromHomepage(agent.meta.homepage);
+      if (!domain) {
+        return sendError(
+          reply,
+          422,
+          "domain_invalid",
+          "meta.homepage must be set to a real https:// URL (not an IP address or localhost) before requesting domain verification",
+        );
+      }
+      const token = generateVerificationToken();
+      const domainVerification = { domain, token, status: "pending" as const, requestedAt: new Date(), verifiedAt: null };
+      const updated = await agents.update(agent._id, { domainVerification });
+      return reply.code(201).send({
+        domainVerification: domainVerificationView(updated!.domainVerification!),
+        verifyUrl: verificationFileUrl(domain),
+        instructions: `Publish a file at ${verificationFileUrl(domain)} whose contents are exactly this token, on its own line: ${token}`,
+      });
+    },
+  );
+
+  app.post(
+    "/v1/agents/me/domain-verification/check",
+    { preHandler: [verifyAgentRequest(deps.db), rateLimit(deps.db, "domain_verification", (req) => req.agent!.doc._id)] },
+    async (req, reply) => {
+      const agent = req.agent!.doc;
+      const dv = agent.domainVerification ?? null;
+      if (!dv) return sendError(reply, 409, "domain_verification_not_requested", "Call POST /v1/agents/me/domain-verification first");
+      if (dv.status === "verified") return { domainVerification: domainVerificationView(dv) };
+
+      const ok = await deps.checkDomainVerification(dv.domain, dv.token);
+      if (!ok) {
+        return sendError(reply, 422, "domain_verification_failed", `Could not find the verification token at ${verificationFileUrl(dv.domain)}`);
+      }
+      const updated = await agents.update(agent._id, { domainVerification: { ...dv, status: "verified", verifiedAt: new Date() } });
+      return { domainVerification: domainVerificationView(updated!.domainVerification!) };
+    },
+  );
 
   app.post("/v1/agents/me/claim-token", { preHandler: verifyAgentRequest(deps.db) }, async (req, reply) => {
     const agent = req.agent!.doc;
@@ -158,5 +247,11 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
     const agent = await agents.findById(req.params.agentId);
     if (!agent) return sendError(reply, 404, "not_found", "Agent not found");
     return { agent: agentPublicView(agent) };
+  });
+
+  app.get<{ Params: { agentId: string } }>("/v1/agents/:agentId/agent.json", async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent) return sendError(reply, 404, "not_found", "Agent not found");
+    return agentCardFor(agent, deps);
   });
 }

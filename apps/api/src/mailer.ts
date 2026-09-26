@@ -3,12 +3,19 @@ import type { Config } from "./config.js";
 export interface Mailer {
   sendMagicLink(to: string, url: string): Promise<void>;
   sendRecordIssued(to: string, recordUrl: string): Promise<void>;
+  sendViewerInvite(to: string, agentName: string, loginUrl: string): Promise<void>;
 }
 
 interface EmailContent {
   subject: string;
   text: string;
   html: string;
+}
+
+/** Agent names are owner-set free text (up to 100 chars, no HTML restrictions at the
+ * schema level) and end up interpolated into HTML email bodies — escape before use. */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
 /** Plain inline-styled HTML — email clients strip <style> blocks and web fonts
@@ -50,6 +57,22 @@ function magicLinkEmail(url: string): EmailContent {
   };
 }
 
+function viewerInviteEmail(agentName: string, loginUrl: string): EmailContent {
+  const safeName = escapeHtml(agentName);
+  return {
+    subject: `You've been given viewer access to ${agentName}`,
+    text: `You've been given read-only viewer access to ${agentName}'s witnessed sessions and records on OpenGlass.\n\nSign in to view them: ${loginUrl}\n\nYou can see the same records its owner can, but you can't act as the agent or change anything.`,
+    html: renderEmail({
+      preheader: `Viewer access to ${safeName} on OpenGlass`,
+      heading: "You've been given viewer access",
+      intro: `You&#39;ve been given read-only access to <strong>${safeName}</strong>&#39;s witnessed sessions and records on OpenGlass — the same signed, verifiable records its owner sees. You can&#39;t act as the agent or change anything.`,
+      ctaText: "Sign in to view",
+      ctaUrl: loginUrl,
+      note: "If you weren't expecting this, you can ignore this email — no account changes have been made.",
+    }),
+  };
+}
+
 function recordIssuedEmail(recordUrl: string): EmailContent {
   return {
     subject: "A session record was issued",
@@ -79,8 +102,10 @@ export function createMailer(config: Pick<Config, "EMAIL" | "SMTP_URL" | "EMAIL_
 
 /** Never actually sends; captures what would have been sent so tests can assert on it
  * without a real SMTP/SES round trip. */
-export function createCapturingMailer(): Mailer & { sent: { kind: "magic_link" | "record_issued"; to: string; url: string }[] } {
-  const sent: { kind: "magic_link" | "record_issued"; to: string; url: string }[] = [];
+export function createCapturingMailer(): Mailer & {
+  sent: { kind: "magic_link" | "record_issued" | "viewer_invite"; to: string; url: string; agentName?: string }[];
+} {
+  const sent: { kind: "magic_link" | "record_issued" | "viewer_invite"; to: string; url: string; agentName?: string }[] = [];
   return {
     sent,
     async sendMagicLink(to, url) {
@@ -88,6 +113,9 @@ export function createCapturingMailer(): Mailer & { sent: { kind: "magic_link" |
     },
     async sendRecordIssued(to, url) {
       sent.push({ kind: "record_issued", to, url });
+    },
+    async sendViewerInvite(to, agentName, url) {
+      sent.push({ kind: "viewer_invite", to, url, agentName });
     },
   };
 }
@@ -112,6 +140,11 @@ function createSmtpMailer(opts: { url: string; from: string }): Mailer {
       const { subject, text, html } = recordIssuedEmail(recordUrl);
       await t.sendMail({ from: opts.from, to, subject, text, html });
     },
+    async sendViewerInvite(to, agentName, loginUrl) {
+      const t = await getTransport();
+      const { subject, text, html } = viewerInviteEmail(agentName, loginUrl);
+      await t.sendMail({ from: opts.from, to, subject, text, html });
+    },
   };
 }
 
@@ -132,5 +165,6 @@ function createSesMailer(opts: { from: string; region?: string }): Mailer {
   return {
     sendMagicLink: (to, url) => send(to, magicLinkEmail(url)),
     sendRecordIssued: (to, recordUrl) => send(to, recordIssuedEmail(recordUrl)),
+    sendViewerInvite: (to, agentName, loginUrl) => send(to, viewerInviteEmail(agentName, loginUrl)),
   };
 }

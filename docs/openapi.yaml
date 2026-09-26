@@ -335,6 +335,69 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /v1/agents/me/domain-verification:
+    post:
+      tags: [agents]
+      operationId: startDomainVerification
+      summary: Start verifying control of meta.homepage's domain
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+      responses:
+        '201':
+          description: A fresh pending challenge (always starts over, whatever the previous state was)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domainVerification, verifyUrl, instructions]
+                properties:
+                  domainVerification: { $ref: '#/components/schemas/DomainVerification' }
+                  verifyUrl: { type: string }
+                  instructions: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422':
+          description: '`domain_invalid` — meta.homepage isn''t a real https:// URL'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/agents/me/domain-verification/check:
+    post:
+      tags: [agents]
+      operationId: checkDomainVerification
+      summary: Check the published verification token
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+      responses:
+        '200':
+          description: Verified (or already was)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [domainVerification]
+                properties:
+                  domainVerification: { $ref: '#/components/schemas/DomainVerification' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: '`domain_verification_not_requested` — call POST .../domain-verification first'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: '`domain_verification_failed` — the token wasn''t found at the published URL'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /v1/agents/{agentId}:
     get:
       tags: [agents]
@@ -494,6 +557,43 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /v1/sessions/{sessionId}/pause:
+    post:
+      tags: [sessions]
+      operationId: pauseSession
+      summary: Pause an active session for the owner's review (Prompt 6)
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        '200':
+          description: Paused
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`session_not_active`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
 
   /v1/sessions/{sessionId}/messages:
     post:
@@ -810,6 +910,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /v1/owner/agents/{agentId}/spend-limit:
+    patch:
+      tags: [owner]
+      operationId: setAgentSpendLimit
+      summary: Set or clear the agent's x402 premium spend cap
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [spendLimitUsdCents]
+              properties:
+                spendLimitUsdCents:
+                  description: US cents; null clears the limit (unlimited).
+                  oneOf:
+                    - type: integer
+                      minimum: 0
+                    - type: 'null'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /v1/owner/sessions:
     get:
       tags: [owner]
@@ -885,6 +1016,58 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /v1/owner/sessions/{sessionId}/resume:
+    post:
+      tags: [owner]
+      operationId: resumeSession
+      summary: Resume a session paused for review (Prompt 6)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Resumed; session active again
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`session_not_paused`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/owner/sessions/{sessionId}/decline-resume:
+    post:
+      tags: [owner]
+      operationId: declineResumeSession
+      summary: Decline to resume a paused session; it moves to closing (Prompt 6)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Declined; session moved to closing
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`session_not_paused`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /v1/owner/records:
     get:
       tags: [owner]
@@ -897,6 +1080,146 @@ paths:
       responses:
         '200':
           description: Records for the owner's agents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Record' }
+                  nextCursor: { $ref: '#/components/schemas/NextCursor' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ---------------------------------------------------------------- viewer access (Prompt 6)
+  /v1/owner/agents/{agentId}/viewers:
+    post:
+      tags: [owner]
+      operationId: inviteViewer
+      summary: Invite a human to read-only access on an owned agent
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                label: { type: [string, 'null'], maxLength: 100 }
+      responses:
+        '201':
+          description: Grant created (or reactivated, if it was previously revoked)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grant]
+                properties:
+                  grant: { $ref: '#/components/schemas/ViewerGrant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    get:
+      tags: [owner]
+      operationId: listAgentViewers
+      summary: List viewer grants (active and revoked) for an owned agent
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Viewer grants for this agent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ViewerGrant' }
+                  nextCursor: { $ref: '#/components/schemas/NextCursor' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/owner/agents/{agentId}/viewers/{grantId}/revoke:
+    post:
+      tags: [owner]
+      operationId: revokeViewer
+      summary: Revoke a viewer grant (idempotent)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/GrantId'
+      responses:
+        '200':
+          description: Revoked (or already was)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grant]
+                properties:
+                  grant: { $ref: '#/components/schemas/ViewerGrant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/owner/viewer-access:
+    get:
+      tags: [owner]
+      operationId: listViewerAccess
+      summary: Agents the caller has been granted read-only viewer access to
+      security: [ { ownerSession: [] } ]
+      responses:
+        '200':
+          description: Active grants made out to the caller's own email
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ViewerAccessItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/viewer-access/sessions:
+    get:
+      tags: [owner]
+      operationId: listViewerAccessSessions
+      summary: Sessions of agents the caller can view
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Sessions of every agent the caller holds an active viewer grant for
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/viewer-access/records:
+    get:
+      tags: [owner]
+      operationId: listViewerAccessRecords
+      summary: Records of agents the caller can view
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Records of every agent the caller holds an active viewer grant for
           content:
             application/json:
               schema:
@@ -1033,6 +1356,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    GrantId:
+      name: grantId
+      in: path
+      required: true
+      schema: { type: string, pattern: '^vwg_[0-9A-HJKMNP-TV-Z]{26}$' }
     Cursor:
       name: cursor
       in: query
@@ -1220,7 +1548,7 @@ components:
       enum: [unclaimed, active, suspended]
     AgentPublic:
       type: object
-      required: [id, name, description, status, claimed, fingerprint, keys, createdAt]
+      required: [id, name, description, status, claimed, fingerprint, keys, createdAt, domainVerified]
       properties:
         id: { $ref: '#/components/schemas/AgentId' }
         name: { type: string }
@@ -1236,6 +1564,21 @@ components:
           type: array
           items: { $ref: '#/components/schemas/AgentKey' }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
+        domainVerified:
+          type: boolean
+          description: Whether meta.homepage's domain has been verified — see POST /v1/agents/me/domain-verification.
+    DomainVerification:
+      type: object
+      required: [domain, token, status, requestedAt, verifiedAt]
+      properties:
+        domain: { type: string }
+        token: { type: string }
+        status: { type: string, enum: [pending, verified] }
+        requestedAt: { $ref: '#/components/schemas/Timestamp' }
+        verifiedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
     Agent:
       allOf:
         - $ref: '#/components/schemas/AgentPublic'
@@ -1253,6 +1596,21 @@ components:
             suspendedAt:
               oneOf:
                 - $ref: '#/components/schemas/Timestamp'
+                - type: 'null'
+            spendLimitUsdCents:
+              description: Owner-set cap on this agent's own x402 premium spend, in US cents. null = unlimited.
+              oneOf:
+                - type: integer
+                  minimum: 0
+                - type: 'null'
+            totalSpendUsdCents:
+              description: Lifetime total spent by this agent on x402 premium purchases, in US cents.
+              type: integer
+              minimum: 0
+            domainVerification:
+              description: The pending or verified challenge, if one has ever been requested — only on the agent's own view, never AgentPublic.
+              oneOf:
+                - $ref: '#/components/schemas/DomainVerification'
                 - type: 'null'
     AgentEnvelope:
       type: object
@@ -1348,7 +1706,7 @@ components:
         closedAt: { $ref: '#/components/schemas/Timestamp' }
     CloseReason:
       type: string
-      enum: [agent_closed, idle_timeout, agent_suspended, message_limit]
+      enum: [agent_closed, idle_timeout, agent_suspended, message_limit, owner_declined_pause]
     RecordStatement:
       type: object
       description: Signed by the platform with purpose "record" over H(JCS(statement)).
@@ -1392,7 +1750,7 @@ components:
     # ------------------------------------------------------------ sessions & invites
     SessionStatus:
       type: string
-      enum: [pending, active, closing, closed, declined, cancelled, expired]
+      enum: [pending, active, paused, closing, closed, declined, cancelled, expired]
     SessionParticipant:
       type: object
       required: [agentId, ownerId, kid]
@@ -1404,7 +1762,7 @@ components:
       type: object
       required: [id, mode, status, purpose, initiator, counterparty, inviteId, offer, offerSignature,
                  accept, acceptSignature, genesisHash, genesisSignature, head, messageCount,
-                 idleTimeoutSec, createdAt, activatedAt, lastActivityAt, expiresAt, closing,
+                 idleTimeoutSec, createdAt, activatedAt, lastActivityAt, expiresAt, pause, closing,
                  closedAt, recordId]
       properties:
         id: { $ref: '#/components/schemas/SessionId' }
@@ -1439,6 +1797,16 @@ components:
             - type: 'null'
         lastActivityAt: { $ref: '#/components/schemas/Timestamp' }
         expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        pause:
+          description: Prompt 6 - set while an agent has paused this session for owner review.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [requestedBy, reason, requestedAt]
+              properties:
+                requestedBy: { $ref: '#/components/schemas/AgentId' }
+                reason: { type: string, maxLength: 1000 }
+                requestedAt: { $ref: '#/components/schemas/Timestamp' }
         closing:
           oneOf:
             - type: 'null'
@@ -1575,6 +1943,27 @@ components:
             sha256: { $ref: '#/components/schemas/Hash' }
             bytes: { type: integer, minimum: 0 }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
+    ViewerGrant:
+      type: object
+      required: [id, ownerId, agentId, viewerEmail, label, status, createdAt, revokedAt]
+      properties:
+        id: { type: string }
+        ownerId: { $ref: '#/components/schemas/OwnerId' }
+        agentId: { $ref: '#/components/schemas/AgentId' }
+        viewerEmail: { type: string, format: email }
+        label: { type: [string, 'null'] }
+        status: { type: string, enum: [active, revoked] }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        revokedAt: { oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/Timestamp' }] }
+    ViewerAccessItem:
+      type: object
+      required: [grant, agent]
+      properties:
+        grant: { $ref: '#/components/schemas/ViewerGrant' }
+        agent:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/AgentPublic'
     EvidenceMessage:
       type: object
       required: [envelope, hash, signature, receivedAt, platformSignature]
@@ -1681,7 +2070,7 @@ components:
         type:
           type: string
           enum: [ready, ack, error, pong, message, invite.received, invite.awaiting_owner,
-                 session.active, session.declined, session.cancelled, session.expired,
-                 session.closing, record.issued, agent.claimed]
+                 session.active, session.paused, session.declined, session.cancelled,
+                 session.expired, session.closing, record.issued, agent.claimed]
         id: { type: string }
       additionalProperties: true

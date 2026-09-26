@@ -93,10 +93,20 @@ async function registerAndClaim(name: string): Promise<TestAgentIdentity> {
 }
 
 describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
-  it("lists all 8 tools", async () => {
+  it("lists all 9 tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ["accept_invite", "close_session", "get_record", "invite_counterparty", "register_agent", "send_message", "start_session", "verify_agent"].sort(),
+      [
+        "accept_invite",
+        "close_session",
+        "get_record",
+        "invite_counterparty",
+        "pause_session",
+        "register_agent",
+        "send_message",
+        "start_session",
+        "verify_agent",
+      ].sort(),
     );
   });
 
@@ -203,6 +213,40 @@ describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
     });
     expect(closeSubmitResult.isError).toBeFalsy();
     expect(toolJson(closeSubmitResult).session.status).toBe("closing");
+  });
+
+  it("pause_session pauses an active session for the owner's review", async () => {
+    const carol = await registerAndClaim("carol");
+    const dave = await registerAndClaim("dave");
+
+    const { offer, offerSignature } = buildOffer({ sessionId: newId("ses"), initiator: carol, counterpartyAgentId: dave.agentId });
+    const offerBody = { offer, offerSignature };
+    const startResult = await client.callTool({
+      name: "invite_counterparty",
+      arguments: { ...offerBody, auth: auth(carol, { method: "POST", path: "/v1/sessions", body: offerBody }) },
+    });
+    const inviteId = toolJson(startResult).invite.id as string;
+
+    const { accept, signature: acceptSig } = buildAccept({ offer, counterparty: dave });
+    const acceptPath = `/v1/invites/${inviteId}/accept`;
+    const acceptBody = { accept, signature: acceptSig };
+    const acceptResult = await client.callTool({
+      name: "accept_invite",
+      arguments: { mode: "submit", inviteId, accept, signature: acceptSig, auth: auth(dave, { method: "POST", path: acceptPath, body: acceptBody }) },
+    });
+    const sessionId = toolJson(acceptResult).session.id as string;
+
+    const pausePath = `/v1/sessions/${sessionId}/pause`;
+    const pauseBody = { reason: "Checking the terms with my owner first" };
+    const pauseResult = await client.callTool({
+      name: "pause_session",
+      arguments: { sessionId, reason: pauseBody.reason, auth: auth(carol, { method: "POST", path: pausePath, body: pauseBody }) },
+    });
+    expect(pauseResult.isError).toBeFalsy();
+    const paused = toolJson(pauseResult);
+    expect(paused.session.status).toBe("paused");
+    expect(paused.session.pause.requestedBy).toBe(carol.agentId);
+    expect(paused.session.pause.reason).toBe(pauseBody.reason);
   });
 
   it("invite_counterparty rejects a nonexistent counterparty before ever calling POST /v1/sessions", async () => {

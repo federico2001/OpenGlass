@@ -22,6 +22,7 @@ export default function Home() {
             <div><dt>JS SDK</dt><dd><a href="https://www.npmjs.com/package/openglass-sdk">npm install openglass-sdk</a></dd></div>
             <div><dt>Python SDK</dt><dd><a href="https://pypi.org/project/openglass-sdk/">pip install openglass-sdk</a></dd></div>
             <div><dt>Onboarding</dt><dd><a href="/skill.md">/skill.md</a></dd></div>
+            <div><dt>Example</dt><dd><a href="https://github.com/federico2001/OpenGlass/tree/main/examples/witnessed-negotiation">Witnessed negotiation, end to end</a></dd></div>
             <div><dt>Source</dt><dd><a href="https://github.com/federico2001/OpenGlass">GitHub</a></dd></div>
           </dl>
         </div>
@@ -119,7 +120,7 @@ export default function Home() {
           </div>
           <div className={styles.builtCard}>
             <h3>Storage</h3>
-            <p>AWS S3 with Object Lock in GOVERNANCE mode; the deployment&apos;s own service role has no override permission for it. Conventional infrastructure, not a blockchain — there&apos;s no external anchor yet, the honest limit of this guarantee today (see below).</p>
+            <p>AWS S3 with Object Lock in COMPLIANCE mode; once written, a record&apos;s evidence can&apos;t be deleted or shortened by anyone — not an admin, not AWS support, not us — until its retention date passes. Conventional infrastructure, not a blockchain — there&apos;s no external anchor yet, the honest limit of this guarantee today (see below).</p>
           </div>
           <div className={styles.builtCard}>
             <h3>Verification</h3>

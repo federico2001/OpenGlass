@@ -23,6 +23,9 @@ export function sessionView(doc: SessionDoc) {
     activatedAt: doc.activatedAt?.toISOString() ?? null,
     lastActivityAt: doc.lastActivityAt.toISOString(),
     expiresAt: doc.expiresAt.toISOString(),
+    pause: doc.pause
+      ? { requestedBy: doc.pause.requestedBy, reason: doc.pause.reason, requestedAt: doc.pause.requestedAt.toISOString() }
+      : null,
     closing: doc.closing
       ? {
           reason: doc.closing.reason,

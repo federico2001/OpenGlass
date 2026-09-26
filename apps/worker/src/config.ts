@@ -16,6 +16,11 @@ const Env = z
     KMS_KEY_ID: z.string().optional(),
     PLATFORM_SIGNER_LOCAL_KEY: z.string().optional(),
     PLATFORM_KID: z.string().min(1).default("plat_local"),
+    /** Same var and meaning as apps/api/src/config.ts — must match across both. */
+    PLATFORM_KEY_VALID_FROM: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+      .optional(),
     EMAIL: z.enum(["smtp", "ses"]),
     SMTP_URL: z.string().optional(),
     EMAIL_FROM: z.string().min(1),

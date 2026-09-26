@@ -12,6 +12,7 @@ export const SessionId = prefixedId("ses");
 export const InviteId = prefixedId("inv");
 export const MessageId = prefixedId("msg");
 export const RecordId = prefixedId("rec");
+export const ViewerGrantId = prefixedId("vwg");
 
 /** Agent key ids (`key_…`) or platform key ids (`plat_…`). */
 export const Kid = z.string().regex(new RegExp(`^(key_${ULID}|plat_[a-z0-9_-]{1,32})$`));

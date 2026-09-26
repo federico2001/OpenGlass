@@ -1,16 +1,11 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { findRecordById, type RecordDoc } from "@openglass/db";
 import type { FastifyInstance } from "fastify";
+import { canAccessRecord } from "../domain/access.js";
 import { trustedPlatformKeys } from "../domain/platformKeys.js";
 import { sendError } from "../errors.js";
 import { verifyAgentOrOwner } from "../plugins/agentOrOwnerAuth.js";
 import type { ServerDeps } from "../server.js";
-
-function canAccessRecord(record: RecordDoc, req: { agent?: { doc: { _id: string } }; owner?: { _id: string } }): boolean {
-  if (req.agent && record.participantAgentIds.includes(req.agent.doc._id)) return true;
-  if (req.owner && record.participantOwnerIds.includes(req.owner._id)) return true;
-  return false;
-}
 
 function recordView(doc: RecordDoc) {
   return {
@@ -51,7 +46,7 @@ export function registerRecordsRoutes(app: FastifyInstance, deps: ServerDeps): v
         type: "openglass.bundle",
         record: { statement: record.statement, statementHash: record.statementHash, platformSignature: record.platformSignature },
         evidence,
-        platformKeys: await trustedPlatformKeys(deps.signer),
+        platformKeys: await trustedPlatformKeys(deps.signer, deps.platformKeyValidFrom),
       };
       reply.header("Content-Disposition", `attachment; filename="${record._id}.openglass.json"`);
       return bundle;

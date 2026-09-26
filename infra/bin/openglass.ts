@@ -19,7 +19,7 @@ new OpenGlassStack(app, "OpenGlass", {
   budgetEmail: env("OG_BUDGET_EMAIL"),
   acmeEmail: env("OG_ACME_EMAIL"),
   createGithubOidcProvider: process.env.OG_CREATE_GITHUB_OIDC_PROVIDER !== "false",
-  objectLockMode: process.env.OG_OBJECT_LOCK_MODE === "COMPLIANCE" ? "COMPLIANCE" : "GOVERNANCE",
+  objectLockMode: process.env.OG_OBJECT_LOCK_MODE === "GOVERNANCE" ? "GOVERNANCE" : "COMPLIANCE",
   x402: process.env.OG_X402_PAY_TO_ADDRESS
     ? {
         payToAddress: process.env.OG_X402_PAY_TO_ADDRESS,

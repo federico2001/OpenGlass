@@ -100,7 +100,34 @@ samp {
 
 .site-footer .wrap {
   padding-block: 22px 40px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px 24px;
+}
+
+.footer-note {
+  margin: 0;
   font-size: 12px;
   line-height: 1.6;
   color: var(--ink-soft);
+}
+
+.footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+}
+
+.footer-nav a {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+
+.footer-nav a:hover {
+  color: var(--accent-text);
 }
