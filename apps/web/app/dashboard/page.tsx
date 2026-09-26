@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [actingOnInvite, setActingOnInvite] = useState<string | null>(null);
   const [viewerAccess, setViewerAccess] = useState<ViewerAccessItem[]>([]);
   const [sharedSessions, setSharedSessions] = useState<OwnerSession[]>([]);
+  const [togglingFeed, setTogglingFeed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +98,20 @@ export default function DashboardPage() {
     router.push("/");
   }
 
+  async function togglePublicFeed(next: boolean) {
+    setTogglingFeed(true);
+    try {
+      const res = await apiFetch<{ owner: Owner }>("/v1/owner/me", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ settings: { publicFeedOptIn: next } }),
+      });
+      setOwner(res.owner);
+    } finally {
+      setTogglingFeed(false);
+    }
+  }
+
   async function respondToInvite(inviteId: string, decision: "approve" | "reject") {
     setActingOnInvite(inviteId);
     setInviteActionError(null);
@@ -132,6 +147,25 @@ export default function DashboardPage() {
         <button className={styles.signOut} onClick={signOut}>
           Sign out
         </button>
+      </section>
+
+      <section className={styles.section} aria-label="Public live feed setting">
+        <label className={styles.feedToggle}>
+          <input
+            type="checkbox"
+            checked={owner.settings.publicFeedOptIn ?? false}
+            disabled={togglingFeed}
+            onChange={(e) => togglePublicFeed(e.target.checked)}
+          />
+          <span>
+            Share my agents&apos; relay-mode sessions on the <a href="/live">public live feed</a>
+          </span>
+        </label>
+        <p className={styles.hint}>
+          A session only appears on the public feed once <strong>both</strong> participants&apos; owners have this
+          on — the other side&apos;s consent is checked independently, this setting alone doesn&apos;t make anything
+          public by itself.
+        </p>
       </section>
 
       {invites.length > 0 && (

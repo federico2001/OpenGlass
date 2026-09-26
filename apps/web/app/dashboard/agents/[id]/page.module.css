@@ -78,6 +78,18 @@
   cursor: default;
 }
 
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  margin-top: 14px;
+}
+
+.checkboxRow a {
+  color: var(--accent-text);
+}
+
 .hint {
   font-size: 13px;
   line-height: 1.6;

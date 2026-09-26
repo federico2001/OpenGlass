@@ -21,7 +21,13 @@ import type { ServerDeps } from "../server.js";
 
 const PatchOwnerBody = z.strictObject({
   displayName: z.string().max(100).nullable().optional(),
-  settings: z.strictObject({ requireInviteApproval: z.boolean().optional(), emailOnRecord: z.boolean().optional() }).optional(),
+  settings: z
+    .strictObject({
+      requireInviteApproval: z.boolean().optional(),
+      emailOnRecord: z.boolean().optional(),
+      publicFeedOptIn: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 const InviteViewerBody = z.strictObject({
@@ -33,6 +39,8 @@ const SpendLimitBody = z.strictObject({
   /** US cents; null clears the limit (unlimited). */
   spendLimitUsdCents: z.int().min(0).nullable(),
 });
+
+const PatchAgentBody = z.strictObject({ publicDirectory: z.boolean() });
 
 function paginationOf(query: unknown): { limit: number; cursor?: string } {
   const q = query as { limit?: string; cursor?: string };
@@ -148,6 +156,15 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
     const body = parseOrError(SpendLimitBody, req.body, reply);
     if (!body) return;
     const updated = await agents.update(agent._id, { spendLimitUsdCents: body.spendLimitUsdCents });
+    return { agent: agentFullView(updated!) };
+  });
+
+  app.patch<{ Params: { agentId: string } }>("/v1/owner/agents/:agentId", { preHandler: ownerAuth }, async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+    const body = parseOrError(PatchAgentBody, req.body, reply);
+    if (!body) return;
+    const updated = await agents.update(agent._id, { publicDirectory: body.publicDirectory });
     return { agent: agentFullView(updated!) };
   });
 

@@ -62,6 +62,7 @@ export function agentFullView(doc: AgentDoc) {
     verifiedBadge: doc.verifiedBadge ?? false,
     domainVerified: isDomainVerified(doc),
     domainVerification: doc.domainVerification ? domainVerificationView(doc.domainVerification) : null,
+    publicDirectory: doc.publicDirectory ?? false,
     ownerId: doc.ownerId,
     claimedAt: doc.claimedAt?.toISOString() ?? null,
     suspendedAt: doc.suspendedAt?.toISOString() ?? null,

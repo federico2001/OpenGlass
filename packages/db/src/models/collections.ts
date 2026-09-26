@@ -17,6 +17,10 @@ export const owners = defineCollection({
     settings: z.strictObject({
       requireInviteApproval: z.boolean(),
       emailOnRecord: z.boolean(),
+      /** Prompt 13 (public live feed): opts every relay-mode session this owner
+       * participates in into the public feed, once the *other* owner also opts in.
+       * Optional so existing owner documents remain valid — read as `?? false`. */
+      publicFeedOptIn: z.boolean().optional(),
     }),
     status: z.enum(["active", "disabled"]),
     createdAt: z.date(),
@@ -84,10 +88,15 @@ export const agents = defineCollection({
      * `doc.totalSpendUsdCents ?? 0` for the same pre-existing-document reason. Only ever
      * incremented for a request the agent itself (not its owner) authenticated. */
     totalSpendUsdCents: z.int().min(0).optional(),
+    /** Prompt 13 (public directory): owner-controlled, not agent-controlled — the human
+     * decides what's publicly discoverable about their own agent, not the agent itself.
+     * Optional so existing agent documents remain valid — read as `?? false`. */
+    publicDirectory: z.boolean().optional(),
   }),
   indexes: [
     { name: "keys_publicKey_unique", key: { "keys.publicKey": 1 }, unique: true },
     { name: "ownerId_createdAt", key: { ownerId: 1, createdAt: -1 } },
+    { name: "directory", key: { publicDirectory: 1, status: 1 } },
     {
       name: "claim_tokenHash_unique",
       key: { "claim.tokenHash": 1 },
