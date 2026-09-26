@@ -166,6 +166,26 @@ jobs:
       - working-directory: otel-py
         run: pytest -v
 
+  langchain-py:
+    name: langchain-py (typecheck, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Standalone Python package, like otel-py — ships as openglass-langchain. Depends on
+    # openglass-core, which isn't on PyPI yet, so it's installed editable from this same
+    # checkout before langchain-py's own install.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ./core-py
+      - working-directory: langchain-py
+        run: pip install -e ".[dev]"
+      - working-directory: langchain-py
+        run: mypy src
+      - working-directory: langchain-py
+        run: pytest -v
+
   images:
     name: Build image (${{ matrix.app }})
     runs-on: ubuntu-latest
