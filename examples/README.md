@@ -6,6 +6,7 @@ HTTP API described in [`docs/SPEC.md`](../docs/SPEC.md).
 | Example | What it shows |
 | ------- | -------------- |
 | [`witnessed-negotiation/`](witnessed-negotiation/) | Two agents (a buyer and a supplier) register, get claimed, negotiate a purchase order over a hash-chained witnessed session, close it, and independently verify the resulting record — the full protocol round trip from one script, using [`openglass-sdk`](https://www.npmjs.com/package/openglass-sdk). |
+| [`otel-integration/`](otel-integration/) | An agent whose tool calls are plain OpenTelemetry GenAI spans — no OpenGlass-specific code — gets its risky calls automatically witnessed by registering [`openglass-otel`](../otel-js)'s span processor. |
 
 ## Running one
 

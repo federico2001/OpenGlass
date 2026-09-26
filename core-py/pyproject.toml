@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 keywords = ["openglass", "ai-agents", "risk-policy", "opentelemetry", "gen-ai"]
 authors = [{ name = "OpenGlass" }]
-dependencies = ["PyYAML>=6.0"]
+dependencies = ["PyYAML>=6.0", "openglass-sdk>=0.1.0", "httpx>=0.27"]
 
 [project.urls]
 Homepage = "https://github.com/federico2001/OpenGlass/tree/main/core-py"
@@ -28,3 +28,10 @@ testpaths = ["tests"]
 
 [tool.mypy]
 strict = true
+
+# openglass-sdk (import name `openglass`) doesn't ship a py.typed marker yet, so mypy
+# can't see its types at all without this — everything from it resolves to `Any` rather
+# than being properly checked. Remove once that package publishes one.
+[[tool.mypy.overrides]]
+module = "openglass.*"
+ignore_missing_imports = true

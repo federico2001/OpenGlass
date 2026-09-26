@@ -1,0 +1,37 @@
+{
+  "name": "openglass-otel",
+  "version": "0.1.0",
+  "description": "An OpenTelemetry SpanProcessor that classifies GenAI tool-call spans against an openglass-policy and opens an OpenGlass attestation for the risky ones.",
+  "keywords": ["openglass", "opentelemetry", "gen-ai", "risk-policy", "observability"],
+  "homepage": "https://github.com/federico2001/OpenGlass/tree/main/otel-js",
+  "repository": { "type": "git", "url": "https://github.com/federico2001/OpenGlass", "directory": "otel-js" },
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@openglass/core": "file:../core-js",
+    "openglass-sdk": "^0.1.0"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0 || ^2.0.0"
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
+    "@types/node": "^22",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

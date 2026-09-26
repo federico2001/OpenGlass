@@ -115,6 +115,57 @@ jobs:
       - run: mypy src
       - run: pytest -v
 
+  otel-js:
+    name: otel-js (typecheck, build, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Intentionally outside the pnpm workspace, like sdk-js/core-js — ships standalone as
+    # openglass-otel. Depends on @openglass/core via a local file: reference (neither is
+    # published yet), so core-js is built first in this same job.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            core-js/pnpm-lock.yaml
+            otel-js/pnpm-lock.yaml
+      - name: Build @openglass/core (local dependency)
+        working-directory: core-js
+        run: |
+          pnpm install --ignore-workspace --frozen-lockfile
+          pnpm build
+      - working-directory: otel-js
+        run: pnpm install --ignore-workspace --frozen-lockfile
+      - working-directory: otel-js
+        run: pnpm typecheck
+      - working-directory: otel-js
+        run: pnpm build
+      - working-directory: otel-js
+        run: pnpm test
+
+  otel-py:
+    name: otel-py (typecheck, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Standalone Python package, like sdk-py/core-py — ships as openglass-otel. Depends on
+    # openglass-core, which isn't on PyPI yet, so it's installed editable from this same
+    # checkout before otel-py's own install.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ./core-py
+      - working-directory: otel-py
+        run: pip install -e ".[dev]"
+      - working-directory: otel-py
+        run: mypy src
+      - working-directory: otel-py
+        run: pytest -v
+
   images:
     name: Build image (${{ matrix.app }})
     runs-on: ubuntu-latest
