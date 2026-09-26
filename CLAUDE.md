@@ -15,6 +15,9 @@ TypeScript monorepo using pnpm workspaces:
 | `/packages/db` | Zod models, MongoDB client, migrations              |
 | `/sdk-js`      | JavaScript/TypeScript SDK                           |
 | `/sdk-py`      | Python SDK                                          |
+| `/core-js`     | `@openglass/core` — reference `openglass-policy` evaluator (TS) |
+| `/core-py`     | `openglass-core` — reference `openglass-policy` evaluator (Python) |
+| `/spec/openglass-policy` | Versioned YAML risk-policy format + JSON Schema, vendor-neutral |
 | `/infra`       | AWS CDK stack (ECR, EC2, S3, KMS, Route 53, SES, SSM, budget) |
 | `/deploy`      | `deploy.sh`, run on EC2 through SSM Run Command     |
 

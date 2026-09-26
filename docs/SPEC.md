@@ -995,3 +995,5 @@ Access rule: same shape as §8.1's — the attestor agent, its owner, or a viewe
 **`POST /v1/attestations/{id}/close`** takes `{ "statement": CloseStatement, "signature": Signature }` and returns `202 { "attestation": {…, "status": "closing" } }`, or `409 attestation_not_active`, `422 head_mismatch`, `422 invalid_signature`.
 
 New error codes (extending §11's table): `409 attestation_id_taken`, `409 attestation_not_active`, `422 open_invalid`.
+
+Deciding *when* an action is worth attesting is a separate concern from the attestation mechanism itself: see [`docs/POLICY.md`](POLICY.md) and [`/spec/openglass-policy`](../spec/openglass-policy) for a vendor-neutral format for classifying an agent's action as `low`/`medium`/`high` risk, with reference evaluators in `core-js`/`core-py`.

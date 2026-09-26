@@ -13,10 +13,15 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter "@openglass/web..."
 COPY apps/web apps/web
 COPY docs docs
+COPY spec spec
 # Served as static files so /docs/SPEC.md and /docs/openapi.yaml are live, not just
 # referenced by skill.md/llms-full.txt — those files must exist at the source of truth
-# (docs/) and get copied here, not duplicated by hand.
-RUN mkdir -p apps/web/public/docs && cp docs/SPEC.md docs/openapi.yaml apps/web/public/docs/
+# (docs/) and get copied here, not duplicated by hand. /spec/openglass-policy/** gets the
+# same treatment so the policy schema/default policy are fetchable, not just readable in
+# the repo.
+RUN mkdir -p apps/web/public/docs apps/web/public/spec && \
+    cp docs/SPEC.md docs/openapi.yaml docs/POLICY.md apps/web/public/docs/ && \
+    cp -r spec/openglass-policy apps/web/public/spec/
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter @openglass/web build && mkdir -p /empty-cache
 

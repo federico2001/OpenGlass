@@ -72,6 +72,49 @@ jobs:
       - run: mypy src
       - run: pytest -v
 
+  core-js:
+    name: core-js (typecheck, build, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Intentionally outside the pnpm workspace, like sdk-js — ships standalone as
+    # @openglass/core on its own release cadence. Its test suite runs the
+    # spec/openglass-policy/v1 test vectors shared with core-py, plus a JSON-Schema
+    # cross-check of the shipped default.yaml.
+    defaults:
+      run:
+        working-directory: core-js
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: core-js/pnpm-lock.yaml
+      - run: pnpm install --ignore-workspace --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test
+
+  core-py:
+    name: core-py (typecheck, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Standalone Python package, like sdk-py — ships as openglass-core on its own release
+    # cadence. Its test suite runs the spec/openglass-policy/v1 test vectors shared with
+    # core-js, plus a JSON-Schema cross-check of the shipped default.yaml.
+    defaults:
+      run:
+        working-directory: core-py
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: mypy src
+      - run: pytest -v
+
   images:
     name: Build image (${{ matrix.app }})
     runs-on: ubuntu-latest

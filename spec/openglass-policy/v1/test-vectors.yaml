@@ -1,0 +1,385 @@
+# Shared cross-language test vectors for the openglass-policy v1 reference evaluators
+# (packages/core's TS evaluator and core-py's Python evaluator). Each case is either
+# self-contained (an inline `policy`) or runs against the real `default.yaml`
+# (`policy: default`), so drift between the two language ports — or between either
+# evaluator and the shipped default policy — shows up as a failing test in both.
+#
+# `expect.matchedIds` is every rule id that matched, in policy order (not just the
+# highest-risk one) — the evaluator reports the full picture, not just the winner.
+cases:
+  - name: equals-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "field:action", op: equals, value: delete_user }
+    event: { fields: { action: delete_user } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: equals-no-match-falls-to-default
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      defaultRisk: low
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "field:action", op: equals, value: delete_user }
+    event: { fields: { action: read_user } }
+    expect: { risk: low, matchedIds: [], defaultApplied: true }
+
+  - name: not-equals-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: medium
+          when: { field: "field:status", op: not_equals, value: ok }
+    event: { fields: { status: failed } }
+    expect: { risk: medium, matchedIds: [r1], defaultApplied: false }
+
+  - name: in-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "attr:gen_ai.tool.name", op: in, value: [execute_shell, run_command, eval_code] }
+    event: { attributes: { gen_ai.tool.name: run_command } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: not-in-no-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      defaultRisk: low
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "attr:gen_ai.tool.name", op: not_in, value: [read_file, list_files] }
+    event: { attributes: { gen_ai.tool.name: read_file } }
+    expect: { risk: low, matchedIds: [], defaultApplied: true }
+
+  - name: matches-regex-case-insensitive
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "attr:gen_ai.tool.name", op: matches, value: "(?i)transfer" }
+    event: { attributes: { gen_ai.tool.name: TransferFunds } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: contains-substring-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: medium
+          when: { field: "field:message", op: contains, value: urgent }
+    event: { fields: { message: "this is urgent, please act now" } }
+    expect: { risk: medium, matchedIds: [r1], defaultApplied: false }
+
+  - name: contains-array-membership-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: medium
+          when: { field: "field:tags", op: contains, value: financial }
+    event: { fields: { tags: [internal, financial, quarterly] } }
+    expect: { risk: medium, matchedIds: [r1], defaultApplied: false }
+
+  - name: gt-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "field:amountUsd", op: gt, value: 1000 }
+    event: { fields: { amountUsd: 1500 } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: gte-boundary-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "field:amountUsd", op: gte, value: 1000 }
+    event: { fields: { amountUsd: 1000 } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: lt-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: medium
+          when: { field: "field:confidence", op: lt, value: 0.5 }
+    event: { fields: { confidence: 0.2 } }
+    expect: { risk: medium, matchedIds: [r1], defaultApplied: false }
+
+  - name: lte-boundary-no-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      defaultRisk: low
+      rules:
+        - id: r1
+          risk: medium
+          when: { field: "field:confidence", op: lte, value: 0.5 }
+    event: { fields: { confidence: 0.51 } }
+    expect: { risk: low, matchedIds: [], defaultApplied: true }
+
+  - name: exists-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: medium
+          when: { field: "attr:error.type", op: exists }
+    event: { attributes: { error.type: timeout } }
+    expect: { risk: medium, matchedIds: [r1], defaultApplied: false }
+
+  - name: not-exists-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: low
+          when: { field: "attr:error.type", op: not_exists }
+    event: { attributes: { gen_ai.tool.name: read_file } }
+    expect: { risk: low, matchedIds: [r1], defaultApplied: false }
+
+  - name: all-combinator-both-true-matches
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when:
+            all:
+              - field: "attr:gen_ai.operation.name"
+                op: equals
+                value: execute_tool
+              - field: "field:amountUsd"
+                op: gte
+                value: 500
+    event: { attributes: { gen_ai.operation.name: execute_tool }, fields: { amountUsd: 600 } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: all-combinator-one-false-no-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      defaultRisk: low
+      rules:
+        - id: r1
+          risk: high
+          when:
+            all:
+              - field: "attr:gen_ai.operation.name"
+                op: equals
+                value: execute_tool
+              - field: "field:amountUsd"
+                op: gte
+                value: 500
+    event: { attributes: { gen_ai.operation.name: execute_tool }, fields: { amountUsd: 10 } }
+    expect: { risk: low, matchedIds: [], defaultApplied: true }
+
+  - name: any-combinator-one-true-matches
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when:
+            any:
+              - field: "field:destructive"
+                op: equals
+                value: true
+              - field: "field:amountUsd"
+                op: gte
+                value: 1000000
+    event: { fields: { destructive: true, amountUsd: 0 } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: any-combinator-all-false-no-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      defaultRisk: low
+      rules:
+        - id: r1
+          risk: high
+          when:
+            any:
+              - field: "field:destructive"
+                op: equals
+                value: true
+              - field: "field:amountUsd"
+                op: gte
+                value: 1000000
+    event: { fields: { destructive: false, amountUsd: 5 } }
+    expect: { risk: low, matchedIds: [], defaultApplied: true }
+
+  - name: not-combinator-negates
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: medium
+          when:
+            not:
+              field: "field:approved"
+              op: equals
+              value: true
+    event: { fields: { approved: false } }
+    expect: { risk: medium, matchedIds: [r1], defaultApplied: false }
+
+  - name: nested-any-of-all-matches
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when:
+            any:
+              - all:
+                  - field: "attr:gen_ai.tool.name"
+                    op: matches
+                    value: "(?i)transfer"
+                  - field: "field:amountUsd"
+                    op: gte
+                    value: 100
+              - field: "field:destructive"
+                op: equals
+                value: true
+    event: { attributes: { gen_ai.tool.name: transfer_funds }, fields: { amountUsd: 250 } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: multiple-rules-highest-risk-wins
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: medium-rule
+          risk: medium
+          when: { field: "field:action", op: equals, value: send_email }
+        - id: high-rule
+          risk: high
+          when: { field: "field:hasAttachment", op: equals, value: true }
+    event: { fields: { action: send_email, hasAttachment: true } }
+    expect: { risk: high, matchedIds: [medium-rule, high-rule], defaultApplied: false }
+
+  - name: default-risk-defaults-to-low-when-omitted
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "field:action", op: equals, value: delete_user }
+    event: { fields: { action: noop } }
+    expect: { risk: low, matchedIds: [], defaultApplied: true }
+
+  - name: attr-key-with-dots-exact-lookup
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: medium
+          when: { field: "attr:gen_ai.request.model", op: equals, value: gpt-5 }
+    event: { attributes: { gen_ai.request.model: gpt-5 } }
+    expect: { risk: medium, matchedIds: [r1], defaultApplied: false }
+
+  - name: field-dotted-path-into-nested-object
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "field:payload.recipient.country", op: equals, value: KP }
+    event: { fields: { payload: { recipient: { country: KP } } } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false }
+
+  - name: reasons-are-surfaced-on-match
+    policy:
+      apiVersion: openglass-policy/v1
+      kind: Policy
+      metadata: { name: test }
+      rules:
+        - id: r1
+          risk: high
+          when: { field: "field:action", op: equals, value: delete_user }
+          reasons: ["Deletes a user account"]
+    event: { fields: { action: delete_user } }
+    expect: { risk: high, matchedIds: [r1], defaultApplied: false, reasons: ["Deletes a user account"] }
+
+  - name: default-policy-financial-transaction-by-tool-name
+    policy: default
+    event: { attributes: { gen_ai.tool.name: transfer_funds, gen_ai.operation.name: execute_tool } }
+    expect: { risk: high, matchedIds: [financial-transaction], defaultApplied: false }
+
+  - name: default-policy-destructive-operation-by-field
+    policy: default
+    event: { attributes: { gen_ai.tool.name: cleanup_job }, fields: { destructive: true } }
+    expect: { risk: high, matchedIds: [destructive-operation], defaultApplied: false }
+
+  - name: default-policy-external-communication-medium-risk
+    policy: default
+    event: { attributes: { gen_ai.tool.name: send_email }, fields: { recipientIsExternal: true } }
+    expect: { risk: medium, matchedIds: [external-communication-as-user], defaultApplied: false }
+
+  - name: default-policy-elevated-tool-error-combinator
+    policy: default
+    event: { attributes: { error.type: timeout, gen_ai.tool.name: transfer_funds } }
+    expect: { risk: high, matchedIds: [financial-transaction, elevated-tool-error], defaultApplied: false }
+
+  - name: default-policy-benign-action-falls-to-default-low
+    policy: default
+    event: { attributes: { gen_ai.tool.name: list_calendar_events, gen_ai.operation.name: execute_tool } }
+    expect: { risk: low, matchedIds: [], defaultApplied: true }

@@ -1,0 +1,138 @@
+# OpenGlass's default risk policy (spec v1). See ../README.md for the format guide and
+# ../v1/schema.json for the JSON Schema this document validates against.
+#
+# Field addressing: "attr:<key>" looks up an OpenTelemetry GenAI span attribute by its
+# exact (dotted) key; "field:<path>" does a dotted-path lookup into the plain event
+# fields a caller supplies alongside or instead of OTel attributes. A policy consumer
+# is expected to merge both into one event object before evaluating (see the reference
+# evaluators in packages/core and core-py).
+apiVersion: openglass-policy/v1
+kind: Policy
+metadata:
+  name: default
+  description: >-
+    A general-purpose starting point for classifying agent actions by risk. Covers the
+    action categories most agent frameworks and incident writeups agree are worth a
+    human-verifiable trail: money movement, destructive operations, credential/access
+    changes, arbitrary code execution, external communication sent as the user, and
+    legal/contractual commitments. Meant to be forked and tightened per deployment —
+    the specific tool names and thresholds here are illustrative defaults, not the only
+    correct values.
+defaultRisk: low
+rules:
+  - id: financial-transaction
+    risk: high
+    description: Moves or commits money, credit, or another financial asset.
+    when:
+      any:
+        - field: attr:gen_ai.tool.name
+          op: matches
+          value: "(?i)(transfer|withdraw|payout|wire|refund|charge|invoice|pay)"
+        - all:
+            - field: attr:gen_ai.operation.name
+              op: equals
+              value: execute_tool
+            - field: field:amountUsd
+              op: gte
+              value: 1
+    reasons:
+      - Tool name suggests a funds transfer, payment, or refund
+      - A monetary amount was present on a tool call
+
+  - id: crypto-or-trade-execution
+    risk: high
+    description: Executes a trade or an on-chain transaction.
+    when:
+      field: attr:gen_ai.tool.name
+      op: matches
+      value: "(?i)(swap|trade|buy|sell|stake|bridge|mint|burn|approve_allowance|sign_transaction)"
+    reasons:
+      - Tool name suggests executing a trade or blockchain transaction
+
+  - id: destructive-operation
+    risk: high
+    description: Deletes, drops, or otherwise irreversibly destroys data or infrastructure.
+    when:
+      any:
+        - field: attr:gen_ai.tool.name
+          op: matches
+          value: "(?i)(delete|drop|destroy|terminate|purge|wipe|rm_)"
+        - field: field:destructive
+          op: equals
+          value: true
+    reasons:
+      - Tool name suggests an irreversible delete/destroy operation
+
+  - id: credential-or-access-change
+    risk: high
+    description: Creates, rotates, or revokes credentials, keys, or access grants.
+    when:
+      field: attr:gen_ai.tool.name
+      op: matches
+      value: "(?i)(rotate_key|revoke|grant_access|add_admin|reset_password|create_api_key|disable_mfa)"
+    reasons:
+      - Tool name suggests a change to credentials or access control
+
+  - id: arbitrary-code-execution
+    risk: high
+    description: Runs arbitrary code or shell commands.
+    when:
+      any:
+        - field: attr:gen_ai.tool.name
+          op: in
+          value: [execute_shell, run_command, eval_code, exec]
+        - field: field:command
+          op: exists
+    reasons:
+      - Tool executes a shell command or arbitrary code
+
+  - id: external-communication-as-user
+    risk: medium
+    description: Sends an externally-visible message (email, SMS, social post) that will read as coming from the user.
+    when:
+      all:
+        - field: attr:gen_ai.tool.name
+          op: matches
+          value: "(?i)(send_email|send_sms|post_tweet|post_message|publish)"
+        - field: field:recipientIsExternal
+          op: not_equals
+          value: false
+    reasons:
+      - Sends a message that appears to originate from the user, to a party outside the agent's own operator
+
+  - id: legal-or-contractual-commitment
+    risk: high
+    description: Signs, accepts, or otherwise enters a binding agreement.
+    when:
+      field: attr:gen_ai.tool.name
+      op: matches
+      value: "(?i)(sign_contract|accept_terms|submit_bid|accept_offer|e_sign)"
+    reasons:
+      - Tool name suggests entering a binding legal or contractual commitment
+
+  - id: bulk-sensitive-data-access
+    risk: medium
+    description: Reads or exports a large batch of records that may contain personal data.
+    when:
+      all:
+        - field: attr:gen_ai.tool.name
+          op: matches
+          value: "(?i)(export|bulk_read|download_all|dump)"
+        - field: field:recordCount
+          op: gte
+          value: 100
+    reasons:
+      - Bulk export/read of a dataset large enough to plausibly contain personal data
+
+  - id: elevated-tool-error
+    risk: medium
+    description: A tool call that failed is retried against a high-risk-adjacent tool — worth a closer look even though the action itself didn't complete.
+    when:
+      all:
+        - field: attr:error.type
+          op: exists
+        - field: attr:gen_ai.tool.name
+          op: matches
+          value: "(?i)(transfer|delete|drop|sign_contract|execute_shell)"
+    reasons:
+      - A high-risk-adjacent tool call errored; failed attempts still warrant a record
