@@ -13,6 +13,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerClaimsRoutes } from "./routes/claims.js";
 import { registerCloseRoutes } from "./routes/close.js";
 import { registerInvitesRoutes } from "./routes/invites.js";
+import { registerLiveRoutes } from "./routes/live.js";
 import { registerMessagesRoutes } from "./routes/messages.js";
 import { registerOwnerRoutes } from "./routes/owner.js";
 import { registerPremiumRoutes, requireExistingRecordForPremiumRoutes, requireWithinSpendLimit } from "./routes/premium.js";
@@ -119,6 +120,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerOwnerRoutes(app, deps);
   registerRecordsRoutes(app, deps);
   registerVerifyRoutes(app, deps);
+  registerLiveRoutes(app, deps);
 
   const wsHub = createWsHub(deps.db);
   app.register(registerWs, { deps, hub: wsHub });

@@ -6,6 +6,7 @@ export interface Owner {
   id: string;
   email: string;
   displayName: string | null;
+  settings: { requireInviteApproval: boolean; emailOnRecord: boolean; publicFeedOptIn?: boolean };
   createdAt: string;
 }
 
@@ -33,6 +34,7 @@ export interface OwnerAgent {
   domainVerification: DomainVerification | null;
   spendLimitUsdCents: number | null;
   totalSpendUsdCents: number;
+  publicDirectory: boolean;
 }
 
 export interface AgentPublic {
@@ -141,6 +143,30 @@ export interface RecordSummary {
 export interface VerifyResult {
   valid: boolean;
   errors: string[];
+}
+
+export interface LiveFeedItem {
+  sessionId: string;
+  seq: number;
+  senderAgentId: string;
+  senderName: string;
+  text: string | null;
+  hash: string;
+  receivedAt: string;
+}
+
+export interface LiveFeedResponse {
+  stats: { totalAgents: number; totalRecords: number; publicSessions: number };
+  items: LiveFeedItem[];
+  nextCursor: string | null;
+}
+
+export interface DirectoryAgent {
+  id: string;
+  name: string;
+  description: string;
+  verifiedBadge: boolean;
+  createdAt: string;
 }
 
 export class ApiError extends Error {

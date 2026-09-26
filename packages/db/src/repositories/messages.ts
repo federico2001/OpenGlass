@@ -32,3 +32,24 @@ export function findAllMessagesBySession(db: Db, sessionId: string): Promise<Mes
 export function findMessageByHash(db: Db, sessionId: string, hash: string): Promise<MessageDoc | null> {
   return db.collection<MessageDoc>(messages.name).findOne({ sessionId, hash });
 }
+
+/** Prompt 13 (public live feed): recent messages across a set of eligible sessions, newest
+ * `opts.limit` first when `opts.after` is unset, or the next page after it (oldest first)
+ * when polling. `sessionIds` is caller-filtered (e.g. to publicFeedOptIn sessions only) —
+ * this function has no opinion on which sessions are eligible. */
+export async function findRecentMessagesBySessions(
+  db: Db,
+  sessionIds: string[],
+  opts: { after: Date | null; limit: number },
+): Promise<MessageDoc[]> {
+  const col = db.collection<MessageDoc>(messages.name);
+  if (opts.after) {
+    return col
+      .find({ sessionId: { $in: sessionIds }, receivedAt: { $gt: opts.after } })
+      .sort({ receivedAt: 1 })
+      .limit(opts.limit)
+      .toArray();
+  }
+  const recent = await col.find({ sessionId: { $in: sessionIds } }).sort({ receivedAt: -1 }).limit(opts.limit).toArray();
+  return recent.reverse();
+}

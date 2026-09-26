@@ -9,7 +9,13 @@ import * as recordsRepo from "../../src/repositories/records.js";
  * other than an insert or a find. Never widen these allow-lists to add an update/delete.
  */
 
-const ALLOWED_MESSAGES_EXPORTS = new Set(["insertMessage", "findMessagesBySession", "findAllMessagesBySession", "findMessageByHash"]);
+const ALLOWED_MESSAGES_EXPORTS = new Set([
+  "insertMessage",
+  "findMessagesBySession",
+  "findAllMessagesBySession",
+  "findMessageByHash",
+  "findRecentMessagesBySessions",
+]);
 const ALLOWED_RECORDS_EXPORTS = new Set([
   "insertRecord", "findRecordById", "findRecordBySession", "listRecordsForOwner", "listRecordsForAgents", "DUPLICATE_KEY_ERROR_CODE",
 ]);

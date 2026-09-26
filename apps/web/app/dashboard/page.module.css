@@ -56,6 +56,17 @@
   margin: 8px 0;
 }
 
+.feedToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.feedToggle a {
+  color: var(--accent-text);
+}
+
 /* ---- Invites ---- */
 
 .inviteList {

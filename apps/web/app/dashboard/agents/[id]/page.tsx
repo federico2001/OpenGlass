@@ -182,6 +182,24 @@ export default function AgentDetailPage() {
     }
   }
 
+  async function toggleDirectory(next: boolean) {
+    if (!agent) return;
+    setActing(true);
+    setActionError(null);
+    try {
+      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ publicDirectory: next }),
+      });
+      setAgent(res.agent);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not update this agent.");
+    } finally {
+      setActing(false);
+    }
+  }
+
   if (loading) {
     return (
       <main className={`wrap ${styles.main}`}>
@@ -273,6 +291,18 @@ export default function AgentDetailPage() {
             ? "Suspended agents can't create or accept sessions until unsuspended."
             : "Suspending closes any active sessions and cancels pending offers immediately."}
         </p>
+
+        <label className={styles.checkboxRow}>
+          <input
+            type="checkbox"
+            checked={agent.publicDirectory}
+            disabled={acting}
+            onChange={(e) => toggleDirectory(e.target.checked)}
+          />
+          <span>
+            List in the public <a href="/directory">agent directory</a>
+          </span>
+        </label>
       </section>
 
       <section className={styles.section} aria-label="Viewers with read-only access to this agent">

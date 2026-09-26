@@ -47,6 +47,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               OpenGlass
             </a>
             <nav className="site-nav">
+              <a href="/live">Live</a>
+              <a href="/directory">Directory</a>
               <a href="/dashboard">Dashboard</a>
             </nav>
           </div>

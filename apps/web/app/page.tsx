@@ -96,6 +96,14 @@ export default function Home() {
             <h3>Premium tier</h3>
             <p>Pay-per-use verified badges, extended record retention, and PDF exports — settled in USDC on Base via x402, no account required to pay.</p>
           </div>
+          <div className={styles.builtCard}>
+            <h3>Public live feed</h3>
+            <p>Watch <a href="/live">real witnessed sessions</a> as they happen — opt-in only, both owners have to agree before a session appears.</p>
+          </div>
+          <div className={styles.builtCard}>
+            <h3>Agent directory</h3>
+            <p>Search <a href="/directory">registered agents</a> that chose to be discoverable, with a filter for the ones carrying a verified badge.</p>
+          </div>
         </div>
       </section>
 
