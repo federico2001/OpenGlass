@@ -910,3 +910,88 @@ Limits use fixed windows stored in `rate_limits` (D11). Every response carries `
 | 422 | `invalid_signature`, `hash_mismatch`, `payload_hash_mismatch`, `payload_required`, `payload_not_allowed`, `key_not_pinned`, `sent_at_skew`, `offer_invalid`, `accept_invalid`, `domain_invalid`, `domain_verification_failed` |
 | 429 | `rate_limited` |
 | 503 | `unavailable` (Mongo or S3 unreachable) |
+
+---
+
+## 12. Attestations
+
+An **attestation** is a one-party counterpart to a session (§3.3/§5): a single agent logs something itself — a high-risk tool call, a decision, an internal check — with no counterparty to invite or accept. It reuses the session's evidence bundle format, hash chain and record statement outright rather than defining a parallel entity, so `POST /v1/verify` and every SDK's `verify()` work on an attestation's bundle completely unchanged.
+
+### 12.1 The field-reuse pattern
+
+Wherever a session-era field held a `SessionId`, it now holds a `ChainSubjectId = SessionId | AttestationId` — an attestation id (`att_…`) in exactly the same slot a session id (`ses_…`) used to be the only option for. Concretely: `MessageEnvelope.sessionId`, `CloseStatement.sessionId`, `RecordStatement.sessionId`. This is what lets an attestation's events live in the same `messages` collection, go through the same `computeMessageHash`/`computeCountersignDigest` functions (§7.3), and produce a `RecordStatement` that `verifyBundle` (§7.6) accepts with no separate code path for steps 1, 3 and 4 — only step 2 (genesis) branches on kind.
+
+`RecordStatement` gains `kind: "session" | "attestation"`, **optional**, absent meaning `"session"` — every record issued before this field existed is untouched and still verifies byte-for-byte; the field is never retroactively added to an already-signed, already-hashed statement. `participants` is relaxed to 1–2 entries with an added `"attestor"` role (1 entry, that role, for an attestation; 2, `"initiator"`/`"counterparty"`, for a session, as before).
+
+`Evidence` (§7.4) gains a third, mutually-exclusive pair: `open`/`openSignature` alongside the now-nullable `offer`/`offerSignature`/`accept`/`acceptSignature`. Exactly one pair is populated, matching `kind`. This keeps `verifyBundle`'s input shape and function signature fixed regardless of kind — the two pairs just aren't both present at once.
+
+### 12.2 `attestations` collection
+
+```ts
+{
+  _id: "att_01J…",
+  mode: "relay" | "notary",
+  status: "active" | "closing" | "closed",
+  purpose: string,                         // ≤ 1000 chars
+  attestor: { agentId: "agt_…", ownerId: "own_…", kid: "key_…" },
+  open: AttestationOpen,       openSignature: Signature,           // §12.3
+  genesisHash: string,         genesisSignature: Signature,        // platform
+  head: { seq: number, hash: string | null },
+  eventCount: number,
+  idleTimeoutSec: number,                  // default 86400, max 604800
+  createdAt: Date, activatedAt: Date, lastActivityAt: Date, expiresAt: Date,
+  closing: { reason: "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit",
+             requestedBy: "agt_…" | null, statement: CloseStatement | null,
+             signature: Signature | null, requestedAt: Date } | null,
+  closedAt: Date | null,
+  recordId: "rec_…" | null
+}
+```
+
+Unlike a session, `activatedAt` is never null: there's no `pending`/`declined`/`cancelled`/`expired` state, since there's no counterparty to wait on or reject the offer — an attestation is active the instant the platform countersigns its open statement. There's also no `pause`, for the same reason (§3.3's pause exists so a *counterparty* can hand a decision to a human; a one-party attestation has nothing to pause on behalf of). Indexes: `{ "attestor.agentId": 1, createdAt: -1 }`, `{ status: 1, expiresAt: 1 }`.
+
+### 12.3 Opening
+
+```jsonc
+// AttestationOpen: signed by the attestor, purpose "attestation_open", digest H(JCS(open))
+{
+  "v": 1, "type": "openglass.attestation_open",
+  "attestationId": "att_01J8Z…",
+  "mode": "relay",
+  "purpose": "Log a high-risk tool call",
+  "attestor": { "agentId": "agt_A…", "kid": "key_A1…", "publicKey": "…" },
+  "createdAt": "2026-09-22T22:07:00.000Z"
+}
+
+genesisHash      = hex(H(JCS({ open, openSignature })))
+genesisSignature = platform Sign(sigInput("genesis", genesisHash))
+```
+
+This plays the same role `{ offer, offerSignature, accept, acceptSignature }` plays for a session (§7.2) — a signed opening object, countersigned once by the platform to seed the hash chain — just with one signature instead of two, since there's no counterparty to countersign the open. `attestation_open` is its own signature purpose (§7.1), domain-separated from `offer`/`accept` so a signature made for one can never be replayed as the other.
+
+### 12.4 Events, close and records
+
+Events append to the chain exactly as messages do (§7.3): `envelope.sessionId` holds the attestation id, `prevHash` for the first event is `genesisHash`, and the sender is always pinned to the attestation's own `attestor.agentId`/`kid` — there is no second participant to validate against. Close (§7.4) is identical to a session's, with `CloseStatement.sessionId` again holding the attestation id, signed by the attestor itself (only `agent_closed`, `idle_timeout`, `agent_suspended` and `message_limit` apply — there's no owner-review pause to decline).
+
+When an attestation closes, the worker issues a `RecordStatement` with `kind: "attestation"`, a single-entry `participants` (role `"attestor"`), and an `Evidence` object with `open`/`openSignature` populated and `offer`/`accept` pairs `null`. No owner-notification email is sent (§5's session-close email assumes two owners with something to be told about each other; an attestation has one owner logging its own agent's action).
+
+### 12.5 REST API
+
+| Method | Path | Auth | Purpose |
+| ------ | ---- | ---- | ------- |
+| POST | `/v1/attestations` | agent | Open (agent-signed, activates immediately) |
+| GET | `/v1/attestations` | agent | List own attestations (`?status=`) |
+| GET | `/v1/attestations/{id}` | agent, owner | Attestation state |
+| POST | `/v1/attestations/{id}/events` | agent | Append event (hash-chained, agent-signed, platform-countersigned) |
+| GET | `/v1/attestations/{id}/events` | agent, owner | List events (`afterSeq`) |
+| POST | `/v1/attestations/{id}/close` | agent | Close |
+
+Access rule: same shape as §8.1's — the attestor agent, its owner, or a viewer grant on that one agent. Anyone else gets `404 not_found`.
+
+**`POST /v1/attestations`** takes `{ "open": AttestationOpen, "openSignature": Signature, "idleTimeoutSec"?: number }`. `open.attestor.agentId` must be the authenticated (claimed) agent and `open.attestor.kid` an unrevoked key of its own — an agent can only attest for itself, never on behalf of another. Returns `201 { "attestation": Attestation }`. Errors: `422 open_invalid` (attestor/key mismatch, bad signature, `createdAt` outside ±300 s), `409 attestation_id_taken`.
+
+**`POST /v1/attestations/{id}/events`** takes the same envelope/hash/signature/payload shape as `POST /v1/sessions/{id}/messages` (§8.2), and returns the same `201 { "event", "head" }` / `409 chain_conflict` shape. Same error set otherwise: `409 attestation_not_active`, `422 payload_required`, `422 payload_not_allowed`, `422 payload_hash_mismatch`, `422 hash_mismatch`, `422 invalid_signature`, `422 key_not_pinned`, `422 sent_at_skew`, `413 payload_too_large`.
+
+**`POST /v1/attestations/{id}/close`** takes `{ "statement": CloseStatement, "signature": Signature }` and returns `202 { "attestation": {…, "status": "closing" } }`, or `409 attestation_not_active`, `422 head_mismatch`, `422 invalid_signature`.
+
+New error codes (extending §11's table): `409 attestation_id_taken`, `409 attestation_not_active`, `422 open_invalid`.

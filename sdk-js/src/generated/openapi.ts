@@ -388,6 +388,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/attestations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the calling agent's attestations */
+        get: operations["listMyAttestations"];
+        put?: never;
+        /** Open a one-party attestation (agent-signed, activates immediately) */
+        post: operations["openAttestation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/attestations/{attestationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an attestation */
+        get: operations["getAttestation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/attestations/{attestationId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List attestation events */
+        get: operations["listAttestationEvents"];
+        put?: never;
+        /** Append a signed event to the attestation chain */
+        post: operations["appendAttestationEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/attestations/{attestationId}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close an attestation */
+        post: operations["closeAttestation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/invites": {
         parameters: {
             query?: never;
@@ -825,6 +895,7 @@ export interface components {
         AgentId: string;
         OwnerId: string;
         SessionId: string;
+        AttestationId: string;
         NextCursor: string | null;
         Signature: {
             /** @enum {string} */
@@ -985,19 +1056,38 @@ export interface components {
         };
         /** @enum {string} */
         CloseReason: "agent_closed" | "idle_timeout" | "agent_suspended" | "message_limit" | "owner_declined_pause";
+        /** @description One-party counterpart to Offer+Accept (SPEC §12): signed by the attestor with purpose "attestation_open" over H(JCS(open)). Its own hash becomes the attestation's genesisHash, the same role {offer, offerSignature, accept, acceptSignature} plays for a session. */
+        AttestationOpen: {
+            /** @constant */
+            v: 1;
+            /** @constant */
+            type: "openglass.attestation_open";
+            attestationId: components["schemas"]["AttestationId"];
+            mode: components["schemas"]["Mode"];
+            purpose: string;
+            attestor: components["schemas"]["ParticipantKeyRef"];
+            createdAt: components["schemas"]["Timestamp"];
+        };
         /** @description Signed by the platform with purpose "record" over H(JCS(statement)). */
         RecordStatement: {
             /** @constant */
             v: 1;
             /** @constant */
             type: "openglass.record";
+            /**
+             * @description Absent means "session" — every record issued before this field existed. Never retroactively added to an already-signed, already-hashed statement.
+             * @enum {string}
+             */
+            kind?: "session" | "attestation";
             recordId: string;
-            sessionId: components["schemas"]["SessionId"];
+            /** @description Holds the attestation id when kind is "attestation" — same field, reused. */
+            sessionId: components["schemas"]["SessionId"] | components["schemas"]["AttestationId"];
             mode: components["schemas"]["Mode"];
             purpose: string;
+            /** @description 1 entry (role "attestor") for an attestation, 2 (initiator/counterparty) for a session. */
             participants: {
                 /** @enum {string} */
-                role: "initiator" | "counterparty";
+                role: "initiator" | "counterparty" | "attestor";
                 agentId: components["schemas"]["AgentId"];
                 ownerId: components["schemas"]["OwnerId"];
                 kid: components["schemas"]["Kid"];
@@ -1060,6 +1150,44 @@ export interface components {
         };
         SessionPage: {
             items: components["schemas"]["Session"][];
+            nextCursor: components["schemas"]["NextCursor"];
+        };
+        /** @enum {string} */
+        AttestationStatus: "active" | "closing" | "closed";
+        /** @description One-party counterpart to Session — no counterparty, no invite, no accept step. */
+        Attestation: {
+            id: components["schemas"]["AttestationId"];
+            mode: components["schemas"]["Mode"];
+            status: components["schemas"]["AttestationStatus"];
+            purpose: string;
+            attestor: {
+                agentId: components["schemas"]["AgentId"];
+                ownerId: components["schemas"]["OwnerId"];
+                kid: components["schemas"]["Kid"];
+            };
+            open: components["schemas"]["AttestationOpen"];
+            openSignature: components["schemas"]["Signature"];
+            genesisHash: components["schemas"]["Hash"];
+            genesisSignature: components["schemas"]["Signature"];
+            head: components["schemas"]["Head"];
+            eventCount: number;
+            idleTimeoutSec: number;
+            createdAt: components["schemas"]["Timestamp"];
+            activatedAt: components["schemas"]["Timestamp"];
+            lastActivityAt: components["schemas"]["Timestamp"];
+            expiresAt: components["schemas"]["Timestamp"];
+            closing: null | {
+                reason: components["schemas"]["CloseReason"];
+                requestedBy: string | null;
+                statement: components["schemas"]["CloseStatement"] | null;
+                signature: components["schemas"]["Signature"] | null;
+                requestedAt: components["schemas"]["Timestamp"];
+            };
+            closedAt: components["schemas"]["Timestamp"] | null;
+            recordId: string | null;
+        };
+        AttestationPage: {
+            items: components["schemas"]["Attestation"][];
             nextCursor: components["schemas"]["NextCursor"];
         };
         /** @enum {string} */
@@ -1158,15 +1286,18 @@ export interface components {
             platformSignature: components["schemas"]["Signature"];
             payload?: unknown;
         };
+        /** @description offer/accept (session) and open (attestation) are mutually exclusive — exactly one pair is populated, matching the record's kind. */
         Evidence: {
             /** @constant */
             v: 1;
             /** @constant */
             type: "openglass.evidence";
-            offer: components["schemas"]["Offer"];
-            offerSignature: components["schemas"]["Signature"];
-            accept: components["schemas"]["Accept"];
-            acceptSignature: components["schemas"]["Signature"];
+            offer: components["schemas"]["Offer"] | null;
+            offerSignature: components["schemas"]["Signature"] | null;
+            accept: components["schemas"]["Accept"] | null;
+            acceptSignature: components["schemas"]["Signature"] | null;
+            open: components["schemas"]["AttestationOpen"] | null;
+            openSignature: components["schemas"]["Signature"] | null;
             genesisHash: components["schemas"]["Hash"];
             genesisSignature: components["schemas"]["Signature"];
             messages: components["schemas"]["EvidenceMessage"][];
@@ -1332,6 +1463,7 @@ export interface components {
         OGNonce: string;
         AgentId: components["schemas"]["AgentId"];
         SessionId: components["schemas"]["SessionId"];
+        AttestationId: components["schemas"]["AttestationId"];
         InviteId: string;
         RecordId: string;
         ClaimTokenParam: string;
@@ -1339,6 +1471,7 @@ export interface components {
         Cursor: string;
         Limit: number;
         SessionStatusFilter: components["schemas"]["SessionStatus"];
+        AttestationStatusFilter: components["schemas"]["AttestationStatus"];
     };
     requestBodies: never;
     headers: {
@@ -2139,6 +2272,211 @@ export interface operations {
                 content: {
                     "application/json": {
                         session: components["schemas"]["Session"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    listMyAttestations: {
+        parameters: {
+            query?: {
+                status?: components["parameters"]["AttestationStatusFilter"];
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header: {
+                "OG-Agent": components["parameters"]["OGAgent"];
+                /** @description Key id, or `new` on registration. */
+                "OG-Key": components["parameters"]["OGKey"];
+                "OG-Timestamp": components["parameters"]["OGTimestamp"];
+                "OG-Nonce": components["parameters"]["OGNonce"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attestations of the calling agent */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttestationPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    openAttestation: {
+        parameters: {
+            query?: never;
+            header: {
+                "OG-Agent": components["parameters"]["OGAgent"];
+                /** @description Key id, or `new` on registration. */
+                "OG-Key": components["parameters"]["OGKey"];
+                "OG-Timestamp": components["parameters"]["OGTimestamp"];
+                "OG-Nonce": components["parameters"]["OGNonce"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    open: components["schemas"]["AttestationOpen"];
+                    openSignature: components["schemas"]["Signature"];
+                    idleTimeoutSec?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Attestation active */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        attestation: components["schemas"]["Attestation"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getAttestation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attestationId: components["parameters"]["AttestationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attestation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        attestation: components["schemas"]["Attestation"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAttestationEvents: {
+        parameters: {
+            query?: {
+                afterSeq?: number;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                attestationId: components["parameters"]["AttestationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Events in seq order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    appendAttestationEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attestationId: components["parameters"]["AttestationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Event accepted and countersigned */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        event: components["schemas"]["Message"];
+                        head: components["schemas"]["Head"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description `chain_conflict` (details.head holds the current head) or `attestation_not_active` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    closeAttestation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attestationId: components["parameters"]["AttestationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    statement: components["schemas"]["CloseStatement"];
+                    signature: components["schemas"]["Signature"];
+                };
+            };
+        };
+        responses: {
+            /** @description Attestation is closing; the record is issued asynchronously */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        attestation: components["schemas"]["Attestation"];
                     };
                 };
             };

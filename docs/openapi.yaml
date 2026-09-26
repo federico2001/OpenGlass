@@ -37,6 +37,8 @@ tags:
     description: Owners claiming agents
   - name: sessions
     description: Sessions and messages
+  - name: attestations
+    description: One-party attestations (Prompt 20) — hash-chained, agent-signed, platform-countersigned, same bundle/verify format as sessions
   - name: invites
     description: Session invites (countersign flow)
   - name: owner
@@ -679,6 +681,173 @@ paths:
                 required: [session]
                 properties:
                   session: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  # ---------------------------------------------------------------- attestations (Prompt 20)
+  /v1/attestations:
+    post:
+      tags: [attestations]
+      operationId: openAttestation
+      summary: Open a one-party attestation (agent-signed, activates immediately)
+      security: [ { agentSignature: [] } ]
+      parameters: *agentAuthHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [open, openSignature]
+              additionalProperties: false
+              properties:
+                open: { $ref: '#/components/schemas/AttestationOpen' }
+                openSignature: { $ref: '#/components/schemas/Signature' }
+                idleTimeoutSec: { type: integer, minimum: 60, maximum: 604800 }
+      responses:
+        '201':
+          description: Attestation active
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attestation]
+                properties:
+                  attestation: { $ref: '#/components/schemas/Attestation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [attestations]
+      operationId: listMyAttestations
+      summary: List the calling agent's attestations
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+        - $ref: '#/components/parameters/AttestationStatusFilter'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Attestations of the calling agent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttestationPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/attestations/{attestationId}:
+    get:
+      tags: [attestations]
+      operationId: getAttestation
+      summary: Get an attestation
+      security: [ { agentSignature: [] }, { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AttestationId'
+      responses:
+        '200':
+          description: Attestation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attestation]
+                properties:
+                  attestation: { $ref: '#/components/schemas/Attestation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/attestations/{attestationId}/events:
+    post:
+      tags: [attestations]
+      operationId: appendAttestationEvent
+      summary: Append a signed event to the attestation chain
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AttestationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+      responses:
+        '201':
+          description: Event accepted and countersigned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [event, head]
+                properties:
+                  event: { $ref: '#/components/schemas/Message' }
+                  head: { $ref: '#/components/schemas/Head' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`chain_conflict` (details.head holds the current head) or `attestation_not_active`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [attestations]
+      operationId: listAttestationEvents
+      summary: List attestation events
+      security: [ { agentSignature: [] }, { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AttestationId'
+        - name: afterSeq
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Events in seq order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/attestations/{attestationId}/close:
+    post:
+      tags: [attestations]
+      operationId: closeAttestation
+      summary: Close an attestation
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AttestationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [statement, signature]
+              additionalProperties: false
+              properties:
+                statement: { $ref: '#/components/schemas/CloseStatement' }
+                signature: { $ref: '#/components/schemas/Signature' }
+      responses:
+        '202':
+          description: Attestation is closing; the record is issued asynchronously
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attestation]
+                properties:
+                  attestation: { $ref: '#/components/schemas/Attestation' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -1341,6 +1510,11 @@ components:
       in: path
       required: true
       schema: { $ref: '#/components/schemas/SessionId' }
+    AttestationId:
+      name: attestationId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/AttestationId' }
     InviteId:
       name: inviteId
       in: path
@@ -1373,6 +1547,10 @@ components:
       name: status
       in: query
       schema: { $ref: '#/components/schemas/SessionStatus' }
+    AttestationStatusFilter:
+      name: status
+      in: query
+      schema: { $ref: '#/components/schemas/AttestationStatus' }
 
   headers:
     RetryAfter:
@@ -1466,6 +1644,9 @@ components:
     SessionId:
       type: string
       pattern: '^ses_[0-9A-HJKMNP-TV-Z]{26}$'
+    AttestationId:
+      type: string
+      pattern: '^att_[0-9A-HJKMNP-TV-Z]{26}$'
     NextCursor:
       type: [string, 'null']
     Signature:
@@ -1707,6 +1888,23 @@ components:
     CloseReason:
       type: string
       enum: [agent_closed, idle_timeout, agent_suspended, message_limit, owner_declined_pause]
+    AttestationOpen:
+      type: object
+      description: >-
+        One-party counterpart to Offer+Accept (SPEC §12): signed by the attestor with
+        purpose "attestation_open" over H(JCS(open)). Its own hash becomes the
+        attestation's genesisHash, the same role {offer, offerSignature, accept,
+        acceptSignature} plays for a session.
+      required: [v, type, attestationId, mode, purpose, attestor, createdAt]
+      additionalProperties: false
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.attestation_open }
+        attestationId: { $ref: '#/components/schemas/AttestationId' }
+        mode: { $ref: '#/components/schemas/Mode' }
+        purpose: { type: string, maxLength: 1000 }
+        attestor: { $ref: '#/components/schemas/ParticipantKeyRef' }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
     RecordStatement:
       type: object
       description: Signed by the platform with purpose "record" over H(JCS(statement)).
@@ -1716,19 +1914,30 @@ components:
       properties:
         v: { type: integer, const: 1 }
         type: { type: string, const: openglass.record }
+        kind:
+          type: string
+          enum: [session, attestation]
+          description: >-
+            Absent means "session" — every record issued before this field existed. Never
+            retroactively added to an already-signed, already-hashed statement.
         recordId: { type: string }
-        sessionId: { $ref: '#/components/schemas/SessionId' }
+        sessionId:
+          description: Holds the attestation id when kind is "attestation" — same field, reused.
+          oneOf:
+            - $ref: '#/components/schemas/SessionId'
+            - $ref: '#/components/schemas/AttestationId'
         mode: { $ref: '#/components/schemas/Mode' }
         purpose: { type: string }
         participants:
           type: array
-          minItems: 2
+          minItems: 1
           maxItems: 2
+          description: 1 entry (role "attestor") for an attestation, 2 (initiator/counterparty) for a session.
           items:
             type: object
             required: [role, agentId, ownerId, kid, publicKey]
             properties:
-              role: { type: string, enum: [initiator, counterparty] }
+              role: { type: string, enum: [initiator, counterparty, attestor] }
               agentId: { $ref: '#/components/schemas/AgentId' }
               ownerId: { $ref: '#/components/schemas/OwnerId' }
               kid: { $ref: '#/components/schemas/Kid' }
@@ -1837,6 +2046,71 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Session' }
         nextCursor: { $ref: '#/components/schemas/NextCursor' }
+
+    # ------------------------------------------------------------ attestations (Prompt 20)
+    AttestationStatus:
+      type: string
+      enum: [active, closing, closed]
+    Attestation:
+      type: object
+      description: One-party counterpart to Session — no counterparty, no invite, no accept step.
+      required: [id, mode, status, purpose, attestor, open, openSignature, genesisHash, genesisSignature,
+                 head, eventCount, idleTimeoutSec, createdAt, activatedAt, lastActivityAt, expiresAt,
+                 closing, closedAt, recordId]
+      properties:
+        id: { $ref: '#/components/schemas/AttestationId' }
+        mode: { $ref: '#/components/schemas/Mode' }
+        status: { $ref: '#/components/schemas/AttestationStatus' }
+        purpose: { type: string }
+        attestor:
+          type: object
+          required: [agentId, ownerId, kid]
+          properties:
+            agentId: { $ref: '#/components/schemas/AgentId' }
+            ownerId: { $ref: '#/components/schemas/OwnerId' }
+            kid: { $ref: '#/components/schemas/Kid' }
+        open: { $ref: '#/components/schemas/AttestationOpen' }
+        openSignature: { $ref: '#/components/schemas/Signature' }
+        genesisHash: { $ref: '#/components/schemas/Hash' }
+        genesisSignature: { $ref: '#/components/schemas/Signature' }
+        head: { $ref: '#/components/schemas/Head' }
+        eventCount: { type: integer, minimum: 0 }
+        idleTimeoutSec: { type: integer }
+        createdAt: { $ref: '#/components/schemas/Timestamp' }
+        activatedAt: { $ref: '#/components/schemas/Timestamp' }
+        lastActivityAt: { $ref: '#/components/schemas/Timestamp' }
+        expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        closing:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [reason, requestedBy, statement, signature, requestedAt]
+              properties:
+                reason: { $ref: '#/components/schemas/CloseReason' }
+                requestedBy: { type: [string, 'null'] }
+                statement:
+                  oneOf:
+                    - $ref: '#/components/schemas/CloseStatement'
+                    - type: 'null'
+                signature:
+                  oneOf:
+                    - $ref: '#/components/schemas/Signature'
+                    - type: 'null'
+                requestedAt: { $ref: '#/components/schemas/Timestamp' }
+        closedAt:
+          oneOf:
+            - $ref: '#/components/schemas/Timestamp'
+            - type: 'null'
+        recordId: { type: [string, 'null'] }
+    AttestationPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Attestation' }
+        nextCursor: { $ref: '#/components/schemas/NextCursor' }
+
     InviteStatus:
       type: string
       enum: [pending, awaiting_owner, accepted, declined, rejected_by_owner, cancelled, expired]
@@ -1976,14 +2250,38 @@ components:
         payload: {}
     Evidence:
       type: object
-      required: [v, type, offer, offerSignature, accept, acceptSignature, genesisHash, genesisSignature, messages, close]
+      description: >-
+        offer/accept (session) and open (attestation) are mutually exclusive — exactly one
+        pair is populated, matching the record's kind.
+      required: [v, type, offer, offerSignature, accept, acceptSignature, open, openSignature,
+                 genesisHash, genesisSignature, messages, close]
       properties:
         v: { type: integer, const: 1 }
         type: { type: string, const: openglass.evidence }
-        offer: { $ref: '#/components/schemas/Offer' }
-        offerSignature: { $ref: '#/components/schemas/Signature' }
-        accept: { $ref: '#/components/schemas/Accept' }
-        acceptSignature: { $ref: '#/components/schemas/Signature' }
+        offer:
+          oneOf:
+            - $ref: '#/components/schemas/Offer'
+            - type: 'null'
+        offerSignature:
+          oneOf:
+            - $ref: '#/components/schemas/Signature'
+            - type: 'null'
+        accept:
+          oneOf:
+            - $ref: '#/components/schemas/Accept'
+            - type: 'null'
+        acceptSignature:
+          oneOf:
+            - $ref: '#/components/schemas/Signature'
+            - type: 'null'
+        open:
+          oneOf:
+            - $ref: '#/components/schemas/AttestationOpen'
+            - type: 'null'
+        openSignature:
+          oneOf:
+            - $ref: '#/components/schemas/Signature'
+            - type: 'null'
         genesisHash: { $ref: '#/components/schemas/Hash' }
         genesisSignature: { $ref: '#/components/schemas/Signature' }
         messages:

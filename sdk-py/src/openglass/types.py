@@ -12,7 +12,8 @@ from typing import Any, Literal, TypedDict
 Alg = Literal["Ed25519", "ECDSA_P256_SHA256"]
 Mode = Literal["relay", "notary"]
 AgentStatus = Literal["unclaimed", "active", "suspended"]
-CloseReason = Literal["agent_closed", "idle_timeout", "agent_suspended", "message_limit"]
+CloseReason = Literal["agent_closed", "idle_timeout", "agent_suspended", "message_limit", "owner_declined_pause"]
+RecordKind = Literal["session", "attestation"]
 
 
 class Signature(TypedDict):
@@ -74,27 +75,47 @@ class CloseStatement(TypedDict):
     v: Literal[1]
     type: Literal["openglass.close"]
     sessionId: str
+    """Holds an attestation id for an attestation's close statement — see the note on
+    AttestationOpen below."""
     headSeq: int
     headHash: str | None
     closedAt: str
 
 
+class AttestationOpen(TypedDict):
+    """One-party counterpart to Offer+Accept (SPEC §12): signed by the attestor with
+    purpose "attestation_open" over H(JCS(open)). Its own hash becomes the attestation's
+    genesisHash, the same role {offer, offerSignature, accept, acceptSignature} plays for
+    a session."""
+
+    v: Literal[1]
+    type: Literal["openglass.attestation_open"]
+    attestationId: str
+    mode: Mode
+    purpose: str
+    attestor: ParticipantKeyRef
+    createdAt: str
+
+
 class RecordParticipant(TypedDict):
-    role: Literal["initiator", "counterparty"]
+    role: Literal["initiator", "counterparty", "attestor"]
     agentId: str
     ownerId: str
     kid: str
     publicKey: str
 
 
-class RecordStatement(TypedDict):
+class _RecordStatementRequired(TypedDict):
     v: Literal[1]
     type: Literal["openglass.record"]
     recordId: str
     sessionId: str
+    """Holds the attestation id when kind is "attestation" — same field, reused, so
+    verify_bundle needs no separate code path for it."""
     mode: Mode
     purpose: str
     participants: list[RecordParticipant]
+    """1 entry (role "attestor") for an attestation, 2 (initiator/counterparty) for a session."""
     genesisHash: str
     headSeq: int
     headHash: str | None
@@ -105,6 +126,15 @@ class RecordStatement(TypedDict):
     closedBy: str | None
     evidenceSha256: str
     issuedAt: str
+
+
+class RecordStatement(_RecordStatementRequired, total=False):
+    """``kind`` is the one optional key (Python 3.10 has no ``NotRequired``, hence the
+    required/optional TypedDict split) — absent means "session", the value for every
+    record issued before this field existed. Never retroactively added to an
+    already-signed, already-hashed statement."""
+
+    kind: RecordKind
 
 
 class EvidenceMessage(TypedDict, total=False):
@@ -122,12 +152,17 @@ class EvidenceClose(TypedDict):
 
 
 class Evidence(TypedDict):
+    """``offer``/``accept`` (session) and ``open`` (attestation) are mutually exclusive —
+    exactly one pair is populated, matching the record's ``kind``."""
+
     v: Literal[1]
     type: Literal["openglass.evidence"]
-    offer: Offer
-    offerSignature: Signature
-    accept: Accept
-    acceptSignature: Signature
+    offer: Offer | None
+    offerSignature: Signature | None
+    accept: Accept | None
+    acceptSignature: Signature | None
+    open: AttestationOpen | None
+    openSignature: Signature | None
     genesisHash: str
     genesisSignature: Signature
     messages: list[EvidenceMessage]

@@ -14,6 +14,7 @@ import {
   sigInput,
   webSessionsRepository,
   type Accept,
+  type AttestationOpen,
   type MessageEnvelope,
   type Offer,
   type OwnerDoc,
@@ -153,6 +154,32 @@ export function buildOffer(opts: {
   };
   const offerSignature: Signature = { alg: "Ed25519", kid: opts.initiator.kid, sig: signPurpose(opts.initiator.privateKey, "offer", offer) };
   return { offer, offerSignature };
+}
+
+/** A well-formed, signed `AttestationOpen` (Prompt 20), ready to POST to /v1/attestations. */
+export function buildAttestationOpen(opts: {
+  attestationId: string;
+  attestor: TestAgentIdentity;
+  mode?: "relay" | "notary";
+  purpose?: string;
+  createdAtOffsetMs?: number;
+}): { open: AttestationOpen; openSignature: Signature } {
+  const createdAt = new Date(Date.now() + (opts.createdAtOffsetMs ?? 0)).toISOString();
+  const open: AttestationOpen = {
+    v: 1,
+    type: "openglass.attestation_open",
+    attestationId: opts.attestationId,
+    mode: opts.mode ?? "relay",
+    purpose: opts.purpose ?? "Test attestation",
+    attestor: { agentId: opts.attestor.agentId, kid: opts.attestor.kid, publicKey: opts.attestor.publicKey },
+    createdAt,
+  };
+  const openSignature: Signature = {
+    alg: "Ed25519",
+    kid: opts.attestor.kid,
+    sig: signPurpose(opts.attestor.privateKey, "attestation_open", open),
+  };
+  return { open, openSignature };
 }
 
 /** A well-formed, signed `Accept` (SPEC §7.2), ready to POST to /v1/invites/{id}/accept. */

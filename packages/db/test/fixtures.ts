@@ -2,6 +2,7 @@ import { ObjectId } from "mongodb";
 
 const U = "01J8Z3K4M5N6P7Q8R9S0T1V2W3";
 const U2 = "01J8Z3K4M5N6P7Q8R9S0T1V2W4";
+const U3 = "01J8Z3K4M5N6P7Q8R9S0T1V2W5";
 const now = new Date("2026-09-22T22:07:00.000Z");
 const iso = "2026-09-22T22:07:00.000Z";
 const hash = "a".repeat(64);
@@ -39,6 +40,19 @@ export const validDocs: Record<string, Record<string, unknown>> = {
     genesisHash: hash, genesisSignature: sig("plat_2026a"), head: { seq: 0, hash: null }, messageCount: 0,
     idleTimeoutSec: 86400, createdAt: now, activatedAt: now, lastActivityAt: now, expiresAt: now,
     pause: null, closing: null, closedAt: null, recordId: null,
+  },
+  attestations: {
+    _id: `att_${U}`, mode: "relay", status: "active", purpose: "Log a high-risk tool call",
+    attestor: { agentId: `agt_${U}`, ownerId: `own_${U}`, kid: `key_${U}` },
+    open: {
+      v: 1, type: "openglass.attestation_open", attestationId: `att_${U}`, mode: "relay",
+      purpose: "Log a high-risk tool call", attestor: { agentId: `agt_${U}`, kid: `key_${U}`, publicKey: pk },
+      createdAt: iso,
+    },
+    openSignature: sig(`key_${U}`),
+    genesisHash: hash, genesisSignature: sig("plat_2026a"), head: { seq: 0, hash: null }, eventCount: 0,
+    idleTimeoutSec: 86400, createdAt: now, activatedAt: now, lastActivityAt: now, expiresAt: now,
+    closing: null, closedAt: null, recordId: null,
   },
   invites: {
     _id: `inv_${U}`, sessionId: `ses_${U}`, fromAgentId: `agt_${U}`, kind: "open", toAgentId: null,
@@ -107,7 +121,8 @@ export const invalidDocs: [collection: string, why: string, doc: Record<string, 
   ["messages", "seq 0", { ...validDocs.messages, seq: 0 }],
   ["messages", "hash not hex", { ...validDocs.messages, hash: "zz" }],
   ["messages", "timestamp as string", { ...validDocs.messages, receivedAt: "2026-09-22" }],
-  ["records", "one participant", { ...validDocs.records, participantAgentIds: [`agt_${U}`] }],
+  ["records", "zero participants", { ...validDocs.records, participantAgentIds: [] }],
+  ["records", "three participants", { ...validDocs.records, participantAgentIds: [`agt_${U}`, `agt_${U2}`, `agt_${U3}`] }],
   ["viewer_grants", "uppercase email", { ...validDocs.viewer_grants, viewerEmail: "Legal@Example.com" }],
   ["viewer_grants", "bad status", { ...validDocs.viewer_grants, status: "pending" }],
   ["rate_limits", "fractional count", { ...validDocs.rate_limits, count: 1.5 }],

@@ -41,6 +41,8 @@ function buildEvidence(session: SessionDoc, messages: MessageDoc[]): Evidence {
     offerSignature: session.offerSignature,
     accept: session.accept!,
     acceptSignature: session.acceptSignature!,
+    open: null,
+    openSignature: null,
     genesisHash: session.genesisHash!,
     genesisSignature: session.genesisSignature!,
     messages: messages.map(evidenceMessageOf),
@@ -52,6 +54,7 @@ function buildStatement(session: SessionDoc, recordId: string, evidenceSha256: s
   return {
     v: 1,
     type: "openglass.record",
+    kind: "session",
     recordId,
     sessionId: session._id,
     mode: session.mode,

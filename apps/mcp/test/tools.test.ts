@@ -6,6 +6,7 @@ import { openTestDb } from "../../../packages/db/test/testDb.js";
 import { buildServer as buildApiServer } from "../../api/src/server.js";
 import {
   buildAccept,
+  buildAttestationOpen,
   buildOffer,
   claimAgentDirectly,
   insertTestOwner,
@@ -54,7 +55,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  for (const c of ["agents", "owners", "sessions", "invites", "messages", "request_nonces", "rate_limits"]) {
+  for (const c of ["agents", "owners", "sessions", "invites", "messages", "attestations", "request_nonces", "rate_limits"]) {
     await t.db.collection(c).deleteMany({});
   }
 });
@@ -93,16 +94,19 @@ async function registerAndClaim(name: string): Promise<TestAgentIdentity> {
 }
 
 describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
-  it("lists all 9 tools", async () => {
+  it("lists all 12 tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
       [
         "accept_invite",
+        "close_attestation",
         "close_session",
         "get_record",
         "invite_counterparty",
+        "open_attestation",
         "pause_session",
         "register_agent",
+        "send_attestation_event",
         "send_message",
         "start_session",
         "verify_agent",
@@ -247,6 +251,83 @@ describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
     expect(paused.session.status).toBe("paused");
     expect(paused.session.pause.requestedBy).toBe(carol.agentId);
     expect(paused.session.pause.reason).toBe(pauseBody.reason);
+  });
+
+  it("full attestation lifecycle via MCP tools: open -> event -> close", async () => {
+    const erin = await registerAndClaim("erin");
+    const { canonicalizeToBytes, sha256, hex, signEd25519, sigInput, base64UrlEncode } = await import("@openglass/db");
+
+    const attestationId = newId("att");
+    const { open, openSignature } = buildAttestationOpen({ attestationId, attestor: erin });
+    const openBody = { open, openSignature, idleTimeoutSec: undefined };
+    const openResult = await client.callTool({
+      name: "open_attestation",
+      arguments: { open, openSignature, auth: auth(erin, { method: "POST", path: "/v1/attestations", body: openBody }) },
+    });
+    expect(openResult.isError).toBeFalsy();
+    const opened = toolJson(openResult);
+    expect(opened.attestation.status).toBe("active");
+
+    const eventPreparePath = `/v1/attestations/${attestationId}`;
+    const eventPrepareResult = await client.callTool({
+      name: "send_attestation_event",
+      arguments: { mode: "prepare", attestationId, auth: auth(erin, { method: "GET", path: eventPreparePath }) },
+    });
+    expect(eventPrepareResult.isError).toBeFalsy();
+    const eventPrepared = toolJson(eventPrepareResult);
+    expect(eventPrepared.nextSeq).toBe(1);
+    expect(eventPrepared.prevHash).toBe(opened.attestation.genesisHash);
+
+    const payload = { text: "logging a high-risk tool call" };
+    const payloadHash = hex(sha256(canonicalizeToBytes(payload)));
+    const envelope = {
+      v: 1 as const,
+      type: "openglass.message" as const,
+      sessionId: attestationId,
+      seq: 1,
+      prevHash: eventPrepared.prevHash,
+      sender: { agentId: erin.agentId, kid: erin.kid },
+      contentType: "application/json",
+      payloadHash,
+      sentAt: new Date().toISOString(),
+    };
+    const hashBytes = sha256(Buffer.concat([Buffer.from(eventPrepared.prevHash, "hex"), canonicalizeToBytes(envelope)]));
+    const hash = hex(hashBytes);
+    const signature = { alg: "Ed25519" as const, kid: erin.kid, sig: base64UrlEncode(signEd25519(sigInput("message", hashBytes), erin.privateKey)) };
+    const eventSubmitPath = `/v1/attestations/${attestationId}/events`;
+    const eventSubmitBody = { envelope, hash, signature, payload };
+    const eventSubmitResult = await client.callTool({
+      name: "send_attestation_event",
+      arguments: { mode: "submit", attestationId, envelope, hash, signature, payload, auth: auth(erin, { method: "POST", path: eventSubmitPath, body: eventSubmitBody }) },
+    });
+    expect(eventSubmitResult.isError).toBeFalsy();
+    expect(toolJson(eventSubmitResult).head.seq).toBe(1);
+
+    const closePreparePath = `/v1/attestations/${attestationId}`;
+    const closePrepareResult = await client.callTool({
+      name: "close_attestation",
+      arguments: { mode: "prepare", attestationId, auth: auth(erin, { method: "GET", path: closePreparePath }) },
+    });
+    const closePrepared = toolJson(closePrepareResult);
+    expect(closePrepared.headSeq).toBe(1);
+
+    const statement = {
+      v: 1 as const,
+      type: "openglass.close" as const,
+      sessionId: attestationId,
+      headSeq: closePrepared.headSeq,
+      headHash: closePrepared.headHash,
+      closedAt: new Date().toISOString(),
+    };
+    const closeSig = { alg: "Ed25519" as const, kid: erin.kid, sig: base64UrlEncode(signEd25519(sigInput("close", sha256(canonicalizeToBytes(statement))), erin.privateKey)) };
+    const closeSubmitPath = `/v1/attestations/${attestationId}/close`;
+    const closeSubmitBody = { statement, signature: closeSig };
+    const closeSubmitResult = await client.callTool({
+      name: "close_attestation",
+      arguments: { mode: "submit", attestationId, statement, signature: closeSig, auth: auth(erin, { method: "POST", path: closeSubmitPath, body: closeSubmitBody }) },
+    });
+    expect(closeSubmitResult.isError).toBeFalsy();
+    expect(toolJson(closeSubmitResult).attestation.status).toBe("closing");
   });
 
   it("invite_counterparty rejects a nonexistent counterparty before ever calling POST /v1/sessions", async () => {
