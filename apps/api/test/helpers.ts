@@ -60,6 +60,7 @@ export function testServerDeps(
     // what a local test server would be) — tests that exercise a specific outcome override
     // this per call, e.g. `{ ...testServerDeps(t), checkDomainVerification: async () => true }`.
     checkDomainVerification: async () => false,
+    adminEmails: ["admin@example.com"],
   };
 }
 

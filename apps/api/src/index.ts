@@ -49,6 +49,7 @@ const app = buildServer({
   objectLockMode: config.OBJECT_LOCK_MODE,
   x402,
   checkDomainVerification,
+  adminEmails: config.ADMIN_EMAILS,
 });
 
 await app.listen({ host: "0.0.0.0", port: config.PORT });

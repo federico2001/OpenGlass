@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
-  AgentId, AttestationId, ChainSubjectId, Hash, InviteId, KeyId, MessageId, ObjectIdSchema, OwnerId, PublicKey,
-  RecordId, SessionId, Signature, Kid, ViewerGrantId,
+  AgentId, AttestationId, ChainSubjectId, Hash, IntegrationRequestId, IntegrationVoteId, InviteId, KeyId, MessageId,
+  ObjectIdSchema, OwnerId, PublicKey, RecordId, SessionId, Signature, Kid, ViewerGrantId,
 } from "./common.js";
 import { Accept, AttestationOpen, CloseReason, CloseStatement, MessageEnvelope, Mode, Offer, RecordStatement } from "./protocol.js";
 import { defineCollection } from "./define.js";
@@ -324,6 +324,51 @@ export const viewerGrants = defineCollection({
   ],
 });
 
+/** Prompt 23: the public `/integrations` request board. The framework catalog itself
+ * (name, description, links) is a static YAML file (apps/api/data/integrations.yaml),
+ * not a collection — these three collections hold only what's actually dynamic: an
+ * admin-set status override per framework slug, one vote per (slug, owner), and
+ * "request my framework" submissions. */
+export const integrationStatusOverrides = defineCollection({
+  name: "integration_status",
+  schema: z.strictObject({
+    _id: z.string().min(1).max(100), // the catalog entry's own slug
+    status: z.enum(["requested", "in_progress", "available", "native"]),
+    updatedAt: z.date(),
+    updatedBy: OwnerId,
+  }),
+  indexes: [],
+});
+
+export const integrationVotes = defineCollection({
+  name: "integration_votes",
+  schema: z.strictObject({
+    _id: IntegrationVoteId,
+    slug: z.string().min(1).max(100),
+    ownerId: OwnerId,
+    createdAt: z.date(),
+  }),
+  indexes: [
+    { name: "slug_owner_unique", key: { slug: 1, ownerId: 1 }, unique: true },
+    { name: "slug_createdAt", key: { slug: 1, createdAt: -1 } },
+  ],
+});
+
+export const integrationRequests = defineCollection({
+  name: "integration_requests",
+  schema: z.strictObject({
+    _id: IntegrationRequestId,
+    frameworkName: z.string().min(1).max(200),
+    frameworkUrl: z.string().max(500).nullable(),
+    note: z.string().max(1000).nullable(),
+    ownerId: OwnerId,
+    requesterEmail: z.string().max(254),
+    status: z.enum(["new", "reviewed"]),
+    createdAt: z.date(),
+  }),
+  indexes: [{ name: "status_createdAt", key: { status: 1, createdAt: -1 } }],
+});
+
 /** One document per UTC calendar day (SPEC has no section for this — it's operational
  * telemetry, not protocol state). Written once by apps/worker's recordActivitySnapshot job;
  * never updated after insert, so `_id` doubles as the dedup key for "already ran today." */
@@ -426,6 +471,7 @@ export const migrationLock = defineCollection({
 
 export const allCollections = [
   owners, agents, sessions, attestations, invites, messages, records, viewerGrants,
+  integrationStatusOverrides, integrationVotes, integrationRequests,
   loginTokens, webSessions, requestNonces, rateLimits, activitySnapshots,
   changelog, migrationLock,
 ] as const;
@@ -438,6 +484,9 @@ export type InviteDoc = z.infer<typeof invites.schema>;
 export type MessageDoc = z.infer<typeof messages.schema>;
 export type RecordDoc = z.infer<typeof records.schema>;
 export type ViewerGrantDoc = z.infer<typeof viewerGrants.schema>;
+export type IntegrationStatusOverrideDoc = z.infer<typeof integrationStatusOverrides.schema>;
+export type IntegrationVoteDoc = z.infer<typeof integrationVotes.schema>;
+export type IntegrationRequestDoc = z.infer<typeof integrationRequests.schema>;
 export type LoginTokenDoc = z.infer<typeof loginTokens.schema>;
 export type WebSessionDoc = z.infer<typeof webSessions.schema>;
 export type RequestNonceDoc = z.infer<typeof requestNonces.schema>;

@@ -24,6 +24,8 @@ export const RATE_LIMIT_RULES = {
   session_pause: { limit: 60, windowMs: 3_600_000 },
   viewer_invite: { limit: 30, windowMs: 3_600_000 },
   domain_verification: { limit: 20, windowMs: 3_600_000 },
+  integration_vote: { limit: 60, windowMs: 3_600_000 },
+  integration_request: { limit: 10, windowMs: 3_600_000 },
   read: { limit: 600, windowMs: 60_000 },
   verify: { limit: 30, windowMs: 60_000 },
   unauthenticated_default: { limit: 120, windowMs: 60_000 },

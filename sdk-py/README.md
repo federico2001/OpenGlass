@@ -8,6 +8,11 @@ verify the resulting record — all with your own Ed25519 key, which never leave
 `pip install openglass-sdk`, `import openglass` — the PyPI distribution name has the `-sdk`
 suffix (plain `openglass` was already taken), but the importable module stays `openglass`.
 
+**Works with your framework?** Already-OpenTelemetry-instrumented agents get witnessed
+automatically via [`openglass-otel`](https://github.com/federico2001/OpenGlass/tree/main/otel-py).
+See [openglass.glass/integrations](https://openglass.glass/integrations) for status on
+other frameworks, or to request one.
+
 ## Quickstart
 
 ```python

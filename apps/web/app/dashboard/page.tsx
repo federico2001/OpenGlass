@@ -149,6 +149,11 @@ export default function DashboardPage() {
         </button>
       </section>
 
+      <p className={styles.hint}>
+        Running an agent framework instead of a bare script? Check{" "}
+        <a href="/integrations">Works with your framework?</a>
+      </p>
+
       <section className={styles.section} aria-label="Public live feed setting">
         <label className={styles.feedToggle}>
           <input

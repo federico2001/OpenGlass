@@ -49,6 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <nav className="site-nav">
               <a href="/live">Live</a>
               <a href="/directory">Directory</a>
+              <a href="/integrations">Integrations</a>
               <a href="/dashboard">Dashboard</a>
             </nav>
           </div>

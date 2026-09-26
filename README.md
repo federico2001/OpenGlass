@@ -39,6 +39,8 @@ MinIO no longer publishes official images, so compose uses the maintained commun
 
 [`otel-js`](otel-js)/[`otel-py`](otel-py) (`openglass-otel`) plug into an already-OpenTelemetry-instrumented agent: a `SpanProcessor` reads GenAI spans, classifies each against an `openglass-policy`, and opens an attestation for the risky ones — no OpenGlass-specific code in the agent itself. See [`examples/otel-integration`](examples/otel-integration) for a runnable demo. [`/integrations/_template`](integrations/_template) is the starting point for a framework-specific integration, including the conformance tests every integration must pass.
 
+The public [`/integrations`](https://openglass.glass/integrations) page is the request board: a card per framework (from a static catalog, [`apps/api/data/integrations.yaml`](apps/api/data/integrations.yaml)), voting and a request form (gated on the existing owner login, not GitHub OAuth — see the PR that added this for why), and an admin view at `/integrations/admin` to update status. Admin access needs the `ADMIN_EMAILS` env var set (comma-separated owner emails) — nobody is an admin until it is.
+
 ## Develop and test
 
 ```sh

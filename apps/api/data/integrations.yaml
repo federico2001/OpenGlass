@@ -1,0 +1,77 @@
+# The static catalog for the public /integrations request board (Prompt 23). Editing this
+# file (a PR, reviewed like any other change) is how a new framework card gets added; the
+# per-framework `status`, vote counts, and "request my framework" submissions are dynamic
+# and live in Mongo (packages/db/src/models/collections.ts's integration_* collections),
+# layered on top of whatever `defaultStatus` says here.
+frameworks:
+  - slug: langchain
+    name: LangChain
+    url: https://www.langchain.com/
+    description: The most widely used agent/orchestration framework for Python and JS, with a callback API well-suited to witnessing tool calls.
+    category: orchestration
+    defaultStatus: in_progress
+    evidence:
+      - label: Callback API docs
+        url: https://python.langchain.com/docs/concepts/callbacks/
+
+  - slug: crewai
+    name: CrewAI
+    url: https://www.crewai.com/
+    description: Multi-agent orchestration framework built around role-based crews.
+    category: orchestration
+    defaultStatus: requested
+    evidence: []
+
+  - slug: autogen
+    name: AutoGen
+    url: https://microsoft.github.io/autogen/
+    description: Microsoft's multi-agent conversation framework.
+    category: orchestration
+    defaultStatus: requested
+    evidence: []
+
+  - slug: llamaindex
+    name: LlamaIndex
+    url: https://www.llamaindex.ai/
+    description: Data framework for building context-augmented LLM agents.
+    category: data
+    defaultStatus: requested
+    evidence: []
+
+  - slug: vercel-ai-sdk
+    name: Vercel AI SDK
+    url: https://sdk.vercel.ai/
+    description: TypeScript toolkit for building AI-powered applications, including tool-calling agents.
+    category: sdk
+    defaultStatus: requested
+    evidence: []
+
+  - slug: semantic-kernel
+    name: Semantic Kernel
+    url: https://github.com/microsoft/semantic-kernel
+    description: Microsoft's SDK for integrating LLMs into apps with plugins and planners.
+    category: sdk
+    defaultStatus: requested
+    evidence: []
+
+  - slug: opentelemetry
+    name: OpenTelemetry (direct)
+    url: https://opentelemetry.io/
+    description: Framework-agnostic — any agent already emitting OTel GenAI semantic-convention spans works with OpenGlass today, no framework-specific adapter needed.
+    category: observability
+    defaultStatus: native
+    evidence:
+      - label: openglass-otel
+        url: https://github.com/federico2001/OpenGlass/tree/main/otel-js
+      - label: Runnable example
+        url: https://github.com/federico2001/OpenGlass/tree/main/examples/otel-integration
+
+  - slug: mcp
+    name: Model Context Protocol (direct)
+    url: https://modelcontextprotocol.io/
+    description: Anthropic's protocol for connecting agents to tools and context. OpenGlass runs its own MCP server exposing the full protocol as callable tools.
+    category: protocol
+    defaultStatus: native
+    evidence:
+      - label: apps/mcp
+        url: https://github.com/federico2001/OpenGlass/tree/main/apps/mcp
