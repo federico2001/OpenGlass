@@ -5,7 +5,7 @@
 # exact (dotted) key; "field:<path>" does a dotted-path lookup into the plain event
 # fields a caller supplies alongside or instead of OTel attributes. A policy consumer
 # is expected to merge both into one event object before evaluating (see the reference
-# evaluators in packages/core and core-py).
+# evaluators in core-js and core-py).
 apiVersion: openglass-policy/v1
 kind: Policy
 metadata:

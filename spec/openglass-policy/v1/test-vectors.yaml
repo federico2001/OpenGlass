@@ -1,5 +1,5 @@
 # Shared cross-language test vectors for the openglass-policy v1 reference evaluators
-# (packages/core's TS evaluator and core-py's Python evaluator). Each case is either
+# (core-js's TS evaluator and core-py's Python evaluator). Each case is either
 # self-contained (an inline `policy`) or runs against the real `default.yaml`
 # (`policy: default`), so drift between the two language ports — or between either
 # evaluator and the shipped default policy — shows up as a failing test in both.

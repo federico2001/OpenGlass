@@ -6,7 +6,7 @@ deserves a witnessed record, a pause for human review, or nothing at all. The fo
 itself has no opinion on what happens after classification: what a "high" verdict
 triggers (open an [OpenGlass attestation](../../docs/SPEC.md#12-attestations), block the
 call, page someone, just log it) is entirely up to the caller. This directory is the
-spec; [`packages/core`](../../packages/core) (TypeScript) and
+spec; [`core-js`](../../core-js) (TypeScript) and
 [`core-py`](../../core-py) (Python) are reference evaluators for it, kept in sync by a
 shared set of test vectors.
 
