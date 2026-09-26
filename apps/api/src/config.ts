@@ -53,6 +53,13 @@ const Env = z
      * deployed — see infra/lib/openglass-stack.ts). Only used as a fallback in the premium
      * extend-retention route. */
     OBJECT_LOCK_MODE: z.enum(["GOVERNANCE", "COMPLIANCE"]).default("COMPLIANCE"),
+    /** Comma-separated owner emails allowed to use /v1/admin/* (Prompt 23's integration
+     * request-board status management). Empty by default — nobody is an admin until this
+     * is set. Lowercased/trimmed at parse time to match Owner.email's stored form. */
+    ADMIN_EMAILS: z
+      .string()
+      .default("")
+      .transform((v) => v.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)),
   })
   .superRefine((env, ctx) => {
     if (env.SIGNER === "kms" && !env.KMS_KEY_ID) ctx.addIssue({ code: "custom", path: ["KMS_KEY_ID"], message: "required when SIGNER=kms" });

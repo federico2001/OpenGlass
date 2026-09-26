@@ -169,6 +169,42 @@ export interface DirectoryAgent {
   createdAt: string;
 }
 
+export type IntegrationStatus = "requested" | "in_progress" | "available" | "native";
+
+export interface IntegrationEvidence {
+  label: string;
+  url: string;
+}
+
+export interface IntegrationCard {
+  slug: string;
+  name: string;
+  url: string;
+  description: string;
+  category: string;
+  evidence: IntegrationEvidence[];
+  status: IntegrationStatus;
+  voteCount: number;
+  hasVoted: boolean;
+}
+
+export interface IntegrationRequest {
+  id: string;
+  frameworkName: string;
+  frameworkUrl: string | null;
+  note: string | null;
+  requesterEmail: string;
+  status: "new" | "reviewed";
+  createdAt: string;
+}
+
+export const INTEGRATION_STATUS_LABEL: Record<IntegrationStatus, string> = {
+  requested: "Requested",
+  in_progress: "In progress",
+  available: "Available",
+  native: "Native",
+};
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {

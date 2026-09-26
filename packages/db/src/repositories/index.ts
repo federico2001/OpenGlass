@@ -1,6 +1,9 @@
 export { activitySnapshotsRepository, type ActivitySnapshotsRepository } from "./activitySnapshots.js";
 export { agentsRepository, type AgentsRepository } from "./agents.js";
 export { attestationsRepository, type AttestationsRepository } from "./attestations.js";
+export { integrationRequestsRepository, type IntegrationRequestsRepository } from "./integrationRequests.js";
+export { integrationStatusRepository, type IntegrationStatusRepository } from "./integrationStatus.js";
+export { integrationVotesRepository, type IntegrationVotesRepository } from "./integrationVotes.js";
 export { invitesRepository, type InvitesRepository } from "./invites.js";
 export { loginTokensRepository, type LoginTokensRepository } from "./loginTokens.js";
 export { findAllMessagesBySession, findMessageByHash, findMessagesBySession, findRecentMessagesBySessions, insertMessage } from "./messages.js";

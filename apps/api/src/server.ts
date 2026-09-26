@@ -13,6 +13,7 @@ import { registerAttestationsRoutes } from "./routes/attestations.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerClaimsRoutes } from "./routes/claims.js";
 import { registerCloseRoutes } from "./routes/close.js";
+import { registerIntegrationsRoutes } from "./routes/integrations.js";
 import { registerInvitesRoutes } from "./routes/invites.js";
 import { registerLiveRoutes } from "./routes/live.js";
 import { registerMessagesRoutes } from "./routes/messages.js";
@@ -60,6 +61,8 @@ export interface ServerDeps {
    * the network call instead of standing up a real public HTTPS server (which the real
    * implementation's SSRF guard would refuse to fetch from anyway). */
   checkDomainVerification: (domain: string, token: string) => Promise<boolean>;
+  /** Lowercased owner emails allowed to use /v1/admin/* (Prompt 23). Empty means nobody. */
+  adminEmails: string[];
 }
 
 const CHECK_TIMEOUT_MS = 2_000;
@@ -123,6 +126,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerRecordsRoutes(app, deps);
   registerVerifyRoutes(app, deps);
   registerLiveRoutes(app, deps);
+  registerIntegrationsRoutes(app, deps);
 
   const wsHub = createWsHub(deps.db);
   app.register(registerWs, { deps, hub: wsHub });

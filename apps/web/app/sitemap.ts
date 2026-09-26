@@ -23,5 +23,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${baseUrl}/security`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
     { url: `${baseUrl}/live`, lastModified: now, changeFrequency: "always", priority: 0.8 },
     { url: `${baseUrl}/directory`, lastModified: now, changeFrequency: "hourly", priority: 0.6 },
+    { url: `${baseUrl}/integrations`, lastModified: now, changeFrequency: "daily", priority: 0.7 },
   ];
 }

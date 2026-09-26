@@ -1,0 +1,189 @@
+.main {
+  padding-block: 48px 64px;
+}
+
+.masthead {
+  margin-bottom: 28px;
+}
+
+.title {
+  font-size: clamp(26px, 5vw, 36px);
+  line-height: 1.1;
+  margin: 12px 0 14px;
+}
+
+.lede {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: var(--measure);
+  margin: 0;
+}
+
+.lede a {
+  color: var(--accent-text);
+}
+
+.empty {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 48px;
+}
+
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.name {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.statusBadge {
+  flex-shrink: 0;
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+}
+
+.status_native,
+.status_available {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.desc {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.voteButton {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule-strong);
+  background: var(--bg-subtle);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.voteButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.link,
+.evidenceToggle {
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.evidenceList {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.requestSection {
+  max-width: var(--measure);
+  border-top: 1px solid var(--rule);
+  padding-top: 28px;
+}
+
+.requestTitle {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+
+.requestForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.input,
+.textarea {
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--ink);
+}
+
+.textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.submitButton {
+  align-self: flex-start;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: var(--og-near-black);
+  cursor: pointer;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: var(--accent-text);
+}
+
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.errorText {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
