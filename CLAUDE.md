@@ -19,6 +19,7 @@ TypeScript monorepo using pnpm workspaces:
 | `/core-py`     | `openglass-core` — reference `openglass-policy` evaluator + attestation client (Python) |
 | `/otel-js`     | `openglass-otel` — OpenTelemetry GenAI `SpanProcessor` integration (TS) |
 | `/otel-py`     | `openglass-otel` — OpenTelemetry GenAI `SpanProcessor` integration (Python) |
+| `/langchain-py` | `openglass-langchain` — LangChain `BaseCallbackHandler` integration (Python) |
 | `/integrations` | Adapter skeleton + conformance tests for building a new integration |
 | `/spec/openglass-policy` | Versioned YAML risk-policy format + JSON Schema, vendor-neutral |
 | `/infra`       | AWS CDK stack (ECR, EC2, S3, KMS, Route 53, SES, SSM, budget) |

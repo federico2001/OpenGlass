@@ -1,0 +1,7 @@
+# openglass-core and openglass-langchain aren't published to PyPI yet (see their own
+# READMEs), so this points at the local packages in this repo — once they ship, these
+# two lines become ordinary version pins, like openglass-sdk already is.
+openglass-sdk>=0.1.0
+-e ../../core-py
+-e ../../langchain-py
+langchain-core>=0.3.0
