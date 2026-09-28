@@ -28,6 +28,10 @@ export const RATE_LIMIT_RULES = {
   integration_request: { limit: 10, windowMs: 3_600_000 },
   read: { limit: 600, windowMs: 60_000 },
   verify: { limit: 30, windowMs: 60_000 },
+  /** Realignment R2 (docs/SPEC.md §14). Lower than `read`/`verify` — an unregistered-agent
+   * lookup can trigger up to three outbound fetches (agent card, MCP registry, RDAP), so
+   * this is bounded more like an outbound-request budget than a plain DB read. */
+  lookup: { limit: 60, windowMs: 60_000 },
   unauthenticated_default: { limit: 120, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 

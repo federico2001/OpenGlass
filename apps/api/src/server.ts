@@ -16,6 +16,7 @@ import { registerCloseRoutes } from "./routes/close.js";
 import { registerIntegrationsRoutes } from "./routes/integrations.js";
 import { registerInvitesRoutes } from "./routes/invites.js";
 import { registerLiveRoutes } from "./routes/live.js";
+import { registerLookupRoutes } from "./routes/lookup.js";
 import { registerMessagesRoutes } from "./routes/messages.js";
 import { registerOwnerRoutes } from "./routes/owner.js";
 import { registerPremiumRoutes, requireExistingRecordForPremiumRoutes, requireWithinSpendLimit } from "./routes/premium.js";
@@ -132,6 +133,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerRecordsRoutes(app, deps);
   registerSealingRoutes(app, deps);
   registerVerifyRoutes(app, deps);
+  registerLookupRoutes(app, deps);
   registerLiveRoutes(app, deps);
   registerIntegrationsRoutes(app, deps);
 

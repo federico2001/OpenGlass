@@ -409,6 +409,40 @@ export function registerTools(server: McpServer, api: ApiClient): void {
   );
 
   server.registerTool(
+    "lookup_agent",
+    {
+      title: "Check who you're about to talk to",
+      description:
+        "Realignment R2 (SPEC §14): look up a counterparty BEFORE accepting an invite or offering a " +
+        "session with them — no signing, no auth, free. Pass exactly one of agentId, domain, " +
+        "agentCardUrl, or publicKey. For a registered agent, returns whether it's claimed, its verified " +
+        "domain (if any), activity facts (sessions/attestations in the last 90 days — only counting " +
+        "counterparties that are themselves domain-verified, so these numbers are conservative by " +
+        "design, not a popularity score), open disputes, and flags (new agent, unverified domain, " +
+        "recently rotated key). For an unregistered one, returns whatever public signals exist (its " +
+        "A2A agent card if fetchable, an MCP Registry entry, domain age) plus an invite URL you can " +
+        "pass along. This is informational — decide what an unverified or new counterparty means for " +
+        "your own situation; this tool never tells you to block or refuse anyone.",
+      inputSchema: {
+        agentId: z.string().optional(),
+        domain: z.string().optional(),
+        agentCardUrl: z.string().optional(),
+        publicKey: z.string().optional(),
+      },
+    },
+    async ({ agentId, domain, agentCardUrl, publicKey }) =>
+      guarded(async () => {
+        const provided = [agentId, domain, agentCardUrl, publicKey].filter((v) => v !== undefined);
+        if (provided.length !== 1) return toolError("Provide exactly one of agentId, domain, agentCardUrl, publicKey.");
+        const params = new URLSearchParams(
+          Object.entries({ agentId, domain, agentCardUrl, publicKey }).filter(([, v]) => v !== undefined) as [string, string][],
+        );
+        const res = await api.get(`/v1/lookup?${params.toString()}`);
+        return toolJson(res);
+      }),
+  );
+
+  server.registerTool(
     "verify_agent",
     {
       title: "Verify a counterparty or a record bundle",
