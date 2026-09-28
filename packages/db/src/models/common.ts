@@ -13,6 +13,7 @@ export const InviteId = prefixedId("inv");
 export const MessageId = prefixedId("msg");
 export const RecordId = prefixedId("rec");
 export const ViewerGrantId = prefixedId("vwg");
+export const ViewerAccessLogId = prefixedId("val");
 export const AttestationId = prefixedId("att");
 export const IntegrationVoteId = prefixedId("ivt");
 export const IntegrationRequestId = prefixedId("irq");

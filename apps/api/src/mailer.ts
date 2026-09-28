@@ -1,9 +1,14 @@
 import type { Config } from "./config.js";
 
+/** Realignment R4 (docs/SPEC.md §15): the four oversight-alert triggers. One shared
+ * template rather than four near-identical ones — each just supplies its own heading/copy. */
+export type OversightAlertKind = "new_counterparty" | "unverified_counterparty" | "high_risk_action" | "dispute_raised";
+
 export interface Mailer {
   sendMagicLink(to: string, url: string): Promise<void>;
   sendRecordIssued(to: string, recordUrl: string): Promise<void>;
   sendViewerInvite(to: string, agentName: string, loginUrl: string): Promise<void>;
+  sendOversightAlert(to: string, kind: OversightAlertKind, detail: string, url: string): Promise<void>;
 }
 
 interface EmailContent {
@@ -89,6 +94,50 @@ function recordIssuedEmail(recordUrl: string): EmailContent {
   };
 }
 
+const ALERT_COPY: Record<OversightAlertKind, { subject: string; heading: string; intro: string; ctaText: string }> = {
+  new_counterparty: {
+    subject: "New counterparty on one of your agents",
+    heading: "New counterparty",
+    intro: "One of your agents just started interacting with a counterparty it hasn't dealt with before.",
+    ctaText: "Review",
+  },
+  unverified_counterparty: {
+    subject: "Unverified counterparty on one of your agents",
+    heading: "Unverified counterparty",
+    intro: "One of your agents is talking to a counterparty whose domain isn't verified — its identity hasn't been independently confirmed.",
+    ctaText: "Review",
+  },
+  high_risk_action: {
+    subject: "High-risk action attested",
+    heading: "High-risk action",
+    intro: "One of your agents just attested a high-risk action, per its risk policy.",
+    ctaText: "Review",
+  },
+  dispute_raised: {
+    subject: "A record was disputed",
+    heading: "Dispute raised",
+    intro: "A counterparty raised a dispute on a sealed record involving one of your agents, force-unsealing it.",
+    ctaText: "View record",
+  },
+};
+
+function oversightAlertEmail(kind: OversightAlertKind, detail: string, url: string): EmailContent {
+  const copy = ALERT_COPY[kind];
+  const safeDetail = escapeHtml(detail);
+  return {
+    subject: copy.subject,
+    text: `${copy.heading}\n\n${copy.intro}\n\n${detail}\n\n${url}`,
+    html: renderEmail({
+      preheader: copy.subject,
+      heading: copy.heading,
+      intro: `${copy.intro}<br/><br/>${safeDetail}`,
+      ctaText: copy.ctaText,
+      ctaUrl: url,
+      note: "You're receiving this because you enabled oversight alerts for this agent. Manage alert settings from your dashboard.",
+    }),
+  };
+}
+
 /** `awsRegion` is only used for `EMAIL=ses` — passed separately (rather than added to
  * `Config`) since it's the same AWS region already configured for S3/KMS, not a
  * mail-specific setting. */
@@ -103,9 +152,23 @@ export function createMailer(config: Pick<Config, "EMAIL" | "SMTP_URL" | "EMAIL_
 /** Never actually sends; captures what would have been sent so tests can assert on it
  * without a real SMTP/SES round trip. */
 export function createCapturingMailer(): Mailer & {
-  sent: { kind: "magic_link" | "record_issued" | "viewer_invite"; to: string; url: string; agentName?: string }[];
+  sent: {
+    kind: "magic_link" | "record_issued" | "viewer_invite" | "oversight_alert";
+    to: string;
+    url: string;
+    agentName?: string;
+    alertKind?: OversightAlertKind;
+    detail?: string;
+  }[];
 } {
-  const sent: { kind: "magic_link" | "record_issued" | "viewer_invite"; to: string; url: string; agentName?: string }[] = [];
+  const sent: {
+    kind: "magic_link" | "record_issued" | "viewer_invite" | "oversight_alert";
+    to: string;
+    url: string;
+    agentName?: string;
+    alertKind?: OversightAlertKind;
+    detail?: string;
+  }[] = [];
   return {
     sent,
     async sendMagicLink(to, url) {
@@ -116,6 +179,9 @@ export function createCapturingMailer(): Mailer & {
     },
     async sendViewerInvite(to, agentName, url) {
       sent.push({ kind: "viewer_invite", to, url, agentName });
+    },
+    async sendOversightAlert(to, alertKind, detail, url) {
+      sent.push({ kind: "oversight_alert", to, url, alertKind, detail });
     },
   };
 }
@@ -145,6 +211,11 @@ function createSmtpMailer(opts: { url: string; from: string }): Mailer {
       const { subject, text, html } = viewerInviteEmail(agentName, loginUrl);
       await t.sendMail({ from: opts.from, to, subject, text, html });
     },
+    async sendOversightAlert(to, kind, detail, url) {
+      const t = await getTransport();
+      const { subject, text, html } = oversightAlertEmail(kind, detail, url);
+      await t.sendMail({ from: opts.from, to, subject, text, html });
+    },
   };
 }
 
@@ -166,5 +237,6 @@ function createSesMailer(opts: { from: string; region?: string }): Mailer {
     sendMagicLink: (to, url) => send(to, magicLinkEmail(url)),
     sendRecordIssued: (to, recordUrl) => send(to, recordIssuedEmail(recordUrl)),
     sendViewerInvite: (to, agentName, loginUrl) => send(to, viewerInviteEmail(agentName, loginUrl)),
+    sendOversightAlert: (to, kind, detail, url) => send(to, oversightAlertEmail(kind, detail, url)),
   };
 }

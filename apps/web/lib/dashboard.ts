@@ -6,7 +6,7 @@ export interface Owner {
   id: string;
   email: string;
   displayName: string | null;
-  settings: { requireInviteApproval: boolean; emailOnRecord: boolean; publicFeedOptIn?: boolean };
+  settings: { requireInviteApproval: boolean; emailOnRecord: boolean; publicFeedOptIn?: boolean; oversightAlerts?: boolean };
   createdAt: string;
 }
 
@@ -35,6 +35,8 @@ export interface OwnerAgent {
   spendLimitUsdCents: number | null;
   totalSpendUsdCents: number;
   publicDirectory: boolean;
+  privateRetentionDays: number | null;
+  defaultVisibility: "private" | "sealed" | "shared" | null;
 }
 
 export interface AgentPublic {
@@ -74,6 +76,30 @@ export interface OwnerSession {
   closedAt: string | null;
   recordId: string | null;
   pause: SessionPause | null;
+  visibility?: "private" | "sealed" | "shared" | null;
+}
+
+export interface OwnerAttestation {
+  id: string;
+  mode: "relay" | "notary";
+  status: "active" | "closing" | "closed";
+  purpose: string;
+  attestor: { agentId: string; ownerId: string; kid: string };
+  eventCount: number;
+  createdAt: string;
+  activatedAt: string;
+  closedAt: string | null;
+  recordId: string | null;
+  visibility?: "private" | "sealed" | "shared" | null;
+}
+
+export interface SealedState {
+  status: "sealed" | "unseal_requested" | "unsealed" | "disputed";
+  requestedBy: string | null;
+  approvals: string[];
+  unsealedAt?: string | null;
+  disputedBy: string | null;
+  disputedAt?: string | null;
 }
 
 export interface ViewerGrant {
@@ -85,6 +111,14 @@ export interface ViewerGrant {
   status: "active" | "revoked";
   createdAt: string;
   revokedAt: string | null;
+  scope: "read" | "export" | "manage";
+}
+
+export interface AccessLogEntry {
+  viewerEmail: string;
+  action: "list_sessions" | "list_attestations" | "list_records" | "view_record_bundle";
+  resourceId: string | null;
+  at: string;
 }
 
 export interface ViewerAccessItem {
@@ -138,6 +172,8 @@ export interface RecordSummary {
   statementHash: string;
   evidence: { sha256: string; bytes: number };
   createdAt: string;
+  visibility?: "private" | "sealed" | "shared" | null;
+  sealedState?: SealedState | null;
 }
 
 export interface VerifyResult {

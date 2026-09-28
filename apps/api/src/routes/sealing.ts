@@ -1,5 +1,6 @@
 import { approveUnseal, disputeSeal, findRecordById, requestUnseal, type RecordDoc } from "@openglass/db";
 import type { FastifyInstance } from "fastify";
+import { notifyDisputeRaised } from "../domain/alerts.js";
 import { sendError } from "../errors.js";
 import { verifyOwnerSession } from "../plugins/ownerAuth.js";
 import type { ServerDeps } from "../server.js";
@@ -75,6 +76,9 @@ export function registerSealingRoutes(app: FastifyInstance, deps: ServerDeps): v
     if (record.visibility !== "sealed") return sendError(reply, 409, "not_sealed", "This record is not visibility: sealed");
     const updated = await disputeSeal(deps.db, record._id, req.owner!._id);
     if (!updated) return sendError(reply, 409, "already_unsealed", "This record is already fully unsealed");
+    notifyDisputeRaised(deps.db, deps.mailer, req.log, record._id, record.participantOwnerIds, req.owner!._id, deps.publicUrl).catch((err) =>
+      req.log.warn({ err }, "failed to run dispute oversight alert check"),
+    );
     return sealedStateView(updated);
   });
 }

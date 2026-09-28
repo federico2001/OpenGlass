@@ -4,6 +4,7 @@ import { openTestDb } from "../../../../packages/db/test/testDb.js";
 import { buildServer } from "../../src/server.js";
 import {
   buildAccept,
+  buildAttestationOpen,
   buildOffer,
   claimAgentDirectly,
   createOwnerSessionCookie,
@@ -11,6 +12,7 @@ import {
   signedRequestHeaders,
   testIdentity,
   testServerDeps,
+  type TestAgentIdentity,
 } from "../helpers.js";
 
 let t: Awaited<ReturnType<typeof openTestDb>>;
@@ -21,7 +23,7 @@ afterAll(async () => {
   await t.cleanup();
 });
 beforeEach(async () => {
-  for (const c of ["agents", "owners", "sessions", "invites", "web_sessions", "request_nonces", "rate_limits"]) {
+  for (const c of ["agents", "owners", "sessions", "invites", "attestations", "web_sessions", "request_nonces", "rate_limits"]) {
     await t.db.collection(c).deleteMany({});
   }
 });
@@ -205,5 +207,103 @@ describe("PATCH /v1/owner/agents/{id}/retention (realignment R1, docs/SPEC.md §
       payload: { privateRetentionDays: 30 },
     });
     expect(wrongOwner.statusCode).toBe(404);
+  });
+});
+
+describe("PATCH /v1/owner/agents/{id}/visibility-default (realignment R4, docs/SPEC.md §15)", () => {
+  it("fills in an omitted session visibility, without overriding an explicit request", async () => {
+    const owner = await insertTestOwner(t.db, `visdef_${newId("own").slice(-6)}@example.com`);
+    const counterpartyOwner = await insertTestOwner(t.db, `visdef_cp_${newId("own").slice(-6)}@example.com`);
+    const initiator = await registerAndClaimFor(`visdef_init_${newId("agt").slice(-6)}`, owner._id);
+    const counterparty = await registerAndClaimFor(`visdef_cp_${newId("agt").slice(-6)}`, counterpartyOwner._id);
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const server = app();
+
+    const setRes = await server.inject({
+      method: "PATCH",
+      url: `/v1/owner/agents/${initiator.agentId}/visibility-default`,
+      headers: { cookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { defaultVisibility: "shared" },
+    });
+    expect(setRes.statusCode).toBe(200);
+    expect(setRes.json().agent.defaultVisibility).toBe("shared");
+
+    const { offer, offerSignature } = buildOffer({ sessionId: newId("ses"), initiator, counterpartyAgentId: counterparty.agentId });
+    const omittedBody = { offer, offerSignature }; // no `visibility` field at all
+    const omittedHeaders = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body: omittedBody, identity: initiator });
+    const omittedRes = await server.inject({ method: "POST", url: "/v1/sessions", headers: omittedHeaders, payload: omittedBody });
+    expect(omittedRes.statusCode).toBe(201);
+    expect(omittedRes.json().session.visibility).toBe("shared"); // agent default, not the platform's "sealed"
+
+    const { offer: offer2, offerSignature: offerSignature2 } = buildOffer({
+      sessionId: newId("ses"),
+      initiator,
+      counterpartyAgentId: counterparty.agentId,
+    });
+    const explicitBody = { offer: offer2, offerSignature: offerSignature2, visibility: "sealed" as const };
+    const explicitHeaders = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body: explicitBody, identity: initiator });
+    const explicitRes = await server.inject({ method: "POST", url: "/v1/sessions", headers: explicitHeaders, payload: explicitBody });
+    expect(explicitRes.statusCode).toBe(201);
+    expect(explicitRes.json().session.visibility).toBe("sealed"); // explicit request wins over the agent default
+
+    const clearRes = await server.inject({
+      method: "PATCH",
+      url: `/v1/owner/agents/${initiator.agentId}/visibility-default`,
+      headers: { cookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { defaultVisibility: null },
+    });
+    expect(clearRes.statusCode).toBe(200);
+    expect(clearRes.json().agent.defaultVisibility).toBeNull();
+  });
+
+  it("404s for an agent belonging to a different owner", async () => {
+    const owner = await insertTestOwner(t.db, `visdef_other_${newId("own").slice(-6)}@example.com`);
+    const stranger = await insertTestOwner(t.db, `visdef_stranger_${newId("own").slice(-6)}@example.com`);
+    const agent = await registerAndClaimFor(`visdef_agent_${newId("agt").slice(-6)}`, owner._id);
+    const strangerCookie = await createOwnerSessionCookie(t.db, stranger._id);
+
+    const res = await app().inject({
+      method: "PATCH",
+      url: `/v1/owner/agents/${agent.agentId}/visibility-default`,
+      headers: { cookie: strangerCookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { defaultVisibility: "shared" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("GET /v1/owner/attestations (realignment R4, docs/SPEC.md §15)", () => {
+  async function openAttestation(server: ReturnType<typeof app>, attestor: TestAgentIdentity) {
+    const { open, openSignature } = buildAttestationOpen({ attestationId: newId("att"), attestor });
+    const body = { open, openSignature };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/attestations", body, identity: attestor });
+    return server.inject({ method: "POST", url: "/v1/attestations", headers, payload: body });
+  }
+
+  it("lists only the caller's own attestations, filterable by status", async () => {
+    const owner = await insertTestOwner(t.db, `att_owner_${newId("own").slice(-6)}@example.com`);
+    const otherOwner = await insertTestOwner(t.db, `att_other_${newId("own").slice(-6)}@example.com`);
+    const attestor = await registerAndClaimFor(`att_mine_${newId("agt").slice(-6)}`, owner._id);
+    const otherAttestor = await registerAndClaimFor(`att_theirs_${newId("agt").slice(-6)}`, otherOwner._id);
+    const server = app();
+
+    const mineRes = await openAttestation(server, attestor);
+    expect(mineRes.statusCode).toBe(201);
+    const mineId = mineRes.json().attestation.id as string;
+    const theirsRes = await openAttestation(server, otherAttestor);
+    expect(theirsRes.statusCode).toBe(201);
+
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const listRes = await server.inject({ method: "GET", url: "/v1/owner/attestations", headers: { cookie } });
+    expect(listRes.statusCode).toBe(200);
+    const ids = (listRes.json().items as { id: string }[]).map((i) => i.id);
+    expect(ids).toContain(mineId);
+    expect(ids).toHaveLength(1); // not the other owner's attestation
+
+    const filteredRes = await server.inject({ method: "GET", url: "/v1/owner/attestations?status=active", headers: { cookie } });
+    expect((filteredRes.json().items as { id: string }[]).map((i) => i.id)).toContain(mineId);
+
+    const closedRes = await server.inject({ method: "GET", url: "/v1/owner/attestations?status=closed", headers: { cookie } });
+    expect(closedRes.json().items).toHaveLength(0); // the attestation is still active, not closed
   });
 });

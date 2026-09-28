@@ -12,8 +12,16 @@ declare module "fastify" {
     /** Agents this owner-authenticated caller holds an active human viewer grant for
      * (Prompt 6), keyed by their verified email — see domain/access.ts. Always set once
      * `owner` is set (possibly empty), so callers don't need to distinguish "not an owner
-     * request" from "no viewer grants". */
+     * request" from "no viewer grants". Derived from `viewerGrantScopes` below; kept as
+     * its own field since most call sites only need "can they read this at all", not the
+     * specific scope. */
     viewerAgentIds?: Set<string>;
+    /** Realignment R4 (docs/SPEC.md §15): the scope of each viewer grant above, by
+     * agentId — "read" (view only) vs "export" (also download a record's full bundle) vs
+     * "manage" (reserved, see collections.ts's own doc comment). Lets a route distinguish
+     * "this caller can see the record exists" from "this caller can download its full
+     * evidence" without a second DB round trip. */
+    viewerGrantScopes?: Map<string, "read" | "export" | "manage">;
   }
 }
 
@@ -55,6 +63,8 @@ export function verifyOwnerSession(db: Db, opts: { webOrigin: string; requireOri
       return sendError(reply, 401, "unauthenticated", "Owner not found or disabled");
     }
     req.owner = owner;
-    req.viewerAgentIds = new Set((await viewerGrants.listActiveForViewer(owner.email)).map((g) => g.agentId));
+    const grants = await viewerGrants.listActiveForViewer(owner.email);
+    req.viewerAgentIds = new Set(grants.map((g) => g.agentId));
+    req.viewerGrantScopes = new Map(grants.map((g) => [g.agentId, g.scope ?? "read"]));
   };
 }

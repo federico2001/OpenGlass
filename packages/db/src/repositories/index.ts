@@ -24,5 +24,6 @@ export {
 } from "./records.js";
 export { requestNoncesRepository, type RequestNoncesRepository } from "./requestNonces.js";
 export { sessionsRepository, type SessionsRepository } from "./sessions.js";
+export { viewerAccessLogRepository, type ViewerAccessLogRepository } from "./viewerAccessLog.js";
 export { viewerGrantsRepository, type ViewerGrantsRepository } from "./viewerGrants.js";
 export { webSessionsRepository, type WebSessionsRepository } from "./webSessions.js";

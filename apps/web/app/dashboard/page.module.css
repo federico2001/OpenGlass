@@ -17,6 +17,31 @@
   word-break: break-word;
 }
 
+.buttonRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.navLink {
+  flex-shrink: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 8px 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.navLink:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
 .signOut {
   flex-shrink: 0;
   font-family: var(--font-ui);

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   AgentId, AttestationId, ChainSubjectId, Hash, IntegrationRequestId, IntegrationVoteId, InviteId, KeyId, MessageId,
-  ObjectIdSchema, OwnerId, PublicKey, RecordId, SessionId, Signature, Kid, ViewerGrantId,
+  ObjectIdSchema, OwnerId, PublicKey, RecordId, SessionId, Signature, Kid, ViewerAccessLogId, ViewerGrantId,
 } from "./common.js";
 import { Accept, AttestationOpen, CloseReason, CloseStatement, MessageEnvelope, Mode, Offer, RecordRetention, RecordStatement } from "./protocol.js";
 import { defineCollection } from "./define.js";
@@ -29,6 +29,13 @@ export const owners = defineCollection({
        * participates in into the public feed, once the *other* owner also opts in.
        * Optional so existing owner documents remain valid — read as `?? false`. */
       publicFeedOptIn: z.boolean().optional(),
+      /** Realignment R4 (docs/SPEC.md §15): email alerts for a new counterparty, an
+       * unverified counterparty, a high-risk attested action, or a dispute raised — see
+       * apps/api/src/domain/alerts.ts. Optional/absent means on (`?? true`) — an
+       * oversight feature that ships opt-out, unlike `publicFeedOptIn` above which ships
+       * opt-in, since staying silent by default would undercut the whole point of "owner
+       * dashboard as oversight". */
+      oversightAlerts: z.boolean().optional(),
     }),
     status: z.enum(["active", "disabled"]),
     createdAt: z.date(),
@@ -116,6 +123,13 @@ export const agents = defineCollection({
      * too, so a lookup can report "claims this domain, unverified" instead of a false
      * not_found for an agent that exists but hasn't proven it yet. */
     homepageDomain: z.string().max(253).nullable().optional(),
+    /** Realignment R4 (docs/SPEC.md §13/§15): owner-set per-agent default for
+     * `visibility` when a session/attestation-open request omits it — read by
+     * apps/api/src/domain/visibility.ts's `effectiveVisibility` ahead of the hardcoded
+     * platform default (sealed for sessions, private for attestations). `null`/absent
+     * means "use the platform default", not "shared" — this never widens exposure by
+     * itself. Owner-set via `PATCH /v1/owner/agents/{id}/visibility-default`. */
+    defaultVisibility: Visibility.nullable().optional(),
   }),
   indexes: [
     { name: "keys_publicKey_unique", key: { "keys.publicKey": 1 }, unique: true },
@@ -409,12 +423,43 @@ export const viewerGrants = defineCollection({
     status: z.enum(["active", "revoked"]),
     createdAt: z.date(),
     revokedAt: z.date().nullable(),
+    /** Realignment R4 (docs/SPEC.md §15). Optional/absent means "read" — every grant
+     * created before this field existed keeps exactly its original (read-only) behavior.
+     * "read": list/view sessions, attestations, and record summaries. "export": read,
+     * plus download a record's full verifiable bundle (GET .../bundle) — a real step up,
+     * since the bundle carries the full evidence, not just that a session happened.
+     * "manage" is reserved: stored and shown in the dashboard, but doesn't yet grant any
+     * write capability beyond export — see docs/SPEC.md §15 before relying on it for
+     * anything more than read/export. */
+    scope: z.enum(["read", "export", "manage"]).optional(),
   }),
   indexes: [
     { name: "agent_viewerEmail_unique", key: { agentId: 1, viewerEmail: 1 }, unique: true },
     { name: "viewerEmail_status", key: { viewerEmail: 1, status: 1 } },
     { name: "ownerId_createdAt", key: { ownerId: 1, createdAt: -1 } },
   ],
+});
+
+/** Realignment R4 (docs/SPEC.md §15): "an audit log of who viewed what" — one row per
+ * read a viewer-grant holder (never the owner/agent themselves, who don't need auditing
+ * on their own data) makes against a granted agent's sessions/attestations/records.
+ * Append-only in spirit (a log entry is never edited or deleted once written) even
+ * though it isn't marked `appendOnly: true` here — unlike `messages`/`records`, nothing
+ * about this collection's integrity depends on a hash chain or a signature, so the
+ * stricter enforced-in-code guarantee (D12) isn't needed; ordinary insert-only
+ * application code is enough. */
+export const viewerAccessLog = defineCollection({
+  name: "viewer_access_log",
+  schema: z.strictObject({
+    _id: ViewerAccessLogId,
+    ownerId: OwnerId, // whose data was viewed — lets that owner query "who's been looking at my stuff"
+    agentId: AgentId,
+    viewerEmail: z.string().max(254),
+    action: z.enum(["list_sessions", "list_attestations", "list_records", "view_record_bundle"]),
+    resourceId: z.string().nullable(), // a session/attestation/record id for a single-resource action; null for a list
+    at: z.date(),
+  }),
+  indexes: [{ name: "ownerId_agentId_at", key: { ownerId: 1, agentId: 1, at: -1 } }],
 });
 
 /** Prompt 23: the public `/integrations` request board. The framework catalog itself
@@ -563,7 +608,7 @@ export const migrationLock = defineCollection({
 });
 
 export const allCollections = [
-  owners, agents, sessions, attestations, invites, messages, records, viewerGrants,
+  owners, agents, sessions, attestations, invites, messages, records, viewerGrants, viewerAccessLog,
   integrationStatusOverrides, integrationVotes, integrationRequests,
   loginTokens, webSessions, requestNonces, rateLimits, activitySnapshots,
   changelog, migrationLock,
@@ -577,6 +622,7 @@ export type InviteDoc = z.infer<typeof invites.schema>;
 export type MessageDoc = z.infer<typeof messages.schema>;
 export type RecordDoc = z.infer<typeof records.schema>;
 export type ViewerGrantDoc = z.infer<typeof viewerGrants.schema>;
+export type ViewerAccessLogDoc = z.infer<typeof viewerAccessLog.schema>;
 export type IntegrationStatusOverrideDoc = z.infer<typeof integrationStatusOverrides.schema>;
 export type IntegrationVoteDoc = z.infer<typeof integrationVotes.schema>;
 export type IntegrationRequestDoc = z.infer<typeof integrationRequests.schema>;
