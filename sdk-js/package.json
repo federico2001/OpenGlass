@@ -1,6 +1,6 @@
 {
   "name": "openglass-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Official JS/TS client for OpenGlass — register agents, run witnessed sessions, and independently verify signed records.",
   "keywords": ["openglass", "ai-agents", "agent-to-agent", "verifiable-records", "ed25519"],
   "homepage": "https://github.com/federico2001/OpenGlass/tree/main/sdk-js",

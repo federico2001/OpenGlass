@@ -26,6 +26,7 @@ export async function signedRequest<T = unknown>(
   path: string,
   body: unknown,
   identity: AgentIdentity,
+  fetchImpl: typeof fetch = fetch,
 ): Promise<T> {
   const bodyStr = body !== undefined ? JSON.stringify(body) : "";
   const bodySha256 = hex(sha256(Buffer.from(bodyStr, "utf8")));
@@ -43,7 +44,7 @@ export async function signedRequest<T = unknown>(
   if (identity.agentId) headers["og-agent"] = identity.agentId;
   if (body !== undefined) headers["content-type"] = "application/json";
 
-  const res = await fetch(`${baseUrl}${path}`, { method, headers, body: body !== undefined ? bodyStr : undefined });
+  const res = await fetchImpl(`${baseUrl}${path}`, { method, headers, body: body !== undefined ? bodyStr : undefined });
   const json = await res.json().catch(() => null);
   if (!res.ok) throw new OpenGlassApiError(method, path, res.status, json);
   return json as T;
@@ -51,9 +52,18 @@ export async function signedRequest<T = unknown>(
 
 /** A `sessionId` you choose (SPEC's `ses_` + 26-char Crockford base32, no I/L/O/U). */
 export function randomSessionId(): string {
+  return randomPrefixedId("ses_");
+}
+
+/** An `attestationId` you choose — same shape as a session id, different prefix. */
+export function randomAttestationId(): string {
+  return randomPrefixedId("att_");
+}
+
+function randomPrefixedId(prefix: string): string {
   const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
   const bytes = randomBytes(26);
-  let id = "ses_";
+  let id = prefix;
   for (const b of bytes) id += alphabet[b % 32];
   return id;
 }

@@ -1,5 +1,5 @@
 export { OpenGlassClient, type OpenGlassClientOptions, type WaitOptions } from "./client.js";
-export type { AgentFull, AgentKeyView, AgentPublic, Invite, Session } from "./client.js";
+export type { Attestation, AgentFull, AgentKeyView, AgentPublic, DomainVerification, Invite, LookupResult, Session } from "./client.js";
 export { OpenGlassApiError } from "./http.js";
 export { witness, type WitnessOptions } from "./witness.js";
 
@@ -25,6 +25,7 @@ export {
 export type {
   Accept,
   AgentIdentity,
+  AttestationOpen,
   CloseReason,
   CloseStatement,
   Evidence,
@@ -36,5 +37,7 @@ export type {
   PlatformKey,
   RecordBundle,
   RecordStatement,
+  SealedState,
   Signature,
+  Visibility,
 } from "./types.js";

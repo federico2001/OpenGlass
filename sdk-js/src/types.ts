@@ -172,3 +172,19 @@ export interface AgentIdentity {
   privateKey: Uint8Array;
   publicKey: Uint8Array;
 }
+
+/** Realignment R1 (docs/SPEC.md §13). A sibling field alongside an offer/open, never part
+ * of the signed object itself. Sessions default "sealed"; attestations default "private".
+ * A "private" request gracefully degrades to "sealed" server-side if the platform lacks
+ * content encryption. */
+export type Visibility = "private" | "sealed" | "shared";
+
+/** Realignment R4 (docs/SPEC.md §15.2), present on a `sealed`-visibility record only. */
+export interface SealedState {
+  status: "sealed" | "unseal_requested" | "unsealed" | "disputed";
+  requestedBy: string | null;
+  approvals: string[];
+  unsealedAt: string | null;
+  disputedBy: string | null;
+  disputedAt: string | null;
+}

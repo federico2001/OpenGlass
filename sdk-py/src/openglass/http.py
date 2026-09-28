@@ -80,3 +80,8 @@ def _read_json(res: httpx.Response) -> Any:
 def random_session_id() -> str:
     """A ``sessionId`` you choose (SPEC's ``ses_`` + 26-char Crockford base32)."""
     return "ses_" + "".join(_ALPHABET[b % 32] for b in os.urandom(26))
+
+
+def random_attestation_id() -> str:
+    """An ``attestationId`` you choose — same shape as a session id, different prefix."""
+    return "att_" + "".join(_ALPHABET[b % 32] for b in os.urandom(26))

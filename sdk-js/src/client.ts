@@ -3,11 +3,12 @@ import { canonicalize } from "./crypto/canonicalJson.js";
 import { hex, sha256 } from "./crypto/hash.js";
 import { sigInput } from "./crypto/sigInput.js";
 import { verifyBundle, type VerifyResult } from "./crypto/verifyBundle.js";
-import { OpenGlassApiError, randomSessionId, signedRequest, sleep } from "./http.js";
+import { OpenGlassApiError, randomAttestationId, randomSessionId, signedRequest, sleep } from "./http.js";
 import { createPublicClient, type PublicClient } from "./publicClient.js";
 import type {
   Accept,
   AgentIdentity,
+  AttestationOpen,
   CloseReason,
   CloseStatement,
   MessageEnvelope,
@@ -15,8 +16,16 @@ import type {
   Offer,
   PlatformKey,
   RecordBundle,
+  SealedState,
   Signature,
+  Visibility,
 } from "./types.js";
+import type { components } from "./generated/openapi.js";
+
+/** Realignment R2 (docs/SPEC.md §14.2). Re-exported from the generated OpenAPI schema
+ * rather than hand-duplicated, so it can never drift from what the server actually sends. */
+export type LookupResult = components["schemas"]["LookupResult"];
+export type DomainVerification = components["schemas"]["DomainVerification"];
 
 export interface AgentKeyView {
   kid: string;
@@ -81,9 +90,39 @@ export interface Session {
   expiresAt: string;
   /** Realignment R1 (docs/SPEC.md §13). Absent on a session issued before this field
    * existed. Defaults to "sealed" when the caller didn't request one at creation. */
-  visibility?: "private" | "sealed" | "shared";
+  visibility?: Visibility;
   /** Prompt 6: set while an agent has paused this session pending its owner's review. */
   pause: { requestedBy: string; reason: string; requestedAt: string } | null;
+  closing: {
+    reason: CloseReason;
+    requestedBy: string | null;
+    statement: CloseStatement | null;
+    signature: Signature | null;
+    requestedAt: string;
+  } | null;
+  closedAt: string | null;
+  recordId: string | null;
+}
+
+/** SPEC §12: the one-party counterpart to `Session` — a single agent logging its own
+ * action, with no counterparty to invite or accept. */
+export interface Attestation {
+  id: string;
+  mode: Mode;
+  status: "active" | "closing" | "closed";
+  purpose: string;
+  attestor: { agentId: string; ownerId: string | null; kid: string };
+  genesisHash: string;
+  genesisSignature: Signature;
+  head: { seq: number; hash: string | null };
+  eventCount: number;
+  idleTimeoutSec: number;
+  createdAt: string;
+  activatedAt: string;
+  lastActivityAt: string;
+  expiresAt: string;
+  /** Realignment R1 (docs/SPEC.md §13). Defaults to "private" when omitted at open time. */
+  visibility?: Visibility;
   closing: {
     reason: CloseReason;
     requestedBy: string | null;
@@ -133,6 +172,12 @@ export interface OpenGlassClientOptions {
   /** Default `https://openglass.glass` in a real deployment — pass your own for local/dev. */
   baseUrl?: string;
   identity?: AgentIdentity;
+  /** Injectable for tests (e.g. mocking `lookup()`/`guard()`'s network calls); defaults to
+   * the global `fetch`. Currently only wired into this client's unauthenticated calls
+   * (`lookup`, `getAgent`, `fetchTrustedKeys`, `verifyRemote`) — every signed request still
+   * uses the global `fetch` directly, matching `core-js`'s own `AttestOptions.fetchImpl`,
+   * which only ever needs to intercept `guard()`'s public lookup. */
+  fetchImpl?: typeof fetch;
 }
 
 const DEFAULT_BASE_URL = "https://openglass.glass";
@@ -146,12 +191,13 @@ export class OpenGlassClient {
   readonly baseUrl: string;
   identity?: AgentIdentity;
   private headBySession = new Map<string, { seq: number; prevHash: string }>();
+  private headByAttestation = new Map<string, { seq: number; prevHash: string }>();
   private publicClient: PublicClient;
 
   constructor(opts: OpenGlassClientOptions = {}) {
     this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
     this.identity = opts.identity;
-    this.publicClient = createPublicClient(this.baseUrl);
+    this.publicClient = createPublicClient(this.baseUrl, opts.fetchImpl);
   }
 
   /** Generates a fresh Ed25519 identity. Call this once and keep the private key — it's
@@ -211,6 +257,48 @@ export class OpenGlassClient {
     }, opts);
   }
 
+  // ---- Lookup & domain verification (realignment R2/R7) --------------------------------
+
+  /** `GET /v1/lookup` — check any agent, registered or not, before offering or accepting a
+   * session with it. Public: no auth, no signing, works before you've even registered
+   * yourself. Pass exactly one of `agentId`, `domain`, `agentCardUrl`, `publicKey`. */
+  async lookup(query: { agentId: string } | { domain: string } | { agentCardUrl: string } | { publicKey: string }): Promise<LookupResult> {
+    const { data, error } = await this.publicClient.GET("/v1/lookup", { params: { query } });
+    if (error) throw new OpenGlassApiError("GET", "/v1/lookup", 0, error);
+    return data as LookupResult;
+  }
+
+  /** Starts domain verification for your own `meta.homepage`: generates a token and
+   * returns instructions for all three proof methods (a DNS TXT record, or one of two
+   * well-known files). Requires `this.identity`. */
+  async requestDomainVerification(): Promise<DomainVerification> {
+    const identity = this.requireIdentity();
+    const { domainVerification } = await signedRequest<{ domainVerification: DomainVerification }>(
+      this.baseUrl,
+      "POST",
+      "/v1/agents/me/domain-verification",
+      undefined,
+      identity,
+    );
+    return domainVerification;
+  }
+
+  /** Checks whether any of the three proof methods `requestDomainVerification()` described
+   * now succeed — call this after you've actually published the token. Throws
+   * `domain_verification_not_requested` (via `OpenGlassApiError`) if you haven't called
+   * `requestDomainVerification()` first. */
+  async verifyDomain(): Promise<DomainVerification> {
+    const identity = this.requireIdentity();
+    const { domainVerification } = await signedRequest<{ domainVerification: DomainVerification }>(
+      this.baseUrl,
+      "POST",
+      "/v1/agents/me/domain-verification/check",
+      undefined,
+      identity,
+    );
+    return domainVerification;
+  }
+
   // ---- Sessions ----------------------------------------------------------
 
   /** Builds, signs, and submits a session offer. If `counterpartyAgentId` is omitted this
@@ -225,7 +313,7 @@ export class OpenGlassClient {
     /** Realignment R1 (docs/SPEC.md §13). Defaults to "sealed" when omitted. A "private"
      * request gracefully degrades to "sealed" server-side if content encryption isn't
      * configured there. */
-    visibility?: "private" | "sealed" | "shared";
+    visibility?: Visibility;
   }): Promise<{ session: Session; invite: Invite & { token: string | null; url: string | null } }> {
     const identity = this.requireIdentity();
     const sessionId = input.sessionId ?? randomSessionId();
@@ -403,6 +491,189 @@ export class OpenGlassClient {
 
   async getRecordBundle(recordId: string): Promise<RecordBundle> {
     return signedRequest<RecordBundle>(this.baseUrl, "GET", `/v1/records/${recordId}/bundle`, undefined, this.requireIdentity());
+  }
+
+  // ---- Attestations (SPEC §12) — the one-party counterpart to a session ----------------
+
+  /** Logs one of your own agent's actions — a payment, a tool call, a policy match — with
+   * no counterparty to invite or accept. Activates immediately: no invite, no waiting on
+   * anyone. Private by default (unlike a session, which defaults to sealed). */
+  async openAttestation(input: {
+    purpose: string;
+    mode?: Mode;
+    attestationId?: string;
+    idleTimeoutSec?: number;
+    /** Realignment R1 (docs/SPEC.md §13). Defaults to "private" when omitted. Note there is
+     * no separate per-call "retention" option here — retention on `visibility: "private"`
+     * records is an owner-dashboard setting (`PATCH /v1/owner/agents/{id}/retention`), not
+     * something an agent's own signed request can set; this client is agent-authenticated
+     * only and has no owner-session support, so it doesn't expose a parameter that
+     * wouldn't do anything. */
+    visibility?: Visibility;
+  }): Promise<{ attestation: Attestation }> {
+    const identity = this.requireIdentity();
+    const attestationId = input.attestationId ?? randomAttestationId();
+    const open: AttestationOpen = {
+      v: 1,
+      type: "openglass.attestation_open",
+      attestationId,
+      mode: input.mode ?? "relay",
+      purpose: input.purpose,
+      attestor: { agentId: identity.agentId!, kid: identity.kid, publicKey: base64UrlEncode(identity.publicKey) },
+      createdAt: new Date().toISOString(),
+    };
+    const openSignature = signPurpose("attestation_open", open, identity);
+    const result = await signedRequest<{ attestation: Attestation }>(
+      this.baseUrl,
+      "POST",
+      "/v1/attestations",
+      { open, openSignature, idleTimeoutSec: input.idleTimeoutSec, ...(input.visibility ? { visibility: input.visibility } : {}) },
+      identity,
+    );
+    if (result.attestation.genesisHash) this.headByAttestation.set(attestationId, { seq: 0, prevHash: result.attestation.genesisHash });
+    return result;
+  }
+
+  async getAttestation(attestationId: string): Promise<Attestation> {
+    const { attestation } = await signedRequest<{ attestation: Attestation }>(
+      this.baseUrl,
+      "GET",
+      `/v1/attestations/${attestationId}`,
+      undefined,
+      this.requireIdentity(),
+    );
+    return attestation;
+  }
+
+  /** Appends one signed, hash-chained event — the one-party counterpart to `sendMessage`.
+   * `seq`/`prevHash` are tracked automatically from `openAttestation`, same as sessions. */
+  async sendAttestationEvent(
+    attestationId: string,
+    payload: unknown,
+    opts: { contentType?: string; seq?: number; prevHash?: string } = {},
+  ): Promise<{ head: { seq: number; hash: string } }> {
+    const identity = this.requireIdentity();
+    const tracked = this.headByAttestation.get(attestationId);
+    const seq = opts.seq ?? (tracked ? tracked.seq + 1 : undefined);
+    const prevHash = opts.prevHash ?? tracked?.prevHash;
+    if (seq === undefined || prevHash === undefined) {
+      throw new Error(`No tracked head for attestation ${attestationId} — call openAttestation first, or pass seq/prevHash explicitly.`);
+    }
+
+    const payloadHash = hex(sha256(Buffer.from(canonicalize(payload), "utf8")));
+    const envelope: MessageEnvelope = {
+      v: 1,
+      type: "openglass.message",
+      sessionId: attestationId,
+      seq,
+      prevHash,
+      sender: { agentId: identity.agentId!, kid: identity.kid },
+      contentType: opts.contentType ?? "application/json",
+      payloadHash,
+      sentAt: new Date().toISOString(),
+    };
+    const hashBytes = sha256(concatBytes(Buffer.from(prevHash, "hex"), Buffer.from(canonicalize(envelope), "utf8")));
+    const hash = hex(hashBytes);
+    const signature: Signature = { alg: "Ed25519", kid: identity.kid, sig: base64UrlEncode(signEd25519(sigInput("message", hashBytes), identity.privateKey)) };
+
+    const result = await signedRequest<{ head: { seq: number; hash: string } }>(
+      this.baseUrl,
+      "POST",
+      `/v1/attestations/${attestationId}/events`,
+      { envelope, hash, signature, payload },
+      identity,
+    );
+    this.headByAttestation.set(attestationId, { seq: result.head.seq, prevHash: result.head.hash });
+    return result;
+  }
+
+  async closeAttestation(attestationId: string): Promise<void> {
+    const identity = this.requireIdentity();
+    const tracked = this.headByAttestation.get(attestationId);
+    const attestation = tracked ? undefined : await this.getAttestation(attestationId);
+    const headSeq = tracked?.seq ?? attestation!.head.seq;
+    const headHash = tracked ? (tracked.seq === 0 ? null : tracked.prevHash) : attestation!.head.hash;
+    const statement: CloseStatement = { v: 1, type: "openglass.close", sessionId: attestationId, headSeq, headHash, closedAt: new Date().toISOString() };
+    const signature = signPurpose("close", statement, identity);
+    await signedRequest(this.baseUrl, "POST", `/v1/attestations/${attestationId}/close`, { statement, signature }, identity);
+  }
+
+  /** Polls until the attestation is `"closed"` and a record has been issued. See `WaitOptions`. */
+  async waitForAttestationRecord(attestationId: string, opts: WaitOptions = {}): Promise<string> {
+    return poll(async () => {
+      const attestation = await this.getAttestation(attestationId);
+      return attestation.status === "closed" && attestation.recordId ? attestation.recordId : undefined;
+    }, opts);
+  }
+
+  // ---- Sealed record ceremony (realignment R1/R4, docs/SPEC.md §13.2) ------------------
+
+  /** For a `visibility: "sealed"` record: requests the unseal ceremony, implicitly counting
+   * your own approval. Owner-authenticated in the REST API (a human decision on behalf of
+   * a participant) — but the same agent-signed auth this client already uses works too,
+   * since `verifyAgentOrOwner` accepts either. */
+  async requestUnseal(recordId: string): Promise<{ record: { id: string; sealedState: SealedState } }> {
+    return signedRequest(this.baseUrl, "POST", `/v1/records/${recordId}/unseal-request`, undefined, this.requireIdentity());
+  }
+
+  /** Adds your own approval; the record fully unseals once every participant owner has
+   * called this. */
+  async approveUnseal(recordId: string): Promise<{ record: { id: string; sealedState: SealedState } }> {
+    return signedRequest(this.baseUrl, "POST", `/v1/records/${recordId}/unseal-approve`, undefined, this.requireIdentity());
+  }
+
+  /** Force-unseals a sealed record immediately, bypassing the other owner's consent — for
+   * when you need to contest what's in it. */
+  async dispute(recordId: string): Promise<{ record: { id: string; sealedState: SealedState } }> {
+    return signedRequest(this.baseUrl, "POST", `/v1/records/${recordId}/dispute`, undefined, this.requireIdentity());
+  }
+
+  // ---- guard() (realignment R7) ---------------------------------------------------------
+
+  /**
+   * A pre-flight check for a tool call your own policy layer (e.g. `openglass-policy` via
+   * `core-js`/`core-py`) has already marked as worth a second look. `guard()` doesn't run
+   * policy itself — pass in the risk level you've already computed. When that risk meets
+   * `minRiskToCheck` (default `"high"`) and a `counterpartyAgentId` is given, it looks the
+   * counterparty up (`lookup()`) and decides `allow` / `warn` / `block` from your own
+   * `onUnverifiedDomain`/`onNewCounterparty` policy — there's no server-side "owner
+   * config" this reads; you configure it locally, since only you (the integration) knows
+   * what's appropriate for your own agent's risk tolerance. **Fails open**: if OpenGlass
+   * itself is unreachable, returns `allow` rather than block a real task on an
+   * infrastructure hiccup — this is advisory, not a hard gate.
+   */
+  async guard(opts: {
+    risk: "low" | "medium" | "high" | (string & {});
+    counterpartyAgentId?: string;
+    minRiskToCheck?: "low" | "medium" | "high";
+    onUnverifiedDomain?: "allow" | "warn" | "block";
+    onNewCounterparty?: "allow" | "warn" | "block";
+  }): Promise<{ action: "allow" | "warn" | "block"; reason: string; lookup?: LookupResult }> {
+    const RANK = { low: 0, medium: 1, high: 2 };
+    const threshold = RANK[opts.minRiskToCheck ?? "high"];
+    const actual = RANK[opts.risk as "low" | "medium" | "high"] ?? RANK.high; // unknown risk labels are treated as high, not skipped
+    if (actual < threshold) return { action: "allow", reason: `risk "${opts.risk}" is below the check threshold` };
+    if (!opts.counterpartyAgentId) return { action: "allow", reason: "no counterparty to check" };
+
+    let info: LookupResult;
+    try {
+      info = await this.lookup({ agentId: opts.counterpartyAgentId });
+    } catch (err) {
+      return { action: "allow", reason: `OpenGlass unreachable, failing open: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    if (!info.registered) {
+      const policy = opts.onNewCounterparty ?? "allow";
+      return { action: policy, reason: "counterparty is not registered with OpenGlass at all", lookup: info };
+    }
+    if (info.flags.unverifiedDomain) {
+      const policy = opts.onUnverifiedDomain ?? "warn";
+      return { action: policy, reason: "counterparty's domain is not verified", lookup: info };
+    }
+    if (info.flags.newAgent) {
+      const policy = opts.onNewCounterparty ?? "allow";
+      return { action: policy, reason: "first time seeing this counterparty", lookup: info };
+    }
+    return { action: "allow", reason: "counterparty is registered, claimed, and domain-verified", lookup: info };
   }
 
   /** `{apiUrl}/.well-known/openglass-keys.json` — the platform's current and recently
