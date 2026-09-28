@@ -1038,4 +1038,62 @@ A background worker job (`shredExpiredPrivateRecords`) sweeps `records` for `vis
 
 `GET /v1/records/{id}/bundle` on a `private` record served to an authorized owner adds a `decryptedPayloads: { [seq]: unknown }` field alongside the untouched, fully-verifiable `evidence` — decrypted fresh on every request, never persisted, never folded into `evidence` itself (which must stay exactly what was signed). If the record has since been shredded, `decryptedPayloads` is omitted and `contentDeleted: true` is set instead.
 
+## 14. Domain verification and counterparty lookup (realignment R2)
+
+"Know who your agent is talking to" needs a way to actually check, before you talk to them — this section covers two related pieces: proving an agent's domain (extended from Prompt 4's original single method), and `GET /v1/lookup`, the public endpoint that lets any caller check a counterparty before offering or accepting a session with it.
+
+### 14.1 Domain verification: three methods
+
+An agent proves control of the domain at its own `meta.homepage` by publishing a server-generated token one of three ways — any one succeeding verifies it:
+
+1. **HTTP well-known .txt** (original, Prompt 4): the token, on its own line, at `https://<domain>/.well-known/openglass-agent-verification.txt`.
+2. **HTTP well-known JSON** (new): `{"token": "<token>"}` at `https://<domain>/.well-known/openglass.json`.
+3. **DNS TXT** (new): a TXT record at `_openglass.<domain>` whose value is exactly the token.
+
+`POST /v1/agents/me/domain-verification` (unchanged route, extended response) generates the token and returns instructions for all three methods. `POST /v1/agents/me/domain-verification/check` (unchanged route) tries all three and succeeds if any one matches — the caller never has to say which method it used. The two HTTP methods carry the same SSRF guard as before (resolve `meta.homepage`'s hostname and refuse anything that isn't a public address, never follow a redirect); the DNS method has no such exposure, since a TXT lookup never fetches a URL a response could redirect elsewhere.
+
+`agents.homepageDomain` is new: `domainFromHomepage(meta.homepage)`, kept in sync with `meta`/`domainVerification` purely so `GET /v1/lookup?domain=` can query it directly (indexed) instead of scanning every agent. It is never itself a claim of ownership — only `domainVerification.status === "verified"` is.
+
+### 14.2 `GET /v1/lookup`
+
+No auth — the whole point is that a calling agent can check a counterparty it has no relationship with yet. Rate-limited (`lookup`, 60/min/IP) and cached in-process for 60s (a single-instance deployment, so no shared cache is needed). Takes exactly one of `agentId`, `domain`, `agentCardUrl`, `publicKey`.
+
+**Registered agent** response:
+
+```jsonc
+{
+  "registered": true,
+  "agentId": "agt_01J…", "name": "Acme Bot",
+  "claimed": true,
+  "verifiedOwner": { "domain": "acme.example" } | null,    // only when domainVerification.status === "verified"
+  "firstSeen": "2026-01-01T00:00:00.000Z",
+  "keyAgeDays": 42,
+  "activity": {
+    "sessionsLast90d": 12, "attestationsLast90d": 30,
+    "distinctCounterparties": 5,
+    "normalCloseShare": 0.9 | null                          // null, not 0, when there are no closed sessions yet
+  },
+  "openDisputesCount": 0,
+  "flags": { "newAgent": false, "unverifiedDomain": false, "recentlyRotatedKey": false }
+}
+```
+
+**Unregistered** (nothing found by the given key) response — public signals only, best-effort and gracefully `null` on any failure:
+
+```jsonc
+{
+  "registered": false,
+  "agentCard": { … } | null,        // fetched from agentCardUrl, or https://<domain>/.well-known/agent.json
+  "mcpRegistryEntry": { … } | null, // from the official MCP Registry's public search API
+  "domainRegisteredAt": "…" | null, // via RDAP (rdap.org bootstraps to the right registry for the TLD)
+  "inviteUrl": "https://…/skill.md" // hand this to the other agent's developer
+}
+```
+
+`agentId`/`publicKey` lookups that find nothing skip the agent-card fetch (there's no URL to try). An `agentCardUrl` lookup that resolves to a card carrying OpenGlass's own `"x-openglass".agentId` breadcrumb (every card `agentCardFor` — §8.1 — generates has one) is treated as a **registered** lookup for that agent, not an unregistered one — closing the loop for OpenGlass's own agents.
+
+**Anti-gaming (documented per policy — never silently changed):** every count in `activity` that involves a counterparty — `sessionsLast90d`, `distinctCounterparties`, `normalCloseShare` — only counts interactions where *that counterparty* is itself `domainVerification.status === "verified"`. This is deliberately the strong tier, not "claimed by some owner": every session counterparty is already claimed by construction (§4.2/D3 — an unclaimed agent can't accept a session), so "claimed" alone would filter out nothing and provide zero protection against an attacker padding a target's numbers with disposable sham counterparty agents. Domain verification requires controlling a real DNS zone or web server per counterparty — genuinely costly to fake at scale. The honest trade-off: while domain-verification adoption is still low, most agents' real activity numbers will read as 0 or near it. A metric that's low but ungameable beats one that's inflated and meaningless. `attestationsLast90d` has no counterparty at all, so this filter doesn't apply to it. `openDisputesCount` is a lifetime total, not windowed, and isn't counterparty-filtered — a genuine dispute already requires two real owners on a sealed session that actually happened.
+
+Everything returned must already be independently verifiable from something the platform, the agent's own signatures, or a DNS record attests to (CLAUDE.md's "Positioning" rule) — never a rating, a review, or anything derived from session *content*, which stays private regardless of `visibility` (§13).
+
 Deciding *when* an action is worth attesting is a separate concern from the attestation mechanism itself: see [`docs/POLICY.md`](POLICY.md) and [`/spec/openglass-policy`](../spec/openglass-policy) for a vendor-neutral format for classifying an agent's action as `low`/`medium`/`high` risk, with reference evaluators in `core-js`/`core-py`.

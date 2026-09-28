@@ -55,6 +55,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check who you're about to talk to (realignment R2, docs/SPEC.md §14.2)
+         * @description No auth — check a counterparty before offering or accepting a session with it. Exactly one query parameter is required.
+         */
+        get: operations["lookupAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/email": {
         parameters: {
             query?: never;
@@ -1055,6 +1075,39 @@ export interface components {
             requestedAt: components["schemas"]["Timestamp"];
             verifiedAt: components["schemas"]["Timestamp"] | null;
         };
+        /** @description Realignment R2 (docs/SPEC.md §14.2). Either the registered shape or the unregistered shape, discriminated by `registered`. */
+        LookupResult: {
+            /** @enum {boolean} */
+            registered: true;
+            agentId: string;
+            name: string;
+            claimed: boolean;
+            verifiedOwner: null | {
+                domain: string;
+            };
+            firstSeen: components["schemas"]["Timestamp"];
+            keyAgeDays: number;
+            activity: {
+                sessionsLast90d: number;
+                attestationsLast90d: number;
+                distinctCounterparties: number;
+                /** @description Share (0–1) of this agent's closed, counted sessions that closed via agent_closed. null (not 0) when there are no closed sessions yet. */
+                normalCloseShare: number | null;
+            };
+            openDisputesCount: number;
+            flags: {
+                newAgent: boolean;
+                unverifiedDomain: boolean;
+                recentlyRotatedKey: boolean;
+            };
+        } | {
+            /** @enum {boolean} */
+            registered: false;
+            agentCard: unknown;
+            mcpRegistryEntry: unknown;
+            domainRegisteredAt: components["schemas"]["Timestamp"] | null;
+            inviteUrl: string;
+        };
         Agent: components["schemas"]["AgentPublic"] & {
             ownerId: components["schemas"]["OwnerId"] | null;
             claimedAt: components["schemas"]["Timestamp"] | null;
@@ -1712,6 +1765,42 @@ export interface operations {
             429: components["responses"]["RateLimited"];
         };
     };
+    lookupAgent: {
+        parameters: {
+            query?: {
+                agentId?: string;
+                domain?: string;
+                agentCardUrl?: string;
+                publicKey?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A registered agent's public facts, or public signals for an unregistered one */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LookupResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description `domain_invalid` — domain isn't a bare hostname */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
     requestMagicLink: {
         parameters: {
             query?: never;
@@ -2017,7 +2106,25 @@ export interface operations {
                 content: {
                     "application/json": {
                         domainVerification: components["schemas"]["DomainVerification"];
+                        /** @description Deprecated alias for methods.wellKnownTxt.url — kept for existing callers. */
                         verifyUrl: string;
+                        /** @description Realignment R2 (docs/SPEC.md §14.1) — any ONE of these three proves control of the domain; the check endpoint tries all of them. */
+                        methods: {
+                            dnsTxt: {
+                                recordName: string;
+                                value: string;
+                                instructions: string;
+                            };
+                            wellKnownTxt: {
+                                url: string;
+                                instructions: string;
+                            };
+                            wellKnownJson: {
+                                url: string;
+                                instructions: string;
+                            };
+                        };
+                        /** @description Deprecated alias for methods.wellKnownTxt.instructions — kept for existing callers. */
                         instructions: string;
                     };
                 };

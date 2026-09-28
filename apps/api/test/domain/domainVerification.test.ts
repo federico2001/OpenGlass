@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  dnsTxtRecordName,
   domainFromHomepage,
   isPublicIpv4,
   isPublicIpv6,
   resolvesToPublicAddress,
   verificationFileUrl,
+  wellKnownJsonUrl,
 } from "../../src/domain/domainVerification.js";
 
 describe("domainFromHomepage", () => {
@@ -28,6 +30,20 @@ describe("domainFromHomepage", () => {
 describe("verificationFileUrl", () => {
   it("builds the well-known path under the target domain", () => {
     expect(verificationFileUrl("acme.example")).toBe("https://acme.example/.well-known/openglass-agent-verification.txt");
+  });
+});
+
+/** Realignment R2 (docs/SPEC.md §14): the two new domain-verification methods alongside
+ * the original well-known .txt file. */
+describe("wellKnownJsonUrl", () => {
+  it("builds the well-known JSON path under the target domain", () => {
+    expect(wellKnownJsonUrl("acme.example")).toBe("https://acme.example/.well-known/openglass.json");
+  });
+});
+
+describe("dnsTxtRecordName", () => {
+  it("builds the underscore-prefixed TXT record name", () => {
+    expect(dnsTxtRecordName("acme.example")).toBe("_openglass.acme.example");
   });
 });
 

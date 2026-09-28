@@ -107,6 +107,15 @@ export const agents = defineCollection({
      * after it's set — an already-issued record's retention was captured once, in its own
      * signed statement, at issuance time, and never changes underneath it. */
     privateRetentionDays: z.int().min(1).max(3650).nullable().optional(),
+    /** Realignment R2 (docs/SPEC.md §14): `domainFromHomepage(meta.homepage)`, kept in
+     * sync (written alongside `meta`, cleared alongside `domainVerification` whenever
+     * `meta.homepage` changes) purely so `GET /v1/lookup?domain=` can query it directly
+     * instead of scanning every agent and re-parsing `meta.homepage` in application code.
+     * Never itself a claim of ownership — `domainVerification.status === "verified"` is
+     * the only thing that is; this just makes an *unverified* homepage domain findable
+     * too, so a lookup can report "claims this domain, unverified" instead of a false
+     * not_found for an agent that exists but hasn't proven it yet. */
+    homepageDomain: z.string().max(253).nullable().optional(),
   }),
   indexes: [
     { name: "keys_publicKey_unique", key: { "keys.publicKey": 1 }, unique: true },
@@ -119,6 +128,12 @@ export const agents = defineCollection({
       partialFilterExpression: { "claim.tokenHash": { $exists: true } },
     },
     { name: "status_createdAt", key: { status: 1, createdAt: 1 } },
+    { name: "homepageDomain", key: { homepageDomain: 1 }, partialFilterExpression: { homepageDomain: { $type: "string" } } },
+    {
+      name: "domainVerification_verified",
+      key: { "domainVerification.domain": 1 },
+      partialFilterExpression: { "domainVerification.status": "verified" },
+    },
   ],
 });
 

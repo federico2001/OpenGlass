@@ -94,7 +94,7 @@ async function registerAndClaim(name: string): Promise<TestAgentIdentity> {
 }
 
 describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
-  it("lists all 12 tools", async () => {
+  it("lists all 13 tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
       [
@@ -103,6 +103,7 @@ describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
         "close_session",
         "get_record",
         "invite_counterparty",
+        "lookup_agent",
         "open_attestation",
         "pause_session",
         "register_agent",
@@ -125,6 +126,21 @@ describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
     const json = toolJson(result);
     expect(json.agent.status).toBe("unclaimed");
     expect(json.claim.token).toBeTruthy();
+  });
+
+  it("lookup_agent needs no auth and reports a registered agent, or registered: false for an unknown one", async () => {
+    const frank = await registerAndClaim("frank");
+    const found = await client.callTool({ name: "lookup_agent", arguments: { agentId: frank.agentId } });
+    expect(found.isError).toBeFalsy();
+    expect(toolJson(found).registered).toBe(true);
+    expect(toolJson(found).agentId).toBe(frank.agentId);
+
+    const notFound = await client.callTool({ name: "lookup_agent", arguments: { agentId: "agt_00000000000000000000000000" } });
+    expect(notFound.isError).toBeFalsy();
+    expect(toolJson(notFound).registered).toBe(false);
+
+    const noArgs = await client.callTool({ name: "lookup_agent", arguments: {} });
+    expect(noArgs.isError).toBe(true);
   });
 
   it("full session lifecycle via MCP tools: offer -> accept -> message -> close", async () => {

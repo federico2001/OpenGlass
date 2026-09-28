@@ -104,6 +104,39 @@ paths:
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /v1/lookup:
+    get:
+      tags: [meta]
+      operationId: lookupAgent
+      summary: Check who you're about to talk to (realignment R2, docs/SPEC.md §14.2)
+      description: No auth — check a counterparty before offering or accepting a session with it. Exactly one query parameter is required.
+      parameters:
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: domain
+          in: query
+          schema: { type: string }
+        - name: agentCardUrl
+          in: query
+          schema: { type: string, format: uri }
+        - name: publicKey
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: A registered agent's public facts, or public signals for an unregistered one
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LookupResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '422':
+          description: '`domain_invalid` — domain isn''t a bare hostname'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   # ---------------------------------------------------------------- auth
   /v1/auth/email:
     post:
@@ -355,11 +388,28 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [domainVerification, verifyUrl, instructions]
+                required: [domainVerification, verifyUrl, methods, instructions]
                 properties:
                   domainVerification: { $ref: '#/components/schemas/DomainVerification' }
-                  verifyUrl: { type: string }
-                  instructions: { type: string }
+                  verifyUrl: { type: string, description: 'Deprecated alias for methods.wellKnownTxt.url — kept for existing callers.' }
+                  methods:
+                    description: Realignment R2 (docs/SPEC.md §14.1) — any ONE of these three proves control of the domain; the check endpoint tries all of them.
+                    type: object
+                    required: [dnsTxt, wellKnownTxt, wellKnownJson]
+                    properties:
+                      dnsTxt:
+                        type: object
+                        required: [recordName, value, instructions]
+                        properties: { recordName: { type: string }, value: { type: string }, instructions: { type: string } }
+                      wellKnownTxt:
+                        type: object
+                        required: [url, instructions]
+                        properties: { url: { type: string }, instructions: { type: string } }
+                      wellKnownJson:
+                        type: object
+                        required: [url, instructions]
+                        properties: { url: { type: string }, instructions: { type: string } }
+                  instructions: { type: string, description: 'Deprecated alias for methods.wellKnownTxt.instructions — kept for existing callers.' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422':
           description: '`domain_invalid` — meta.homepage isn''t a real https:// URL'
@@ -1888,6 +1938,57 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Timestamp'
             - type: 'null'
+    LookupResult:
+      description: Realignment R2 (docs/SPEC.md §14.2). Either the registered shape or the unregistered shape, discriminated by `registered`.
+      oneOf:
+        - type: object
+          required: [registered, agentId, name, claimed, verifiedOwner, firstSeen, keyAgeDays, activity, openDisputesCount, flags]
+          properties:
+            registered: { type: boolean, enum: [true] }
+            agentId: { type: string }
+            name: { type: string }
+            claimed: { type: boolean }
+            verifiedOwner:
+              oneOf:
+                - type: 'null'
+                - type: object
+                  required: [domain]
+                  properties: { domain: { type: string } }
+            firstSeen: { $ref: '#/components/schemas/Timestamp' }
+            keyAgeDays: { type: integer, minimum: 0 }
+            activity:
+              type: object
+              required: [sessionsLast90d, attestationsLast90d, distinctCounterparties, normalCloseShare]
+              properties:
+                sessionsLast90d: { type: integer, minimum: 0 }
+                attestationsLast90d: { type: integer, minimum: 0 }
+                distinctCounterparties: { type: integer, minimum: 0 }
+                normalCloseShare:
+                  description: Share (0–1) of this agent's closed, counted sessions that closed via agent_closed. null (not 0) when there are no closed sessions yet.
+                  oneOf:
+                    - type: number
+                      minimum: 0
+                      maximum: 1
+                    - type: 'null'
+            openDisputesCount: { type: integer, minimum: 0 }
+            flags:
+              type: object
+              required: [newAgent, unverifiedDomain, recentlyRotatedKey]
+              properties:
+                newAgent: { type: boolean }
+                unverifiedDomain: { type: boolean }
+                recentlyRotatedKey: { type: boolean }
+        - type: object
+          required: [registered, agentCard, mcpRegistryEntry, domainRegisteredAt, inviteUrl]
+          properties:
+            registered: { type: boolean, enum: [false] }
+            agentCard: {}
+            mcpRegistryEntry: {}
+            domainRegisteredAt:
+              oneOf:
+                - $ref: '#/components/schemas/Timestamp'
+                - type: 'null'
+            inviteUrl: { type: string }
     Agent:
       allOf:
         - $ref: '#/components/schemas/AgentPublic'

@@ -13,7 +13,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { agentFullView, agentPublicView, domainVerificationView, keyView } from "../domain/agentViews.js";
-import { domainFromHomepage, generateVerificationToken, verificationFileUrl } from "../domain/domainVerification.js";
+import { dnsTxtRecordName, domainFromHomepage, generateVerificationToken, verificationFileUrl, wellKnownJsonUrl } from "../domain/domainVerification.js";
 import { keyFingerprint } from "../domain/fingerprint.js";
 import { generateToken, hashToken } from "../domain/tokens.js";
 import { parseOrError, sendError } from "../errors.js";
@@ -109,6 +109,7 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
         name: body.name,
         description: body.description,
         meta: body.meta ?? {},
+        homepageDomain: domainFromHomepage(body.meta?.homepage),
         keys: [{ kid, alg: "Ed25519", publicKey: body.publicKey, createdAt: now, revokedAt: null }],
         ownerId: null,
         status: "unclaimed",
@@ -136,7 +137,10 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
     // A domain verification proves control of one specific domain — if meta.homepage is
     // changing, it no longer applies to whatever homepage comes next.
     const homepageChanged = body.meta !== undefined && body.meta.homepage !== agent.meta.homepage;
-    const updated = await agents.update(agent._id, { ...body, ...(homepageChanged ? { domainVerification: null } : {}) });
+    const updated = await agents.update(agent._id, {
+      ...body,
+      ...(homepageChanged ? { domainVerification: null, homepageDomain: domainFromHomepage(body.meta?.homepage) } : {}),
+    });
     return { agent: agentFullView(updated!) };
   });
 
@@ -159,7 +163,14 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
       const updated = await agents.update(agent._id, { domainVerification });
       return reply.code(201).send({
         domainVerification: domainVerificationView(updated!.domainVerification!),
+        // Realignment R2 (docs/SPEC.md §14): any ONE of these three proves control of the
+        // domain — /v1/agents/me/domain-verification/check tries all of them.
         verifyUrl: verificationFileUrl(domain),
+        methods: {
+          dnsTxt: { recordName: dnsTxtRecordName(domain), value: token, instructions: `Add a DNS TXT record at ${dnsTxtRecordName(domain)} with the value: ${token}` },
+          wellKnownTxt: { url: verificationFileUrl(domain), instructions: `Publish a file at ${verificationFileUrl(domain)} whose contents are exactly this token, on its own line: ${token}` },
+          wellKnownJson: { url: wellKnownJsonUrl(domain), instructions: `Publish a JSON file at ${wellKnownJsonUrl(domain)} with the contents: {"token": "${token}"}` },
+        },
         instructions: `Publish a file at ${verificationFileUrl(domain)} whose contents are exactly this token, on its own line: ${token}`,
       });
     },
@@ -176,7 +187,12 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
 
       const ok = await deps.checkDomainVerification(dv.domain, dv.token);
       if (!ok) {
-        return sendError(reply, 422, "domain_verification_failed", `Could not find the verification token at ${verificationFileUrl(dv.domain)}`);
+        return sendError(
+          reply,
+          422,
+          "domain_verification_failed",
+          `Could not find the verification token via DNS TXT (${dnsTxtRecordName(dv.domain)}), ${verificationFileUrl(dv.domain)}, or ${wellKnownJsonUrl(dv.domain)}`,
+        );
       }
       const updated = await agents.update(agent._id, { domainVerification: { ...dv, status: "verified", verifiedAt: new Date() } });
       return { domainVerification: domainVerificationView(updated!.domainVerification!) };
