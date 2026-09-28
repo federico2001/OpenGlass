@@ -3,7 +3,7 @@ import styles from "../legal/legal.module.css";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "What OpenGlass collects, why, and the one honest limit on deleting it: records are append-only.",
+  description: "Private by default: what we collect, who can see it, and the honest limits on deleting it.",
 };
 
 export default function PrivacyPage() {
@@ -12,22 +12,36 @@ export default function PrivacyPage() {
       <section className={styles.masthead}>
         <p className="label">Legal</p>
         <h1 className={styles.title}>Privacy Policy</h1>
-        <p className={styles.lede}>What we collect, why, and the one honest limit on deleting it.</p>
-        <p className={styles.updated}>Effective and last updated: September 25, 2026</p>
+        <p className={styles.lede}>Private by default: what we collect, who can see it, and the honest limits on deleting it.</p>
+        <p className={styles.updated}>Effective and last updated: September 28, 2026</p>
       </section>
+
+      <div className={styles.callout}>
+        <p>
+          <strong>What changed since September 25, 2026:</strong> sessions and attestations are now private or
+          sealed by default instead of fully open (&sect;6); private records can actually be deleted on a schedule
+          you choose (&sect;7), which wasn&apos;t possible before; and this policy now says plainly who besides you
+          can see a session&apos;s content and how a sealed record gets opened (&sect;6, &sect;9). See the full{" "}
+          <a href="#changelog">changelog</a> at the bottom.
+        </p>
+      </div>
 
       <ul className={styles.toc}>
         <li><a href="#scope">1. Scope</a></li>
         <li><a href="#collect">2. What we collect</a></li>
         <li><a href="#dont-collect">3. What we don&apos;t collect</a></li>
         <li><a href="#use">4. How we use it</a></li>
-        <li><a href="#sharing">5. Sharing</a></li>
-        <li><a href="#retention">6. Retention and erasure</a></li>
-        <li><a href="#cookies">7. Cookies</a></li>
-        <li><a href="#children">8. Children</a></li>
-        <li><a href="#rights">9. Your rights</a></li>
-        <li><a href="#changes">10. Changes</a></li>
-        <li><a href="#contact">11. Contact</a></li>
+        <li><a href="#sharing">5. Sharing with our infrastructure providers</a></li>
+        <li><a href="#visibility">6. Who can see a session or attestation&apos;s content</a></li>
+        <li><a href="#retention">7. Retention and erasure</a></li>
+        <li><a href="#lookup">8. How lookup data works, and how to correct it</a></li>
+        <li><a href="#disputes">9. Disputes</a></li>
+        <li><a href="#cookies">10. Cookies</a></li>
+        <li><a href="#children">11. Children</a></li>
+        <li><a href="#rights">12. Your rights</a></li>
+        <li><a href="#changes">13. Changes</a></li>
+        <li><a href="#changelog">14. Changelog</a></li>
+        <li><a href="#contact">15. Contact</a></li>
       </ul>
 
       <div className={styles.prose}>
@@ -35,8 +49,8 @@ export default function PrivacyPage() {
         <p>
           This policy covers personal data OpenGlass processes when you register or claim an agent, sign in as an
           Owner, or use the dashboard, API, MCP server, or SDKs. It doesn&apos;t cover the content of what agents
-          exchange during a session beyond what&apos;s described in §2 and §6 below — that content is created and
-          controlled by you and your counterparty, not by us.
+          exchange or attest to beyond what&apos;s described in &sect;6 and &sect;7 below — that content is created
+          and controlled by you (and, for a session, your counterparty), not by us.
         </p>
 
         <h2 id="collect">2. What we collect</h2>
@@ -44,9 +58,10 @@ export default function PrivacyPage() {
           <li><strong>Owner email address</strong> — verified via a one-time magic link. This is the only piece of personal data the protocol requires.</li>
           <li><strong>Display name</strong> — optional, set by the Owner.</li>
           <li><strong>Agent metadata</strong> — name, description, and homepage/software fields an Owner or agent sets when registering. This describes the agent, not a person, and is public by design (it&apos;s returned by <code>GET /v1/agents/{"{id}"}</code>).</li>
-          <li><strong>IP addresses</strong> — logged briefly for rate limiting and abuse prevention (the <code>rate_limits</code> collection expires automatically; see §6).</li>
-          <li><strong>Session cookie</strong> — an opaque, hashed token identifying an Owner&apos;s browser session (<code>og_session</code>); see §7.</li>
-          <li><strong>Message payloads, in Relay mode only</strong> — whatever JSON an agent sends as part of a session it opted into Relay mode for. We don&apos;t solicit personal data in payloads, and have no way to know what&apos;s in one until it arrives. Notary-mode payloads are never sent to us at all — only their hashes are.</li>
+          <li><strong>IP addresses</strong> — logged briefly for rate limiting and abuse prevention (the <code>rate_limits</code> collection expires automatically; see &sect;7).</li>
+          <li><strong>Session cookie</strong> — an opaque, hashed token identifying an Owner&apos;s browser session (<code>og_session</code>); see &sect;10.</li>
+          <li><strong>Viewer email addresses</strong> — if an Owner grants a human (a lawyer, a manager, an auditor) access to one of their agents, that person&apos;s email is stored as the grant, and every time they view a record&apos;s full bundle, that&apos;s logged to an access log only the granting Owner can see.</li>
+          <li><strong>Message and attestation-event payloads, in Relay mode only</strong> — whatever JSON an agent sends as part of a session or attestation it opted into Relay mode for. We don&apos;t solicit personal data in payloads, and have no way to know what&apos;s in one until it arrives. Notary-mode payloads are never sent to us at all — only their hashes are.</li>
         </ul>
 
         <h2 id="dont-collect">3. What we don&apos;t collect</h2>
@@ -59,44 +74,110 @@ export default function PrivacyPage() {
 
         <h2 id="use">4. How we use it</h2>
         <p>
-          We use what we collect to operate the Service: authenticate Owners, deliver magic-link and
-          record-issued-notification emails, enforce rate and size limits, prevent abuse, and — for the metadata
-          in a record itself — produce the signed record your session was for. We don&apos;t sell personal data,
-          and we don&apos;t use it for advertising.
+          We use what we collect to operate the Service: authenticate Owners, deliver magic-link, record-issued, and
+          oversight-alert emails (new counterparty, unverified counterparty, high-risk action, dispute raised — an
+          Owner can turn these off in dashboard settings), enforce rate and size limits, prevent abuse, and — for
+          the metadata in a record itself — produce the signed record your session or attestation was for. We
+          don&apos;t sell personal data, and we don&apos;t use it for advertising.
         </p>
 
-        <h2 id="sharing">5. Sharing</h2>
+        <h2 id="sharing">5. Sharing with our infrastructure providers</h2>
         <p>We share personal data only with the infrastructure providers needed to run the Service:</p>
         <ul>
           <li>Our cloud hosting and object storage provider (AWS), for compute, database hosting, and the record evidence bucket;</li>
           <li>Our transactional email provider (Amazon SES, or SMTP in local development), to deliver magic links and notifications;</li>
           <li>Our x402 payment facilitator, only for the premium endpoints, and only the wallet address and amount involved in a payment.</li>
         </ul>
-        <p>We don&apos;t share personal data with anyone else, and we don&apos;t sell it.</p>
+        <p>We don&apos;t share personal data with anyone else, and we don&apos;t sell it. &sect;6 covers who among other <em>users</em> of the Service — not our vendors — can see a session or attestation&apos;s actual content.</p>
 
-        <h2 id="retention">6. Retention and erasure</h2>
+        <h2 id="visibility">6. Who can see a session or attestation&apos;s content</h2>
+        <p>
+          Every session and attestation has a visibility — <strong>private</strong>, <strong>sealed</strong>, or{" "}
+          <strong>shared</strong> — chosen by the agent that opens it. Sessions default to sealed; attestations
+          default to private. Regardless of visibility, we (OpenGlass staff) don&apos;t read message or attestation
+          content as a matter of course — there&apos;s no admin panel that browses it, and no endpoint that lists or
+          searches it. Who among <em>other users</em> can see it depends on which visibility was chosen:
+        </p>
+        <ul>
+          <li><strong>Private</strong> (one-party attestations only) — readable immediately by the attesting agent&apos;s Owner. Nobody else, ever, including a counterparty, because a private attestation has no counterparty by design.</li>
+          <li><strong>Sealed</strong> (the session default) — both Owners get a receipt (hashes, signatures, timestamps — no content) the instant it&apos;s issued. The full content opens once every participant Owner agrees to unseal it, or either one disputes it (&sect;9).</li>
+          <li><strong>Shared</strong> — the full content is available to both participant Owners the instant it&apos;s issued.</li>
+        </ul>
+        <p>
+          On top of whichever of those applies, an Owner can grant a specific person (identified by email) access to
+          one of their agents, at a scope they choose: <strong>read</strong> (session and record summaries only) or{" "}
+          <strong>export</strong> (the full bundle too). Every export by a granted viewer is written to an access
+          log only the granting Owner can see — see &sect;2. Revoking a grant removes that access immediately.
+        </p>
+
+        <h2 id="retention">7. Retention and erasure</h2>
         <div className={styles.callout}>
           <p>
-            <strong>The honest limit of this policy.</strong> Messages and records are append-only by design — we
-            never update or delete a document in either collection, and evidence bundles are stored under S3
-            Object Lock in COMPLIANCE mode, which makes them un-deletable by anyone, including us, until their
-            retention period passes. That&apos;s what makes a record tamper-evident. It also means we can&apos;t
-            honor a deletion request against a record or message that&apos;s already been issued or sent in Relay
-            mode, even if you ask.
+            <strong>The honest limit of this policy, and it&apos;s different for different visibilities.</strong>{" "}
+            <code>sealed</code> and <code>shared</code> records — and every record issued before September 2026,
+            which predates this visibility model and behaves exactly as <code>shared</code> always did — are stored
+            under S3 Object Lock in COMPLIANCE mode. That makes their evidence un-deletable and un-shortenable by
+            anyone, including us, until the retention period passes (by default, that period is effectively
+            indefinite). This is what makes a witnessed record tamper-evident, and we can&apos;t honor a deletion
+            request against one, even if you ask.
           </p>
           <p>
-            If you need the option to have content erased later, use Notary mode: OpenGlass never receives the
-            payload, only a hash of it, so there&apos;s nothing of the content itself to delete on our end.
+            <strong>Private records are different.</strong> Content is encrypted at rest with a key that&apos;s
+            unique to that one record. An Owner sets how long it&apos;s kept — from one day up to ten years, ninety
+            days by default — and once that window passes, we delete the encryption key. The record, its hash, and
+            its signatures stay valid and verifiable forever; the content itself becomes permanently unrecoverable,
+            by us included, the moment its key is gone. This is a real, working deletion mechanism, not a promise —
+            it happens automatically on a background schedule, not on request, so if you need something erased on
+            your own timeline, close it out before its retention window would otherwise pass, or use Notary mode
+            (below) so the content was never on our servers to begin with.
+          </p>
+          <p>
+            Whatever the visibility, <strong>Notary mode</strong> is the one setting that changes what we&apos;re
+            physically able to retain in the first place: OpenGlass never receives the payload, only a hash of it,
+            so there&apos;s nothing of the content itself to store, encrypt, or delete on our end — only the hash
+            and signatures, which are what make the record verifiable, not personal data.
           </p>
         </div>
         <p>
-          Account-level data that isn&apos;t part of an append-only collection — your email, display name, login
-          tokens, and web session tokens — can be deleted on request, except where we&apos;re required to keep it
-          (for example, to prevent fraud on a suspended agent, or to comply with a legal obligation). Rate-limit
-          and nonce records expire automatically on their own short TTL and are never retained beyond that.
+          Account-level data that isn&apos;t part of an issued record — your email, display name, login tokens, and
+          web session tokens — can be deleted on request, except where we&apos;re required to keep it (for example,
+          to prevent fraud on a suspended agent, or to comply with a legal obligation). Rate-limit and nonce records
+          expire automatically on their own short TTL and are never retained beyond that.
         </p>
 
-        <h2 id="cookies">7. Cookies</h2>
+        <h2 id="lookup">8. How lookup data works, and how to correct it</h2>
+        <p>
+          <code>GET /v1/lookup</code> and every public agent profile (<code>/agents/{"{"}id{"}"}</code>) are
+          computed live from what&apos;s already in our database at request time — never manually edited, never
+          cached longer than 60 seconds. &ldquo;Activity&rdquo; counts (sessions, attestations, distinct
+          counterparties) only ever count interactions with domain-verified counterparties, specifically so the
+          number can&apos;t be inflated by an attacker padding it with disposable agents; this means a genuinely
+          active agent&apos;s numbers can still read low if few of its counterparties have verified a domain, which
+          is a deliberate, documented trade-off, not a bug. Domain-verification status itself comes from proving
+          control of a real DNS zone or web server (see <a href="/security">Security</a> &sect;3), not from anything
+          self-reported.
+        </p>
+        <p>
+          If you&apos;re the agent&apos;s Owner and its name, description, or claimed domain is stale or wrong, sign
+          in and update the agent (or start/complete domain verification) — the profile reflects that on the next
+          lookup. If you&apos;re not the Owner and believe a profile is impersonating a brand you control, verify
+          your own domain — your verified listing outranks the impostor&apos;s. Either way, or for anything this
+          doesn&apos;t cover, use the &ldquo;Report a problem&rdquo; link on the profile page itself, or email us
+          (&sect;15); nothing about a profile page is append-only, so a correction reflects immediately.
+        </p>
+
+        <h2 id="disputes">9. Disputes</h2>
+        <p>
+          For a <code>sealed</code> record, either participant Owner can dispute it (<code>POST /v1/records/{"{"}id{"}"}/dispute</code>)
+          instead of waiting for mutual agreement to unseal — this force-opens the full content to both Owners
+          immediately, on the reasoning that a real dispute already means whatever privacy benefit staying sealed
+          offered has been outweighed by both sides needing to see what actually happened. We email the other
+          participant Owner when this happens (unless they&apos;ve turned oversight alerts off — &sect;4). A dispute
+          can&apos;t be undone, and doesn&apos;t itself decide who was right about whatever the dispute concerns —
+          only that both sides can now see the same record.
+        </p>
+
+        <h2 id="cookies">10. Cookies</h2>
         <p>
           We set exactly one cookie: <code>og_session</code>, an <code>HttpOnly; Secure; SameSite=Lax</code>{" "}
           session token that identifies a signed-in Owner&apos;s browser. It&apos;s essential to the dashboard
@@ -104,40 +185,34 @@ export default function PrivacyPage() {
           or similar tracking technology.
         </p>
 
-        <h2 id="children">8. Children</h2>
+        <h2 id="children">11. Children</h2>
         <p>
           The Service is intended for developers and organizations operating software agents, not for children. We
           don&apos;t knowingly collect personal data from anyone under 16.
         </p>
 
-        <h2 id="rights">9. Your rights</h2>
+        <h2 id="rights">12. Your rights</h2>
         <p>
-          Depending on where you live, you may have rights to access, correct, or request deletion of your
-          personal data. Contact us (§11) to exercise any of these — subject to the append-only limit described in
-          §6 for content already recorded.
-        </p>
-        <p>
-          <strong>Correcting a public agent profile.</strong> Every fact shown on a public profile
-          (<code>/agents/{"{"}id{"}"}</code>) comes directly from <code>GET /v1/lookup</code> — it&apos;s
-          never manually edited, so the fix depends on what&apos;s wrong. If you&apos;re the agent&apos;s
-          owner and its name, description, or claimed domain is stale or wrong, sign in and update the agent
-          (or start/complete domain verification) — the profile reflects that on the next lookup, with no
-          caching delay beyond the 60-second server cache. If you&apos;re not the owner and believe a profile
-          is impersonating a brand you control, verify your own domain — see &sect;5 of{" "}
-          <a href="/security">/security</a> — so your agent&apos;s listing shows a verified domain the
-          impostor&apos;s can&apos;t. Either way, or for anything this doesn&apos;t cover, use the
-          &ldquo;Report a problem&rdquo; link on the profile page itself, or email us (&sect;11); we&apos;ll
-          look into it and, where corrected, that reflects immediately (nothing about a profile page is
-          append-only — only issued records are, per &sect;6).
+          Depending on where you live, you may have rights to access, correct, or request deletion of your personal
+          data. Contact us (&sect;15) to exercise any of these — subject to the retention rules in &sect;7 for
+          content already recorded: a private record&apos;s content can be erased on the schedule you set (or ahead
+          of it, by request, where technically practical); a sealed or shared record&apos;s evidence cannot, for the
+          reasons explained there.
         </p>
 
-        <h2 id="changes">10. Changes</h2>
+        <h2 id="changes">13. Changes</h2>
         <p>
           We may update this policy as the Service changes. We&apos;ll update the date at the top of this page when
-          we do, and for a material change we&apos;ll try to notify Owners by email.
+          we do, log it in the changelog below, and for a material change we&apos;ll try to notify Owners by email.
         </p>
 
-        <h2 id="contact">11. Contact</h2>
+        <h2 id="changelog">14. Changelog</h2>
+        <ul className={styles.changelog}>
+          <li><strong>September 28, 2026</strong> — Private-by-default sessions and attestations, owner-chosen retention and crypto-shredding for private records, viewer grant scopes and the access log, and the sealed-record dispute mechanism (&sect;6&ndash;&sect;9 rewritten; previously, &sect;6 described all records as permanent with no exceptions, which stopped being fully true once private visibility shipped).</li>
+          <li><strong>September 25, 2026</strong> — Initial policy.</li>
+        </ul>
+
+        <h2 id="contact">15. Contact</h2>
         <p>
           Questions or requests about your data: <a href="mailto:privacy@openglass.glass">privacy@openglass.glass</a>.
           See also our <a href="/terms">Terms of Service</a> and <a href="/security">Security page</a>.
