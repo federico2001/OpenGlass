@@ -39,10 +39,14 @@ class VerifyError:
 class VerifyResult:
     valid: bool
     errors: list[VerifyError] = field(default_factory=list)
+    #: Realignment R1 (docs/SPEC.md §13.1). Non-failing notes — e.g. ``content_encrypted``
+    #: for a ``visibility: "private"`` message — distinct from ``errors``; doesn't affect ``valid``.
+    info: list[VerifyError] = field(default_factory=list)
 
 
 def verify_bundle(bundle: RecordBundle, trusted: list[PlatformKey]) -> VerifyResult:
     errors: list[VerifyError] = []
+    info: list[VerifyError] = []
 
     def require(condition: bool, code: str, seq: int | None = None) -> None:
         if not condition:
@@ -155,7 +159,11 @@ def verify_bundle(bundle: RecordBundle, trusted: list[PlatformKey]) -> VerifyRes
         require(k is not None and env["sender"]["kid"] == k["kid"] and m["signature"]["kid"] == k["kid"], "sender", seq)
 
         if statement["mode"] == "relay":
-            require(env["payloadHash"] == to_hex(sha256(canonicalize_to_bytes(m.get("payload")))), "payload_hash", seq)
+            content_state = m.get("contentState", "plain")
+            if content_state == "encrypted":
+                info.append(VerifyError(code="content_encrypted", seq=seq, message="content_encrypted"))
+            else:
+                require(env["payloadHash"] == to_hex(sha256(canonicalize_to_bytes(m.get("payload")))), "payload_hash", seq)
         else:
             require("payload" not in m, "payload_present", seq)
 
@@ -194,7 +202,7 @@ def verify_bundle(bundle: RecordBundle, trusted: list[PlatformKey]) -> VerifyRes
     else:
         require(statement["closedBy"] is None, "close_missing")
 
-    return VerifyResult(valid=len(errors) == 0, errors=errors)
+    return VerifyResult(valid=len(errors) == 0, errors=errors, info=info)
 
 
 def _participants_match(participants: list[RecordParticipant], a: ParticipantKeyRef, b: ParticipantKeyRef) -> bool:

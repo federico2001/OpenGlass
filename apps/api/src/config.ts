@@ -60,6 +60,23 @@ const Env = z
       .string()
       .default("")
       .transform((v) => v.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)),
+    /** Realignment R1 (docs/SPEC.md §13): envelope encryption for `visibility: "private"`
+     * record content. Unset by default — until it's configured, `visibility: "private"`
+     * requests gracefully fall back to `sealed` (see apps/api/src/domain/
+     * contentEncryptionDeps.ts) rather than erroring, the same "ships disabled until
+     * configured" pattern as X402_PAY_TO_ADDRESS/ADMIN_EMAILS above. */
+    CONTENT_ENCRYPTION: z.enum(["local", "kms"]).optional(),
+    /** A *different* KMS key from KMS_KEY_ID above: this one is a symmetric ENCRYPT_DECRYPT
+     * CMK for wrapping per-record data keys, not the platform's asymmetric SIGN_VERIFY
+     * signing key, which can't wrap anything. Required when CONTENT_ENCRYPTION=kms. */
+    CONTENT_KMS_KEY_ID: z.string().optional(),
+    /** Base64url-encoded 32-byte AES-256 master key, required when CONTENT_ENCRYPTION=local
+     * (dev/test only). Generate one with:
+     *  node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))" */
+    CONTENT_ENCRYPTION_LOCAL_KEY: z.string().optional(),
+    /** Days a `visibility: "private"` record is retained before `shredExpiredPrivateRecords`
+     * crypto-shreds it, absent an owner-configured `agents.privateRetentionDays` override. */
+    DEFAULT_PRIVATE_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
   })
   .superRefine((env, ctx) => {
     if (env.SIGNER === "kms" && !env.KMS_KEY_ID) ctx.addIssue({ code: "custom", path: ["KMS_KEY_ID"], message: "required when SIGNER=kms" });
@@ -67,6 +84,12 @@ const Env = z
       ctx.addIssue({ code: "custom", path: ["PLATFORM_SIGNER_LOCAL_KEY"], message: "required when SIGNER=local" });
     }
     if (env.EMAIL === "smtp" && !env.SMTP_URL) ctx.addIssue({ code: "custom", path: ["SMTP_URL"], message: "required when EMAIL=smtp" });
+    if (env.CONTENT_ENCRYPTION === "kms" && !env.CONTENT_KMS_KEY_ID) {
+      ctx.addIssue({ code: "custom", path: ["CONTENT_KMS_KEY_ID"], message: "required when CONTENT_ENCRYPTION=kms" });
+    }
+    if (env.CONTENT_ENCRYPTION === "local" && !env.CONTENT_ENCRYPTION_LOCAL_KEY) {
+      ctx.addIssue({ code: "custom", path: ["CONTENT_ENCRYPTION_LOCAL_KEY"], message: "required when CONTENT_ENCRYPTION=local" });
+    }
   });
 
 export type Config = z.infer<typeof Env>;

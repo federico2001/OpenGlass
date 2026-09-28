@@ -2,6 +2,7 @@ import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { connectFromEnv, createPlatformSigner, migrate } from "@openglass/db";
 import { loadConfig } from "./config.js";
 import { checkDomainVerification } from "./domain/domainVerification.js";
+import { createContentEncryptionDeps } from "./domain/contentEncryptionDeps.js";
 import { createX402Deps } from "./domain/x402.js";
 import { createMailer } from "./mailer.js";
 import { buildServer } from "./server.js";
@@ -29,6 +30,8 @@ const signer = createPlatformSigner({
 const mailer = createMailer(config, config.S3_REGION);
 const x402 = await createX402Deps(config);
 if (x402) console.log(`[x402] premium tier enabled: network=${x402.network} payTo=${x402.payTo}`);
+const contentEncryption = createContentEncryptionDeps(config);
+if (contentEncryption) console.log(`[content-encryption] visibility=private enabled: mode=${config.CONTENT_ENCRYPTION}`);
 
 const app = buildServer({
   logger: { level: config.LOG_LEVEL },
@@ -50,6 +53,7 @@ const app = buildServer({
   x402,
   checkDomainVerification,
   adminEmails: config.ADMIN_EMAILS,
+  contentEncryption,
 });
 
 await app.listen({ host: "0.0.0.0", port: config.PORT });

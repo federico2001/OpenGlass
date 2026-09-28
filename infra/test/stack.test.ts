@@ -112,4 +112,20 @@ describe("OpenGlassStack", () => {
   it("creates no Lambda-backed custom resources", () => {
     t.resourceCountIs("AWS::Lambda::Function", 0);
   });
+
+  it("realignment R1: no content-encryption KMS key or config unless enablePrivateVisibility is set", () => {
+    t.resourceCountIs("AWS::KMS::Key", 1); // just the platform signer
+    const names = Object.values(t.findResources("AWS::SSM::Parameter")).map((r) => (r as { Properties: { Name: string } }).Properties.Name);
+    expect(names).not.toContain("/openglass/prod/CONTENT_ENCRYPTION");
+    expect(names).not.toContain("/openglass/prod/CONTENT_KMS_KEY_ID");
+  });
+
+  it("realignment R1: enablePrivateVisibility provisions a SYMMETRIC_DEFAULT ENCRYPT_DECRYPT key, grants the instance role, and publishes CONTENT_ENCRYPTION=kms", () => {
+    const withPrivate = synth({ enablePrivateVisibility: true });
+    withPrivate.hasResourceProperties("AWS::KMS::Key", { KeySpec: "SYMMETRIC_DEFAULT", KeyUsage: "ENCRYPT_DECRYPT" });
+    withPrivate.hasResourceProperties("AWS::SSM::Parameter", { Name: "/openglass/prod/CONTENT_ENCRYPTION", Value: "kms" });
+    withPrivate.hasResourceProperties("AWS::SSM::Parameter", { Name: "/openglass/prod/CONTENT_KMS_KEY_ID" });
+    const policies = JSON.stringify(withPrivate.findResources("AWS::IAM::Policy"));
+    expect(policies).toContain("kms:GenerateDataKey");
+  });
 });

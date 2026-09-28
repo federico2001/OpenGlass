@@ -996,4 +996,46 @@ Access rule: same shape as §8.1's — the attestor agent, its owner, or a viewe
 
 New error codes (extending §11's table): `409 attestation_id_taken`, `409 attestation_not_active`, `422 open_invalid`.
 
+## 13. Visibility, sealing and retention (realignment R1)
+
+Every session and attestation carries a `visibility: "private" | "sealed" | "shared"`, chosen by the opening/offering agent as a sibling request-body field — not part of the signed offer/open object, the same pattern `idleTimeoutSec` already uses (§12.3). It's optional and absent on anything issued before this field existed, which is never reinterpreted as any of the three named values; those records keep behaving exactly as they always have (full content, no sealing). Sessions default to `sealed`; attestations default to `private` — the "know who your agent is talking to" positioning is private-by-default for an agent's own attestations, while a two-party session starts receipt-only until both sides have something to look at.
+
+- **`shared`** — today's behavior, unchanged: the full bundle is available to any participant the instant the record is issued.
+- **`sealed`** — both participant owners get a receipt (record id, hashes, signatures, participants, timestamps — never `purpose` or `evidence`) the instant the record is issued. The full bundle unlocks once every participant owner has consented to unseal (§13.2), or either one disputes, which force-unseals for fairness.
+- **`private`** — content is encrypted at rest (§13.3) and readable immediately by either participant owner — no unseal ceremony — but retention-limited: it's crypto-shredded after an owner-chosen (or platform-default) number of days, permanently destroying readability while the record itself, its hash and its platform signature remain valid forever. `sealed`/`shared` records keep the platform's normal full-duration S3 Object Lock, since their whole point is a durable proof both sides can rely on indefinitely; only `private` records carry a `retention`.
+
+A `visibility: "private"` request the platform can't actually satisfy (`CONTENT_ENCRYPTION` unconfigured — see infra/README.md) gracefully degrades to `sealed` rather than erroring, both at the API layer (request time) and, defensively, again at the worker (issuance time) in case the two containers' config ever drifts apart. This never silently upgrades an explicit `sealed`/`shared` choice.
+
+### 13.1 Signed statement and evidence fields
+
+`RecordStatement` (§7.5) gains `visibility` (same enum, optional, same absent-means-legacy rule) and `retention: { days: number, expiresAt: IsoTimestamp } | null` — present only for `visibility: "private"`, computed and platform-signed once at issuance so a record's own declared expiry is tamper-evident; it never changes after the fact, even if an owner later changes their retention setting (that only affects records issued *after* the change).
+
+`EvidenceMessage` (§7.4) gains `contentState: "plain" | "encrypted"`, optional, absent meaning `"plain"`. This is a platform-only-controlled field, deliberately kept as a sibling of `payload` rather than a marker inside it — Relay-mode `payload` is arbitrary agent-chosen JSON (§6), so folding a marker into that value would let an agent's own content coincidentally or maliciously collide with it. There is no `"shredded"` value: stored evidence never changes post-issuance, so `contentState` only ever describes the bundle as issued; whether content is *currently* decryptable is a live, out-of-band question `verifyBundle` can't answer from the bundle alone (§13.3).
+
+`verifyBundle` (§7.6) treats a relay message with `contentState: "encrypted"` as structurally valid without checking `payloadHash` against `payload` (the payload is ciphertext, not the value that hash committed to) and reports a non-failing `info: [{ code: "content_encrypted", seq, message }]` entry instead — a `VerifyResult.info` array, distinct from `errors`, for notes that don't affect `valid`. Everything else about the message (chain hash, agent signature, platform countersignature) is checked exactly as always.
+
+### 13.2 Sealing: unseal and dispute
+
+```
+POST /v1/records/{id}/unseal-request   owner, participant only  →  sealed -> unseal_requested
+POST /v1/records/{id}/unseal-approve   owner, participant only  →  adds this owner's approval; unseal_requested -> unsealed once every participant owner has approved
+POST /v1/records/{id}/dispute          owner, participant only  →  force-unseals immediately, bypassing consent
+```
+
+`records` (§3) gains `sealedState: { status: "sealed" | "unseal_requested" | "unsealed" | "disputed", requestedBy: "own_…" | null, approvals: "own_…"[], unsealedAt: Date | null, disputedBy: "own_…" | null, disputedAt: Date | null } | null` — present only for `visibility: "sealed"` records, initialized to `{ status: "sealed", … }` at issuance. `requestUnseal` implicitly counts the requester's own approval. These three actions are owner-authenticated (a human decision on behalf of a participant, not something an agent can trigger for itself) and scoped to a participant owner of the record; anyone else gets `404 not_found`, never confirming the record exists.
+
+**`GET /v1/records/{id}/bundle`** checks `visibility`/`sealedState` before responding: `sealed` with `status` still `"sealed"` or `"unseal_requested"` returns the receipt shape (`{ v, type: "openglass.receipt", recordId, statementHash, platformSignature, genesisHash, headSeq, headHash, messageCount, evidenceSha256, participants, activatedAt, closedAt, issuedAt, sealedState }`, no `evidence`); `"unsealed"` or `"disputed"` returns the ordinary full bundle. `shared` and `private` records never take the receipt path.
+
+New error codes: `409 not_sealed`, `409 unseal_already_in_progress`, `409 no_pending_unseal_request`, `409 already_unsealed`.
+
+### 13.3 Private: envelope encryption and crypto-shredding
+
+Content confidentiality for `visibility: "private"` uses envelope encryption: one long-lived platform master key (KMS `ENCRYPT_DECRYPT`, or a local AES-256 key for dev — a *different* key from the platform's own SIGN_VERIFY signing key, which can't wrap anything) wraps a fresh, per-record AES-256 data key generated once at issuance. That data key encrypts every relay-mode message's `payload` (AES-256-GCM, over the same canonical JSON bytes `payloadHash` was computed over) before the evidence is hashed, signed and uploaded — so `evidenceSha256`/the platform's signature cover the *encrypted* bytes, exactly as issued, forever. The wrapped (encrypted) data key ciphertext is stored as `records.encryption.dataKeyCiphertext` — a small field on the Mongo document, never inside the S3 evidence.
+
+**Crypto-shredding** is deleting that one field: `shredContent` (the one deliberate exception, alongside the sealing state-machine functions of §13.2, to `records`' append-only rule — see `packages/db/src/repositories/records.ts`) nulls `dataKeyCiphertext` and sets `encryption.shredded: true`. Without the data key, every payload it encrypted becomes permanently unrecoverable by anyone — KMS access included — while every other field of the record, and every byte of the immutable S3 evidence, never changes. `evidenceSha256` and the platform's signature over the record statement stay valid forever regardless of shred status; `verifyBundle` on a shredded record's bundle still reports `valid: true` (it only ever sees `contentState: "encrypted"`, structurally unchanged).
+
+A background worker job (`shredExpiredPrivateRecords`) sweeps `records` for `visibility: "private"`, not-yet-shredded documents whose `retention.expiresAt` has passed, and shreds each — idempotent and safe to run out of order with everything else in the worker's sweep loop. `agents.privateRetentionDays` (owner-set via `PATCH /v1/owner/agents/{id}/retention`, `null` clearing the override) picks the retention window for records that agent participates in as the private-choosing party (the session's initiator, or the attestation's own attestor); absent, the platform default (`DEFAULT_PRIVATE_RETENTION_DAYS`, 90) applies.
+
+`GET /v1/records/{id}/bundle` on a `private` record served to an authorized owner adds a `decryptedPayloads: { [seq]: unknown }` field alongside the untouched, fully-verifiable `evidence` — decrypted fresh on every request, never persisted, never folded into `evidence` itself (which must stay exactly what was signed). If the record has since been shredded, `decryptedPayloads` is omitted and `contentDeleted: true` is set instead.
+
 Deciding *when* an action is worth attesting is a separate concern from the attestation mechanism itself: see [`docs/POLICY.md`](POLICY.md) and [`/spec/openglass-policy`](../spec/openglass-policy) for a vendor-neutral format for classifying an agent's action as `low`/`medium`/`high` risk, with reference evaluators in `core-js`/`core-py`.

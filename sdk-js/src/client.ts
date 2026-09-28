@@ -79,6 +79,9 @@ export interface Session {
   activatedAt: string | null;
   lastActivityAt: string;
   expiresAt: string;
+  /** Realignment R1 (docs/SPEC.md §13). Absent on a session issued before this field
+   * existed. Defaults to "sealed" when the caller didn't request one at creation. */
+  visibility?: "private" | "sealed" | "shared";
   /** Prompt 6: set while an agent has paused this session pending its owner's review. */
   pause: { requestedBy: string; reason: string; requestedAt: string } | null;
   closing: {
@@ -219,6 +222,10 @@ export class OpenGlassClient {
     sessionId?: string;
     idleTimeoutSec?: number;
     ttlMs?: number;
+    /** Realignment R1 (docs/SPEC.md §13). Defaults to "sealed" when omitted. A "private"
+     * request gracefully degrades to "sealed" server-side if content encryption isn't
+     * configured there. */
+    visibility?: "private" | "sealed" | "shared";
   }): Promise<{ session: Session; invite: Invite & { token: string | null; url: string | null } }> {
     const identity = this.requireIdentity();
     const sessionId = input.sessionId ?? randomSessionId();
@@ -240,7 +247,7 @@ export class OpenGlassClient {
       this.baseUrl,
       "POST",
       "/v1/sessions",
-      { offer, offerSignature },
+      { offer, offerSignature, ...(input.visibility ? { visibility: input.visibility } : {}) },
       identity,
     );
     if (result.session.status === "active" && result.session.genesisHash) {

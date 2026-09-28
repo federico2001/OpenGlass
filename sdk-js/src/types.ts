@@ -107,6 +107,12 @@ export interface RecordStatement {
   closedBy: string | null;
   evidenceSha256: string;
   issuedAt: string;
+  /** Realignment R1 (docs/SPEC.md §13). Absent means "shared" — every record issued before
+   * this field existed. Never retroactively added to an already-signed statement. */
+  visibility?: "private" | "sealed" | "shared";
+  /** Present only when `visibility === "private"`. Platform-signed at issuance so a
+   * record's own declared expiry is tamper-evident. */
+  retention?: { days: number; expiresAt: string } | null;
 }
 
 export interface EvidenceMessage {
@@ -117,6 +123,11 @@ export interface EvidenceMessage {
   platformSignature: Signature;
   /** Relay mode only; absent (not null) in notary mode. */
   payload?: unknown;
+  /** Realignment R1 (docs/SPEC.md §13.1). Absent means "plain". "encrypted" means `payload`
+   * is an `EncryptedPayload` blob, not the agent's original content — platform-only-set,
+   * never something agent-supplied `payload` content can spoof (kept as a sibling field,
+   * never folded inside `payload` itself). */
+  contentState?: "plain" | "encrypted";
 }
 
 /** `offer`/`accept` (session) and `open` (attestation) are mutually exclusive — exactly

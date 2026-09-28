@@ -27,4 +27,5 @@ new OpenGlassStack(app, "OpenGlass", {
         cdpApiKeyId: process.env.OG_CDP_API_KEY_ID,
       }
     : undefined,
+  enablePrivateVisibility: process.env.OG_ENABLE_PRIVATE_VISIBILITY === "true",
 });

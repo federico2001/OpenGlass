@@ -18,6 +18,7 @@ import { canAccessSession, participantOf } from "../domain/access.js";
 import { withinClockSkew } from "../domain/genesis.js";
 import { inviteView, sessionView } from "../domain/sessionViews.js";
 import { generateToken, hashToken } from "../domain/tokens.js";
+import { Visibility, effectiveVisibility } from "../domain/visibility.js";
 import { parseOrError, sendError } from "../errors.js";
 import { verifyAgentRequest } from "../plugins/agentAuth.js";
 import { verifyAgentOrOwner } from "../plugins/agentOrOwnerAuth.js";
@@ -29,7 +30,7 @@ const MIN_EXPIRY_MS = 5 * 60_000;
 const MAX_EXPIRY_MS = 7 * 24 * 3_600_000;
 const MAX_PENDING_SESSIONS = 20;
 
-const CreateSessionBody = z.strictObject({ offer: Offer, offerSignature: Signature });
+const CreateSessionBody = z.strictObject({ offer: Offer, offerSignature: Signature, visibility: Visibility.optional() });
 const PauseSessionBody = z.strictObject({ reason: z.string().min(1).max(1000) });
 
 export function registerSessionsRoutes(app: FastifyInstance, deps: ServerDeps): void {
@@ -50,6 +51,7 @@ export function registerSessionsRoutes(app: FastifyInstance, deps: ServerDeps): 
       const body = parseOrError(CreateSessionBody, req.body, reply);
       if (!body) return;
       const { offer, offerSignature } = body;
+      const visibility = effectiveVisibility(body.visibility, "sealed", deps.contentEncryption);
       const initiator = req.agent!.doc;
 
       if (offer.initiator.agentId !== initiator._id) {
@@ -116,6 +118,7 @@ export function registerSessionsRoutes(app: FastifyInstance, deps: ServerDeps): 
         activatedAt: null,
         lastActivityAt: now,
         expiresAt: new Date(offer.expiresAt),
+        visibility,
         pause: null,
         closing: null,
         closedAt: null,

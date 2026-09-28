@@ -14,6 +14,10 @@ Mode = Literal["relay", "notary"]
 AgentStatus = Literal["unclaimed", "active", "suspended"]
 CloseReason = Literal["agent_closed", "idle_timeout", "agent_suspended", "message_limit", "owner_declined_pause"]
 RecordKind = Literal["session", "attestation"]
+Visibility = Literal["private", "sealed", "shared"]
+"""Realignment R1 (docs/SPEC.md §13). Absent means "shared" on a RecordStatement — every
+record issued before this field existed. Never retroactively added to an already-signed
+statement."""
 
 
 class Signature(TypedDict):
@@ -128,13 +132,24 @@ class _RecordStatementRequired(TypedDict):
     issuedAt: str
 
 
+class RecordRetention(TypedDict):
+    """Present only when ``visibility == "private"``. Platform-signed at issuance so a
+    record's own declared expiry is tamper-evident."""
+
+    days: int
+    expiresAt: str
+
+
 class RecordStatement(_RecordStatementRequired, total=False):
-    """``kind`` is the one optional key (Python 3.10 has no ``NotRequired``, hence the
-    required/optional TypedDict split) — absent means "session", the value for every
-    record issued before this field existed. Never retroactively added to an
-    already-signed, already-hashed statement."""
+    """``kind``/``visibility``/``retention`` are the optional keys (Python 3.10 has no
+    ``NotRequired``, hence the required/optional TypedDict split) — ``kind`` absent means
+    "session", ``visibility`` absent means "shared" (realignment R1, docs/SPEC.md §13); both
+    are the value for every record issued before the field existed. Never retroactively
+    added to an already-signed, already-hashed statement."""
 
     kind: RecordKind
+    visibility: Visibility
+    retention: RecordRetention | None
 
 
 class EvidenceMessage(TypedDict, total=False):
@@ -144,6 +159,9 @@ class EvidenceMessage(TypedDict, total=False):
     receivedAt: str
     platformSignature: Signature
     payload: Any  # relay mode only; absent (not just None) in notary mode
+    contentState: Literal["plain", "encrypted"]
+    """Realignment R1 (docs/SPEC.md §13.1). Absent means "plain". "encrypted" means
+    ``payload`` is an EncryptedPayload blob, not the agent's original content."""
 
 
 class EvidenceClose(TypedDict):

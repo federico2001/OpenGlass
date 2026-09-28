@@ -345,7 +345,7 @@ describe("automatic session and record events", () => {
     // finish the job the worker would normally do, with the same signer the session was
     // countersigned with, so issueRecords' own re-verification (SPEC §7.6) passes
     const mailer = createWorkerMailer();
-    const result = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer, publicUrl: "https://localhost" });
+    const result = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer, publicUrl: "https://localhost", contentEncryption: null });
     expect(result.issued).toBe(1);
 
     const issued = await bobFrames.wait((f) => f.type === "record.issued" && f.sessionId === sessionId, 8000);

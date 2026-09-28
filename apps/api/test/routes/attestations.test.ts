@@ -8,6 +8,7 @@ import {
   createOwnerSessionCookie,
   insertTestOwner,
   signedRequestHeaders,
+  testContentEncryptionDeps,
   testIdentity,
   testServerDeps,
   type TestAgentIdentity,
@@ -40,11 +41,15 @@ async function registerAndClaim(name: string): Promise<TestAgentIdentity> {
   return identity;
 }
 
-async function openAttestation(attestor: TestAgentIdentity, attestationId = newId("att")) {
+async function openAttestation(
+  attestor: TestAgentIdentity,
+  attestationId = newId("att"),
+  opts: { visibility?: "private" | "sealed" | "shared"; server?: ReturnType<typeof app> } = {},
+) {
   const { open, openSignature } = buildAttestationOpen({ attestationId, attestor });
-  const body = { open, openSignature };
+  const body = { open, openSignature, ...(opts.visibility ? { visibility: opts.visibility } : {}) };
   const headers = signedRequestHeaders({ method: "POST", path: "/v1/attestations", body, identity: attestor });
-  const res = await app().inject({ method: "POST", url: "/v1/attestations", headers, payload: body });
+  const res = await (opts.server ?? app()).inject({ method: "POST", url: "/v1/attestations", headers, payload: body });
   return res;
 }
 
@@ -82,6 +87,30 @@ describe("POST /v1/attestations", () => {
     const headers = signedRequestHeaders({ method: "POST", path: "/v1/attestations", body, identity: a });
     const res = await app().inject({ method: "POST", url: "/v1/attestations", headers: { ...headers, "og-agent": a.agentId }, payload: body });
     expect(res.statusCode).toBe(422);
+  });
+});
+
+describe("POST /v1/attestations visibility (realignment R1, docs/SPEC.md §13)", () => {
+  it("defaults to private when content encryption is configured", async () => {
+    const attestor = await registerAndClaim(`vis_default_${newId("agt").slice(-6)}`);
+    const server = buildServer({ ...testServerDeps(t), healthChecks: {}, contentEncryption: testContentEncryptionDeps() });
+    const res = await openAttestation(attestor, undefined, { server });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().attestation.visibility).toBe("private");
+  });
+
+  it("gracefully degrades the default private to sealed when content encryption isn't configured", async () => {
+    const attestor = await registerAndClaim(`vis_fallback_${newId("agt").slice(-6)}`);
+    const res = await openAttestation(attestor); // app() (top of file) has contentEncryption: null
+    expect(res.statusCode).toBe(201);
+    expect(res.json().attestation.visibility).toBe("sealed");
+  });
+
+  it("honors an explicit shared request", async () => {
+    const attestor = await registerAndClaim(`vis_shared_${newId("agt").slice(-6)}`);
+    const res = await openAttestation(attestor, undefined, { visibility: "shared" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().attestation.visibility).toBe("shared");
   });
 });
 

@@ -1,5 +1,6 @@
 import { PutObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import {
+  agentsRepository,
   canonicalizeToBytes,
   findAllMessagesBySession,
   hex,
@@ -18,9 +19,11 @@ import {
   type SessionDoc,
 } from "@openglass/db";
 import type { Db } from "mongodb";
+import type { ContentEncryptionDeps } from "../domain/contentEncryptionDeps.js";
 import type { Mailer } from "../mailer.js";
 import { emailRecordIssuedOwners } from "./notifyOwners.js";
 import { PLATFORM_KEY_GENESIS_DATE, trustedPlatformKeys } from "./platformKeys.js";
+import { resolveRecordVisibility } from "./recordVisibility.js";
 
 function evidenceMessageOf(m: MessageDoc): EvidenceMessage {
   return {
@@ -50,7 +53,14 @@ function buildEvidence(session: SessionDoc, messages: MessageDoc[]): Evidence {
   };
 }
 
-function buildStatement(session: SessionDoc, recordId: string, evidenceSha256: string, issuedAt: string): RecordStatement {
+function buildStatement(
+  session: SessionDoc,
+  recordId: string,
+  evidenceSha256: string,
+  issuedAt: string,
+  visibility: RecordStatement["visibility"],
+  retention: RecordStatement["retention"],
+): RecordStatement {
   return {
     v: 1,
     type: "openglass.record",
@@ -85,6 +95,8 @@ function buildStatement(session: SessionDoc, recordId: string, evidenceSha256: s
     closedBy: session.closing!.requestedBy,
     evidenceSha256,
     issuedAt,
+    visibility,
+    retention,
   };
 }
 
@@ -97,6 +109,8 @@ export interface IssueRecordsDeps {
   platformKeyValidFrom?: string;
   mailer: Mailer;
   publicUrl: string;
+  /** Realignment R1 (docs/SPEC.md §13) — null until CONTENT_ENCRYPTION is configured. */
+  contentEncryption: ContentEncryptionDeps | null;
   log?: (message: string, meta?: Record<string, unknown>) => void;
 }
 
@@ -109,6 +123,7 @@ export interface IssueRecordsDeps {
  */
 export async function issueRecords(deps: IssueRecordsDeps): Promise<{ issued: number; skipped: number }> {
   const sessions = sessionsRepository(deps.db);
+  const agents = agentsRepository(deps.db);
   const closing = await sessions.findClosing();
   const log = deps.log ?? (() => {});
 
@@ -117,12 +132,26 @@ export async function issueRecords(deps: IssueRecordsDeps): Promise<{ issued: nu
   for (const session of closing) {
     const messages = await findAllMessagesBySession(deps.db, session._id);
     const evidence = buildEvidence(session, messages);
-    const evidenceBytes = canonicalizeToBytes(evidence);
-    const evidenceSha256 = hex(sha256(evidenceBytes));
 
     const recordId = newId("rec");
     const issuedAt = new Date().toISOString();
-    const statement = buildStatement(session, recordId, evidenceSha256, issuedAt);
+    // The initiator's own retention preference governs a private session record — they're
+    // the one who opted into visibility: "private" in the first place (the default is
+    // "sealed"), so their agent's own override (or the platform default) applies rather
+    // than picking between two potentially-different owners' settings.
+    const initiatorAgent = await agents.findById(session.initiator.agentId!);
+    const resolved = await resolveRecordVisibility({
+      requestedVisibility: session.visibility,
+      defaultVisibility: "sealed",
+      ownerRetentionDaysOverride: initiatorAgent?.privateRetentionDays,
+      issuedAt,
+      evidence,
+      contentEncryption: deps.contentEncryption,
+    });
+
+    const evidenceBytes = canonicalizeToBytes(evidence);
+    const evidenceSha256 = hex(sha256(evidenceBytes));
+    const statement = buildStatement(session, recordId, evidenceSha256, issuedAt, resolved.visibility, resolved.statementRetention);
     const statementHashBytes = sha256(canonicalizeToBytes(statement));
     const statementHash = hex(statementHashBytes);
     const platformSignature = await deps.signer.sign("record", statementHashBytes);
@@ -149,6 +178,10 @@ export async function issueRecords(deps: IssueRecordsDeps): Promise<{ issued: nu
       participantAgentIds: [session.initiator.agentId!, session.counterparty.agentId!],
       participantOwnerIds: [session.initiator.ownerId!, session.counterparty.ownerId!],
       createdAt: new Date(),
+      visibility: resolved.visibility,
+      sealedState: resolved.sealedState,
+      retention: resolved.docRetention,
+      encryption: resolved.encryption,
     };
     const inserted = await insertRecord(deps.db, recordDoc);
 

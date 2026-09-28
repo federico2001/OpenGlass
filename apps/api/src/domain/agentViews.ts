@@ -70,5 +70,10 @@ export function agentFullView(doc: AgentDoc) {
      * premium purchases — private to the agent's own/owner's view, like domainVerification. */
     spendLimitUsdCents: doc.spendLimitUsdCents ?? null,
     totalSpendUsdCents: doc.totalSpendUsdCents ?? 0,
+    /** Realignment R1 (docs/SPEC.md §13): owner override for how long this agent's
+     * `visibility: "private"` records are retained before crypto-shredding. `null` means
+     * "use the platform default" (`DEFAULT_PRIVATE_RETENTION_DAYS`), not "retain forever" —
+     * private records are never kept indefinitely, unlike sealed/shared. */
+    privateRetentionDays: doc.privateRetentionDays ?? null,
   };
 }

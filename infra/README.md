@@ -50,6 +50,12 @@ pnpm exec cdk deploy                # prints the outputs used below
    aws ssm put-parameter --name /openglass/prod/CDP_API_KEY_SECRET --type SecureString --value '<cdp-api-key-secret>'
    ```
    The free public facilitator (used when these are unset, e.g. local dev) only settles Base Sepolia testnet — real payments need a CDP API key from [portal.cdp.coinbase.com/api-keys/secret](https://portal.cdp.coinbase.com/api-keys/secret), IP-allowlisted to the stack's `PublicIp` output.
+6. **Private-visibility records (realignment R1, optional)**: omit `OG_ENABLE_PRIVATE_VISIBILITY` and a `visibility: "private"` request gracefully degrades to `sealed` — no new AWS resource, no added cost. To actually enable envelope encryption for `visibility: "private"` records:
+   ```sh
+   export OG_ENABLE_PRIVATE_VISIBILITY=true
+   pnpm exec cdk deploy
+   ```
+   This provisions a new symmetric KMS key (`alias/openglass-content-encryption`, separate from the platform's own signing key) and sets `CONTENT_ENCRYPTION`/`CONTENT_KMS_KEY_ID`. It never provisions a new S3 bucket — private records still upload to the same Object-Locked `RecordsBucket` as everything else; crypto-shredding only ever clears the wrapped data key in Mongo, never touches S3 (see docs/SPEC.md §13.3).
 
 ## Checks that don't need AWS
 

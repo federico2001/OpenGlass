@@ -13,6 +13,15 @@ export interface VerifyError {
 export interface VerifyResult {
   valid: boolean;
   errors: VerifyError[];
+  /** Realignment R1: non-failing notes — currently just "this message's payload is
+   * encrypted (private-visibility record), so its content can't be hash-checked without
+   * the record's data key." Never affects `valid`; a shredded record's data key is gone
+   * for the exact same reason a merely-encrypted-but-not-yet-shredded one can't be
+   * checked here either, so both report the same `content_encrypted` code — verifyBundle
+   * has no way to know from the bundle alone whether the key still exists (that's live
+   * Mongo/KMS state, checked by the caller, e.g. `GET /v1/records/{id}/bundle`, which
+   * reports "content deleted by owner" itself once it confirms the key is actually gone). */
+  info: VerifyError[];
 }
 
 type ParticipantRef = Offer["initiator"]; // { agentId, kid, publicKey }
@@ -36,6 +45,7 @@ type ParticipantRef = Offer["initiator"]; // { agentId, kid, publicKey }
  */
 export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): VerifyResult {
   const errors: VerifyError[] = [];
+  const info: VerifyError[] = [];
   const require = (condition: boolean, code: string, seq?: number, message = code): void => {
     if (!condition) errors.push({ code, seq, message });
   };
@@ -135,7 +145,12 @@ export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): Veri
     require(!!k && env.sender.kid === k.kid && m.signature.kid === k.kid, "sender", seq);
 
     if (S.mode === "relay") {
-      require(env.payloadHash === hex(sha256(canonicalizeToBytes(m.payload))), "payload_hash", seq);
+      const contentState = m.contentState ?? "plain";
+      if (contentState === "encrypted") {
+        info.push({ code: "content_encrypted", seq, message: "content_encrypted" });
+      } else {
+        require(env.payloadHash === hex(sha256(canonicalizeToBytes(m.payload))), "payload_hash", seq);
+      }
     } else {
       require(!("payload" in m), "payload_present", seq);
     }
@@ -172,7 +187,7 @@ export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): Veri
     require(S.closedBy === null, "close_missing");
   }
 
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, info };
 }
 
 function participantsMatch(

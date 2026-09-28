@@ -1,4 +1,12 @@
 export { canonicalize, canonicalizeToBytes } from "./canonicalJson.js";
+export {
+  createContentEncryptor,
+  decryptPayload,
+  encryptPayload,
+  KmsContentEncryptor,
+  LocalContentEncryptor,
+  type ContentEncryptor,
+} from "./contentEncryption.js";
 export { base64UrlDecode, base64UrlEncode, generateEd25519KeyPair, signEd25519, verifyEd25519 } from "./ed25519.js";
 export { hex, hexToBytes, sha256 } from "./hash.js";
 export { createPlatformSigner, KmsSigner, LocalSigner, type PlatformSigner } from "./platformSigner.js";

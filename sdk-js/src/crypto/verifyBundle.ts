@@ -13,6 +13,9 @@ export interface VerifyError {
 export interface VerifyResult {
   valid: boolean;
   errors: VerifyError[];
+  /** Realignment R1 (docs/SPEC.md §13.1). Non-failing notes — e.g. `content_encrypted` for
+   * a `visibility: "private"` message — distinct from `errors`; doesn't affect `valid`. */
+  info: VerifyError[];
 }
 
 type ParticipantRef = Offer["initiator"]; // { agentId, kid, publicKey }
@@ -34,6 +37,7 @@ type ParticipantRef = Offer["initiator"]; // { agentId, kid, publicKey }
  */
 export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): VerifyResult {
   const errors: VerifyError[] = [];
+  const info: VerifyError[] = [];
   const require = (condition: boolean, code: string, seq?: number, message = code): void => {
     if (!condition) errors.push({ code, seq, message });
   };
@@ -133,7 +137,12 @@ export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): Veri
     require(!!k && env.sender.kid === k.kid && m.signature.kid === k.kid, "sender", seq);
 
     if (S.mode === "relay") {
-      require(env.payloadHash === hex(sha256(canonicalizeToBytes(m.payload))), "payload_hash", seq);
+      const contentState = m.contentState ?? "plain";
+      if (contentState === "encrypted") {
+        info.push({ code: "content_encrypted", seq, message: "content_encrypted" });
+      } else {
+        require(env.payloadHash === hex(sha256(canonicalizeToBytes(m.payload))), "payload_hash", seq);
+      }
     } else {
       require(!("payload" in m), "payload_present", seq);
     }
@@ -170,7 +179,7 @@ export function verifyBundle(bundle: RecordBundle, trusted: PlatformKey[]): Veri
     require(S.closedBy === null, "close_missing");
   }
 
-  return { valid: errors.length === 0, errors };
+  return { valid: errors.length === 0, errors, info };
 }
 
 function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {

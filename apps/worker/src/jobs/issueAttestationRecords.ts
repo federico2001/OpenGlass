@@ -1,5 +1,6 @@
 import { PutObjectCommand, type S3Client } from "@aws-sdk/client-s3";
 import {
+  agentsRepository,
   attestationsRepository,
   canonicalizeToBytes,
   findAllMessagesBySession,
@@ -18,7 +19,9 @@ import {
   type RecordStatement,
 } from "@openglass/db";
 import type { Db } from "mongodb";
+import type { ContentEncryptionDeps } from "../domain/contentEncryptionDeps.js";
 import { PLATFORM_KEY_GENESIS_DATE, trustedPlatformKeys } from "./platformKeys.js";
+import { resolveRecordVisibility } from "./recordVisibility.js";
 
 function evidenceMessageOf(m: MessageDoc): EvidenceMessage {
   return {
@@ -48,7 +51,14 @@ function buildEvidence(attestation: AttestationDoc, events: MessageDoc[]): Evide
   };
 }
 
-function buildStatement(attestation: AttestationDoc, recordId: string, evidenceSha256: string, issuedAt: string): RecordStatement {
+function buildStatement(
+  attestation: AttestationDoc,
+  recordId: string,
+  evidenceSha256: string,
+  issuedAt: string,
+  visibility: RecordStatement["visibility"],
+  retention: RecordStatement["retention"],
+): RecordStatement {
   return {
     v: 1,
     type: "openglass.record",
@@ -76,6 +86,8 @@ function buildStatement(attestation: AttestationDoc, recordId: string, evidenceS
     closedBy: attestation.closing!.requestedBy,
     evidenceSha256,
     issuedAt,
+    visibility,
+    retention,
   };
 }
 
@@ -85,6 +97,8 @@ export interface IssueAttestationRecordsDeps {
   s3Bucket: string;
   signer: PlatformSigner;
   platformKeyValidFrom?: string;
+  /** Realignment R1 (docs/SPEC.md §13) — null until CONTENT_ENCRYPTION is configured. */
+  contentEncryption: ContentEncryptionDeps | null;
   log?: (message: string, meta?: Record<string, unknown>) => void;
 }
 
@@ -96,6 +110,7 @@ export interface IssueAttestationRecordsDeps {
  */
 export async function issueAttestationRecords(deps: IssueAttestationRecordsDeps): Promise<{ issued: number; skipped: number }> {
   const attestations = attestationsRepository(deps.db);
+  const agents = agentsRepository(deps.db);
   const closing = await attestations.findClosing();
   const log = deps.log ?? (() => {});
 
@@ -104,12 +119,22 @@ export async function issueAttestationRecords(deps: IssueAttestationRecordsDeps)
   for (const attestation of closing) {
     const events = await findAllMessagesBySession(deps.db, attestation._id);
     const evidence = buildEvidence(attestation, events);
-    const evidenceBytes = canonicalizeToBytes(evidence);
-    const evidenceSha256 = hex(sha256(evidenceBytes));
 
     const recordId = newId("rec");
     const issuedAt = new Date().toISOString();
-    const statement = buildStatement(attestation, recordId, evidenceSha256, issuedAt);
+    const attestorAgent = await agents.findById(attestation.attestor.agentId);
+    const resolved = await resolveRecordVisibility({
+      requestedVisibility: attestation.visibility,
+      defaultVisibility: "private",
+      ownerRetentionDaysOverride: attestorAgent?.privateRetentionDays,
+      issuedAt,
+      evidence,
+      contentEncryption: deps.contentEncryption,
+    });
+
+    const evidenceBytes = canonicalizeToBytes(evidence);
+    const evidenceSha256 = hex(sha256(evidenceBytes));
+    const statement = buildStatement(attestation, recordId, evidenceSha256, issuedAt, resolved.visibility, resolved.statementRetention);
     const statementHashBytes = sha256(canonicalizeToBytes(statement));
     const statementHash = hex(statementHashBytes);
     const platformSignature = await deps.signer.sign("record", statementHashBytes);
@@ -139,6 +164,10 @@ export async function issueAttestationRecords(deps: IssueAttestationRecordsDeps)
       participantAgentIds: [attestation.attestor.agentId],
       participantOwnerIds: [attestation.attestor.ownerId],
       createdAt: new Date(),
+      visibility: resolved.visibility,
+      sealedState: resolved.sealedState,
+      retention: resolved.docRetention,
+      encryption: resolved.encryption,
     };
     const inserted = await insertRecord(deps.db, recordDoc);
 

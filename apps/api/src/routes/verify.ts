@@ -16,6 +16,7 @@ export function registerVerifyRoutes(app: FastifyInstance, deps: ServerDeps): vo
     return {
       valid: result.valid,
       errors: result.errors,
+      info: result.info,
       recordId: bundle.record.statement.recordId,
       sessionId: bundle.record.statement.sessionId,
     };

@@ -27,6 +27,8 @@ import { registerWsRoutes } from "./routes/ws.js";
 import { createWsHub, type WsHub } from "./ws/hub.js";
 import type { Mailer } from "./mailer.js";
 import type { X402Deps } from "./domain/x402.js";
+import type { ContentEncryptionDeps } from "./domain/contentEncryptionDeps.js";
+import { registerSealingRoutes } from "./routes/sealing.js";
 
 export type HealthCheck = () => Promise<unknown>;
 
@@ -63,6 +65,10 @@ export interface ServerDeps {
   checkDomainVerification: (domain: string, token: string) => Promise<boolean>;
   /** Lowercased owner emails allowed to use /v1/admin/* (Prompt 23). Empty means nobody. */
   adminEmails: string[];
+  /** Realignment R1 (docs/SPEC.md §13) — null until CONTENT_ENCRYPTION is configured, in
+   * which case `visibility: "private"` requests gracefully degrade to `sealed` (see
+   * domain/visibility.ts's effectiveVisibility). See domain/contentEncryptionDeps.ts. */
+  contentEncryption: ContentEncryptionDeps | null;
 }
 
 const CHECK_TIMEOUT_MS = 2_000;
@@ -124,6 +130,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerCloseRoutes(app, deps);
   registerOwnerRoutes(app, deps);
   registerRecordsRoutes(app, deps);
+  registerSealingRoutes(app, deps);
   registerVerifyRoutes(app, deps);
   registerLiveRoutes(app, deps);
   registerIntegrationsRoutes(app, deps);
