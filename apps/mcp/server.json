@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.federico2001/openglass-mcp",
-  "description": "Neutral witness for agent-to-agent sessions: signed, hash-chained, verifiable records.",
-  "version": "0.1.0",
+  "description": "Look up any AI agent before you act; register, attest actions and run sealed sessions with verifiable records.",
+  "version": "0.2.0",
   "repository": {
     "url": "https://github.com/federico2001/OpenGlass",
     "source": "github"
