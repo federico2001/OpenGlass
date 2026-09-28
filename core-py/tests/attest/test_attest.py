@@ -40,6 +40,26 @@ def make_handler(identity: AgentIdentity) -> tuple[Callable[[httpx.Request], htt
         body = json.loads(body_str) if body_str else None
         calls.append({"method": request.method, "path": request.url.path, "body": body})
 
+        # Public, unsigned — realignment R7's counterparty-check path in evaluate_and_attest.
+        if request.method == "GET" and request.url.path == "/v1/lookup":
+            agent_id = request.url.params.get("agentId")
+            return httpx.Response(
+                200,
+                json={
+                    "registered": True,
+                    "agentId": agent_id,
+                    "name": "Counterparty",
+                    "claimed": True,
+                    "verifiedOwner": None,
+                    "firstSeen": "2026-01-01T00:00:00.000Z",
+                    "keyAgeDays": 1,
+                    "software": None,
+                    "activity": {"sessionsLast90d": 0, "attestationsLast90d": 0, "distinctCounterparties": 0, "normalCloseShare": None},
+                    "openDisputesCount": 0,
+                    "flags": {"newAgent": True, "unverifiedDomain": False, "recentlyRotatedKey": False},
+                },
+            )
+
         headers = request.headers
         body_sha256 = sha256(body_str.encode("utf-8")).hex()
         digest = sha256(canonicalize({"method": request.method, "path": request.url.path, "timestamp": headers["og-timestamp"], "nonce": headers["og-nonce"], "bodySha256": body_sha256}).encode("utf-8"))
@@ -82,6 +102,51 @@ def test_attests_a_high_risk_event_via_a_real_open_event_close_sequence() -> Non
         f"/v1/attestations/{result['attestationId']}/events",
         f"/v1/attestations/{result['attestationId']}/close",
     ]
+
+
+def test_defaults_visibility_to_private_and_sends_it_explicitly() -> None:
+    identity = make_identity()
+    client, calls = fake_server(identity)
+    result = evaluate_and_attest(identity, POLICY, {"attributes": {"gen_ai.tool.name": "transfer_funds"}}, {"http_client": client})
+
+    assert result["attested"] is True
+    open_call = next(c for c in calls if c["path"] == "/v1/attestations")
+    assert open_call["body"]["visibility"] == "private"
+
+
+def test_optional_counterparty_check_is_folded_into_the_attested_payload_and_never_blocks() -> None:
+    identity = make_identity()
+    client, calls = fake_server(identity)
+    result = evaluate_and_attest(
+        identity,
+        POLICY,
+        {"attributes": {"gen_ai.tool.name": "transfer_funds"}},
+        {"http_client": client, "counterparty_agent_id": "agt_counterparty0000000000000"},
+    )
+
+    # A brand-new, unverified-domain-free counterparty defaults to "allow" — attesting
+    # still proceeds regardless, since guard()'s verdict here is informational only.
+    assert result["attested"] is True
+    lookup_call = next(c for c in calls if c["path"] == "/v1/lookup")
+    assert lookup_call is not None
+    event_call = next(c for c in calls if c["path"].endswith("/events"))
+    assert event_call["body"]["payload"] is None  # default mode is "notary" -- no payload leaves this process
+
+
+def test_counterparty_check_included_in_relay_mode_payload() -> None:
+    identity = make_identity()
+    client, calls = fake_server(identity)
+    result = evaluate_and_attest(
+        identity,
+        POLICY,
+        {"attributes": {"gen_ai.tool.name": "transfer_funds"}},
+        {"http_client": client, "mode": "relay", "counterparty_agent_id": "agt_counterparty0000000000000"},
+    )
+
+    assert result["attested"] is True
+    event_call = next(c for c in calls if c["path"].endswith("/events"))
+    assert event_call["body"]["payload"]["counterpartyCheck"]["action"] == "allow"
+    assert event_call["body"]["payload"]["counterpartyCheck"]["reason"] == "first time seeing this counterparty"
 
 
 def test_does_not_attest_a_low_risk_event_and_never_calls_the_api() -> None:

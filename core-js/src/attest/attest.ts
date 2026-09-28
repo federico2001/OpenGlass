@@ -1,4 +1,15 @@
-import { base64UrlEncode, canonicalize, canonicalizeToBytes, hex, sha256, sigInput, signEd25519, type AgentIdentity, type Signature } from "openglass-sdk";
+import {
+  base64UrlEncode,
+  canonicalize,
+  canonicalizeToBytes,
+  hex,
+  OpenGlassClient,
+  sha256,
+  sigInput,
+  signEd25519,
+  type AgentIdentity,
+  type Signature,
+} from "openglass-sdk";
 import { evaluate } from "../policy/evaluate.js";
 import type { Policy, PolicyEvent, RiskLevel } from "../policy/types.js";
 import { signedRequest } from "./httpSign.js";
@@ -48,9 +59,26 @@ export async function evaluateAndAttest(identity: AgentIdentity, policy: Policy,
 
   const baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
   const mode = opts.mode ?? "notary";
+  const visibility = opts.visibility ?? "private";
   const retries = opts.retries ?? 3;
   const fetchImpl = opts.fetchImpl ?? fetch;
   const onError = opts.onError ?? ((err: unknown) => console.error("[openglass-core] attestation failed, continuing without one:", err));
+
+  // Realignment R7: an optional, non-blocking counterparty check folded into the
+  // attested payload — never gates the attestation itself (a log of what happened
+  // shouldn't be suppressed by a lookup hiccup or a "warn"/"block" verdict; `guard()`
+  // is for gating the *agent's own action* elsewhere, not for gating its own record of it).
+  let counterpartyCheck: Awaited<ReturnType<OpenGlassClient["guard"]>> | undefined;
+  if (opts.counterpartyAgentId) {
+    const guardClient = new OpenGlassClient({ baseUrl, identity, fetchImpl });
+    counterpartyCheck = await guardClient.guard({
+      risk: verdict.risk,
+      counterpartyAgentId: opts.counterpartyAgentId,
+      minRiskToCheck: "low", // we already know we're attesting; always run the check opts asked for
+      onUnverifiedDomain: opts.onUnverifiedDomain,
+      onNewCounterparty: opts.onNewCounterparty,
+    });
+  }
 
   try {
     const attestationId = `att_${randomUlid()}`;
@@ -65,11 +93,19 @@ export async function evaluateAndAttest(identity: AgentIdentity, policy: Policy,
     };
     const openSignature = signPurpose("attestation_open", open, identity);
     const { attestation } = await withRetry(
-      () => signedRequest<{ attestation: AttestApiView }>(baseUrl, "POST", "/v1/attestations", { open, openSignature, idleTimeoutSec: opts.idleTimeoutSec }, identity, fetchImpl),
+      () =>
+        signedRequest<{ attestation: AttestApiView }>(
+          baseUrl,
+          "POST",
+          "/v1/attestations",
+          { open, openSignature, idleTimeoutSec: opts.idleTimeoutSec, visibility },
+          identity,
+          fetchImpl,
+        ),
       retries,
     );
 
-    const verdictPayload = { event, verdict };
+    const verdictPayload = counterpartyCheck ? { event, verdict, counterpartyCheck } : { event, verdict };
     const payload = mode === "relay" ? verdictPayload : undefined;
     const payloadHash = hex(sha256(canonicalizeToBytes(verdictPayload)));
     const envelope = {

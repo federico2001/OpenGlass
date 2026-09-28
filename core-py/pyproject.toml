@@ -1,6 +1,6 @@
 [project]
 name = "openglass-core"
-version = "0.1.0"
+version = "0.2.0"
 description = "OpenGlass integration core: the reference openglass-policy evaluator, and (soon) the shared runtime an integration builds on."
 readme = "README.md"
 requires-python = ">=3.10"
