@@ -28,21 +28,48 @@ function fakeOpenGlassServer(identity: AgentIdentity) {
   let headHash: string | null = null;
 
   const fetchImpl: typeof fetch = async (input, init) => {
-    const url = new URL(String(input));
-    const method = init!.method!;
+    // Normalized regardless of calling convention: `signedRequest` calls
+    // `fetch(urlString, init)` directly, but `openapi-fetch` (used for the public
+    // `lookup()`/`getAgent()`/etc. calls) constructs and passes a `Request` object
+    // instead — `new Request(input, init)` handles both uniformly.
+    const req = new Request(input, init);
+    const url = new URL(req.url);
+    const method = req.method;
     const path = url.pathname;
-    const bodyStr = typeof init!.body === "string" ? init!.body : "";
+    const bodyStr = await req.clone().text();
     const body = bodyStr ? JSON.parse(bodyStr) : undefined;
     calls.push({ method, path, body });
 
-    const headers = init!.headers as Record<string, string>;
+    // Public, unsigned — realignment R7's counterparty-check path in evaluateAndAttest.
+    if (method === "GET" && path === "/v1/lookup") {
+      const agentId = url.searchParams.get("agentId");
+      return Response.json({
+        registered: true,
+        agentId,
+        name: "Counterparty",
+        claimed: true,
+        verifiedOwner: null,
+        firstSeen: "2026-01-01T00:00:00.000Z",
+        keyAgeDays: 1,
+        software: null,
+        activity: { sessionsLast90d: 0, attestationsLast90d: 0, distinctCounterparties: 0, normalCloseShare: null },
+        openDisputesCount: 0,
+        flags: { newAgent: true, unverifiedDomain: false, recentlyRotatedKey: false },
+      });
+    }
+
     const bodySha256 = Buffer.from(sha256(Buffer.from(bodyStr, "utf8"))).toString("hex");
-    const digest = sha256(Buffer.from(canonicalize({ method, path, timestamp: headers["og-timestamp"], nonce: headers["og-nonce"], bodySha256 }), "utf8"));
+    const digest = sha256(
+      Buffer.from(
+        canonicalize({ method, path, timestamp: req.headers.get("og-timestamp"), nonce: req.headers.get("og-nonce"), bodySha256 }),
+        "utf8",
+      ),
+    );
     const valid = verifySignature(
       { alg: "Ed25519", kid: identity.kid, publicKey: identity.publicKey },
       "request",
       digest,
-      { alg: "Ed25519", kid: headers["og-key"]!, sig: headers["og-signature"]! },
+      { alg: "Ed25519", kid: req.headers.get("og-key")!, sig: req.headers.get("og-signature")! },
     );
     if (!valid) return new Response(JSON.stringify({ error: { code: "invalid_request_signature" } }), { status: 401 });
 
@@ -85,6 +112,51 @@ describe("evaluateAndAttest", () => {
       expect.stringMatching(/\/v1\/attestations\/att_.+\/events/),
       expect.stringMatching(/\/v1\/attestations\/att_.+\/close/),
     ]);
+  });
+
+  it("defaults visibility to private, and sends it explicitly", async () => {
+    const identity = testIdentity();
+    const server = fakeOpenGlassServer(identity);
+    const result = await evaluateAndAttest(identity, POLICY, { attributes: { "gen_ai.tool.name": "transfer_funds" } }, { fetchImpl: server.fetchImpl });
+
+    expect(result.attested).toBe(true);
+    const openCall = server.calls.find((c) => c.path === "/v1/attestations")!;
+    expect((openCall.body as { visibility: string }).visibility).toBe("private");
+  });
+
+  it("runs an optional counterparty check and folds it into the attested payload, without ever blocking", async () => {
+    const identity = testIdentity();
+    const server = fakeOpenGlassServer(identity);
+    const result = await evaluateAndAttest(
+      identity,
+      POLICY,
+      { attributes: { "gen_ai.tool.name": "transfer_funds" } },
+      { fetchImpl: server.fetchImpl, counterpartyAgentId: "agt_counterparty0000000000000" },
+    );
+
+    // A brand-new, unverified-domain-free counterparty defaults to "allow" — attesting
+    // still proceeds regardless, since guard()'s verdict here is informational only.
+    expect(result.attested).toBe(true);
+    expect(server.calls.some((c) => c.path === "/v1/lookup")).toBe(true);
+    const eventCall = server.calls.find((c) => c.path.endsWith("/events"))!;
+    expect((eventCall.body as { payload: unknown }).payload).toBeUndefined(); // default mode "notary" — no payload leaves this process
+  });
+
+  it("includes the counterparty check in the payload when mode is relay", async () => {
+    const identity = testIdentity();
+    const server = fakeOpenGlassServer(identity);
+    const result = await evaluateAndAttest(
+      identity,
+      POLICY,
+      { attributes: { "gen_ai.tool.name": "transfer_funds" } },
+      { fetchImpl: server.fetchImpl, mode: "relay", counterpartyAgentId: "agt_counterparty0000000000000" },
+    );
+
+    expect(result.attested).toBe(true);
+    const eventCall = server.calls.find((c) => c.path.endsWith("/events"))!;
+    const payload = (eventCall.body as { payload: { counterpartyCheck: { action: string; reason: string } } }).payload;
+    expect(payload.counterpartyCheck.action).toBe("allow");
+    expect(payload.counterpartyCheck.reason).toBe("first time seeing this counterparty");
   });
 
   it("does not attest a low-risk event, and never calls the API at all", async () => {

@@ -51,6 +51,18 @@ class AttestOptions(TypedDict, total=False):
     min_risk: RiskLevel
     mode: Mode
     idle_timeout_sec: int
+    # Realignment R7 (docs/SPEC.md §13). Default "private" — explicit here rather than
+    # left to the server's own default. A "private" request gracefully degrades to
+    # "sealed" server-side if content encryption isn't configured.
+    visibility: Literal["private", "sealed", "shared"]
+    # Realignment R7: optional counterparty lookup (openglass-sdk's `guard()`) folded into
+    # the attested payload alongside the policy verdict. Never blocks or suppresses the
+    # attestation itself — attestations are a log of what happened, not a gate on it; it
+    # only enriches the record with what was known about the counterparty at the time.
+    # Omit `counterparty_agent_id` to skip this entirely (the common case).
+    counterparty_agent_id: str
+    on_unverified_domain: Literal["allow", "warn", "block"]
+    on_new_counterparty: Literal["allow", "warn", "block"]
     retries: int
     on_error: Callable[[Exception], None]
     http_client: Any  # Optional[httpx.Client]; Any to avoid importing httpx just for the type here

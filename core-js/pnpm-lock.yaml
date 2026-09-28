@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       openglass-sdk:
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.2.0
+        version: 0.2.0
       yaml:
         specifier: ^2.6.0
         version: 2.9.1
@@ -319,8 +319,8 @@ packages:
   openapi-typescript-helpers@0.0.15:
     resolution: {integrity: sha512-opyTPaunsklCBpTK8JGef6mfPhLSnyy5a0IN9vKtx3+4aExf+KxEqYwIy3hqkedXIB97u357uLMJsOnm3GVjsw==}
 
-  openglass-sdk@0.1.0:
-    resolution: {integrity: sha512-obEK51uI+BE9h80uJSlIKrnfEyvkHmFBKDtI+EM8MP3XKz2puyFM0KeNjTv0OU+70/Pw/H13iDHavNAk80OJ0A==}
+  openglass-sdk@0.2.0:
+    resolution: {integrity: sha512-U0O9QkBHwm6tOXRnbOrFvrdMyW7cm2WYs/d7OKnr+1AtytWVU5ln+NBgtKYZVU36/d/AQgMqNe0RGKPPRPAChw==}
     engines: {node: '>=20'}
 
   picocolors@1.1.1:
@@ -654,7 +654,7 @@ snapshots:
 
   openapi-typescript-helpers@0.0.15: {}
 
-  openglass-sdk@0.1.0:
+  openglass-sdk@0.2.0:
     dependencies:
       '@noble/curves': 1.9.7
       openapi-fetch: 0.13.8

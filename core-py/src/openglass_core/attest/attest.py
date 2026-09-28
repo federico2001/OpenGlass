@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Optional, TypeVar
 
 import httpx
-from openglass import AgentIdentity, Signature, base64url_encode, canonicalize, canonicalize_to_bytes, sha256, sig_input, sign_ed25519, to_hex
+from openglass import AgentIdentity, OpenGlassClient, Signature, base64url_encode, canonicalize, canonicalize_to_bytes, sha256, sig_input, sign_ed25519, to_hex
 
 from ..policy.evaluate import evaluate
 from ..policy.types import Policy, PolicyEvent, PolicyResult, RiskLevel
@@ -63,9 +63,26 @@ def evaluate_and_attest(identity: AgentIdentity, policy: Policy, event: PolicyEv
 
     base_url = o.get("base_url", _DEFAULT_BASE_URL)
     mode = o.get("mode", "notary")
+    visibility = o.get("visibility", "private")
     retries = o.get("retries", 3)
     client: Optional[httpx.Client] = o.get("http_client")
     on_error = o.get("on_error", _default_on_error)
+
+    # Realignment R7: an optional, non-blocking counterparty check folded into the
+    # attested payload — never gates the attestation itself (a log of what happened
+    # shouldn't be suppressed by a lookup hiccup or a "warn"/"block" verdict; `guard()` is
+    # for gating the *agent's own action* elsewhere, not for gating its own record of it).
+    counterparty_check: Optional[dict[str, Any]] = None
+    counterparty_agent_id = o.get("counterparty_agent_id")
+    if counterparty_agent_id:
+        guard_client = OpenGlassClient(base_url=base_url, identity=identity, http_client=client)
+        counterparty_check = guard_client.guard(
+            risk=verdict["risk"],
+            counterparty_agent_id=counterparty_agent_id,
+            min_risk_to_check="low",  # we already know we're attesting; always run the check opts asked for
+            on_unverified_domain=o.get("on_unverified_domain", "warn"),
+            on_new_counterparty=o.get("on_new_counterparty", "allow"),
+        )
 
     try:
         attestation_id = f"att_{_random_ulid()}"
@@ -80,12 +97,19 @@ def evaluate_and_attest(identity: AgentIdentity, policy: Policy, event: PolicyEv
         }
         open_signature = _sign_purpose("attestation_open", open_stmt, identity)
         opened = _with_retry(
-            lambda: signed_request(base_url, "POST", "/v1/attestations", {"open": open_stmt, "openSignature": open_signature, "idleTimeoutSec": o.get("idle_timeout_sec")}, identity, client),
+            lambda: signed_request(
+                base_url,
+                "POST",
+                "/v1/attestations",
+                {"open": open_stmt, "openSignature": open_signature, "idleTimeoutSec": o.get("idle_timeout_sec"), "visibility": visibility},
+                identity,
+                client,
+            ),
             retries,
         )
         genesis_hash: str = opened["attestation"]["genesisHash"]
 
-        verdict_payload = {"event": event, "verdict": verdict}
+        verdict_payload = {"event": event, "verdict": verdict, "counterpartyCheck": counterparty_check} if counterparty_check else {"event": event, "verdict": verdict}
         payload = verdict_payload if mode == "relay" else None
         payload_hash = to_hex(sha256(canonicalize_to_bytes(verdict_payload)))
         envelope = {

@@ -1,6 +1,6 @@
 {
   "name": "@openglass/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "OpenGlass integration core: the reference openglass-policy evaluator, and (soon) the shared runtime an integration builds on.",
   "keywords": ["openglass", "ai-agents", "risk-policy", "opentelemetry", "gen-ai"],
   "homepage": "https://github.com/federico2001/OpenGlass/tree/main/core-js",
@@ -23,7 +23,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "openglass-sdk": "^0.1.0",
+    "openglass-sdk": "^0.2.0",
     "yaml": "^2.6.0",
     "zod": "^4.6.5"
   },

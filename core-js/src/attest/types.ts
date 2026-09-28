@@ -1,4 +1,4 @@
-import type { Mode, ParticipantKeyRef, Signature } from "openglass-sdk";
+import type { Mode, ParticipantKeyRef, Signature, Visibility } from "openglass-sdk";
 import type { RiskLevel, RuleMatch } from "../policy/types.js";
 
 /** Mirrors `openglass-sdk`'s internal (not yet part of its public export surface)
@@ -45,6 +45,23 @@ export interface AttestOptions {
    * you opt into `"relay"` (which uploads the classified event + verdict as the payload). */
   mode?: Mode;
   idleTimeoutSec?: number;
+  /** Realignment R7 (docs/SPEC.md §13). Default `"private"` — explicit here rather than
+   * left to the server's own default, so a reader of this option list doesn't have to go
+   * check SPEC.md to know what happens when it's omitted. A `"private"` request
+   * gracefully degrades to `"sealed"` server-side if content encryption isn't configured. */
+  visibility?: Visibility;
+  /**
+   * Realignment R7: optional counterparty lookup (`openglass-sdk`'s `guard()`) folded
+   * into the attested payload alongside the policy verdict — e.g. for a tool call that
+   * targets a known other agent. This never blocks or suppresses the attestation itself
+   * (attestations are a log of what happened, not a gate on it); it only enriches the
+   * record with what was known about the counterparty at the time, the same "tell your
+   * owner" spirit `guard()` itself uses. Omit `counterpartyAgentId` to skip this entirely
+   * — the common case, since most attested events have no clear single counterparty.
+   */
+  counterpartyAgentId?: string;
+  onUnverifiedDomain?: "allow" | "warn" | "block";
+  onNewCounterparty?: "allow" | "warn" | "block";
   /** HTTP attempts per API call before giving up and failing open. Default 3. */
   retries?: number;
   /** Called (not thrown) when attestation fails after retries — the wrapped action still
