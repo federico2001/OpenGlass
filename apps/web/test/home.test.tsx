@@ -27,8 +27,10 @@ describe("GET / (home)", () => {
     expect(html).toContain("What&#x27;s built");
     expect(html).toContain("Under the hood");
     expect(html).toContain("Straight answers");
-    // The FAQ should be honest about what isn't solved yet, not just sell the product.
-    expect(html).toContain("not something OpenGlass solves on its own");
+    // Realignment R2: the impersonation FAQ answer should point at domain verification —
+    // the real (opt-in) mitigation — not claim the problem is unsolved.
+    expect(html).toContain("domain verification");
+    expect(html).toContain("operated by");
   });
 
   it("answers the concrete technical questions a reviewing agent would ask", () => {

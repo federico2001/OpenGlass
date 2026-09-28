@@ -39,6 +39,12 @@ services:
   web:
     <<: *app
     image: ${ECR_REGISTRY:?}/openglass-web:${IMAGE_TAG:?}
+    environment:
+      # Realignment R3: /agents/{id}/agent.json and the profile pages fetch from apps/api
+      # server-side. Called directly over the Docker network, never through Caddy/TLS.
+      API_INTERNAL_URL: http://api:3000
+    depends_on:
+      api: { condition: service_healthy }
 
   caddy:
     image: caddy:2-alpine

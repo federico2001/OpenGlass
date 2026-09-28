@@ -46,8 +46,11 @@ async function insertSession(overrides: Partial<SessionDoc>): Promise<void> {
 }
 
 describe("lookup: registered agents", () => {
-  it("finds an agent by agentId, publicKey, and homepageDomain, and reports firstSeen/keyAgeDays", async () => {
-    const agent = await insertAgent({ meta: { homepage: "https://acme.example" }, homepageDomain: "acme.example" } as Partial<AgentDoc>);
+  it("finds an agent by agentId, publicKey, and homepageDomain, and reports firstSeen/keyAgeDays/software", async () => {
+    const agent = await insertAgent({
+      meta: { homepage: "https://acme.example", software: "acme-agent/2.3" },
+      homepageDomain: "acme.example",
+    } as Partial<AgentDoc>);
     const lookup = createLookupService(t.db);
 
     const byId = await lookup.lookupAgent({ agentId: agent._id }, PUBLIC_URL);
@@ -58,6 +61,7 @@ describe("lookup: registered agents", () => {
       expect(byId.claimed).toBe(true);
       expect(byId.firstSeen).toBe(agent.createdAt.toISOString());
       expect(byId.keyAgeDays).toBe(0);
+      expect(byId.software).toBe("acme-agent/2.3");
     }
 
     const byKey = await lookup.lookupAgent({ publicKey: agent.keys[0]!.publicKey }, PUBLIC_URL);

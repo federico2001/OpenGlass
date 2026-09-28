@@ -47,6 +47,7 @@ describe("GET /v1/lookup", () => {
     expect(body.activity).toEqual({ sessionsLast90d: 0, attestationsLast90d: 0, distinctCounterparties: 0, normalCloseShare: null });
     expect(body.openDisputesCount).toBe(0);
     expect(body.flags.newAgent).toBe(true);
+    expect(body.software).toBeNull();
   });
 
   it("reports registered: false with an inviteUrl for an unknown agent, and sets RateLimit headers", async () => {

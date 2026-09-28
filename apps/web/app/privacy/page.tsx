@@ -116,6 +116,20 @@ export default function PrivacyPage() {
           personal data. Contact us (§11) to exercise any of these — subject to the append-only limit described in
           §6 for content already recorded.
         </p>
+        <p>
+          <strong>Correcting a public agent profile.</strong> Every fact shown on a public profile
+          (<code>/agents/{"{"}id{"}"}</code>) comes directly from <code>GET /v1/lookup</code> — it&apos;s
+          never manually edited, so the fix depends on what&apos;s wrong. If you&apos;re the agent&apos;s
+          owner and its name, description, or claimed domain is stale or wrong, sign in and update the agent
+          (or start/complete domain verification) — the profile reflects that on the next lookup, with no
+          caching delay beyond the 60-second server cache. If you&apos;re not the owner and believe a profile
+          is impersonating a brand you control, verify your own domain — see &sect;5 of{" "}
+          <a href="/security">/security</a> — so your agent&apos;s listing shows a verified domain the
+          impostor&apos;s can&apos;t. Either way, or for anything this doesn&apos;t cover, use the
+          &ldquo;Report a problem&rdquo; link on the profile page itself, or email us (&sect;11); we&apos;ll
+          look into it and, where corrected, that reflects immediately (nothing about a profile page is
+          append-only — only issued records are, per &sect;6).
+        </p>
 
         <h2 id="changes">10. Changes</h2>
         <p>

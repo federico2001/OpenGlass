@@ -1,0 +1,137 @@
+.state {
+  font-size: 14px;
+  color: var(--ink-soft);
+  padding-block: 24px;
+}
+
+.masthead {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: clamp(24px, 5vw, 34px);
+  line-height: 1.15;
+  margin: 10px 0 12px;
+}
+
+.lede {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: var(--measure);
+  margin: 0;
+}
+
+.levelBadge {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  padding: 4px 12px;
+  border: 1px solid var(--rule-strong);
+}
+
+.levelBadge.strong {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.levelBadge.mid {
+  color: var(--ink);
+  border-color: var(--rule-strong);
+}
+
+.levelBadge.weak {
+  color: var(--ink-soft);
+  border-color: var(--rule);
+}
+
+.factGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.fact {
+  background: var(--bg-panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.factLabel {
+  margin: 0 0 4px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.factValue {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.factValue.warn {
+  color: #c2410c;
+}
+
+.section {
+  margin-top: 32px;
+}
+
+.h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.sectionNote {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+  max-width: var(--measure);
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.flag {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.link {
+  font-size: 13.5px;
+  color: var(--accent-text);
+}
+
+.pre {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.5;
+  background: var(--bg-panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 14px;
+  overflow-x: auto;
+  max-width: var(--measure);
+}
+
+.report {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}

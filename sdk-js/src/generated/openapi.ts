@@ -1087,6 +1087,8 @@ export interface components {
             };
             firstSeen: components["schemas"]["Timestamp"];
             keyAgeDays: number;
+            /** @description Self-reported (meta.software) — not independently verified. Realignment R3's "integrations used". */
+            software: string | null;
             activity: {
                 sessionsLast90d: number;
                 attestationsLast90d: number;
