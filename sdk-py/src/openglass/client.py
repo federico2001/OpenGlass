@@ -3,7 +3,8 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Literal
+from urllib.parse import urlencode
 
 import httpx
 
@@ -17,8 +18,22 @@ from .crypto import (
     to_hex,
 )
 from .crypto.verify_bundle import VerifyResult, verify_bundle as _verify_bundle
-from .http import public_request, random_session_id, signed_request
-from .types import Accept, AgentIdentity, CloseStatement, MessageEnvelope, Mode, Offer, PlatformKey, RecordBundle, Signature
+from .http import public_request, random_attestation_id, random_session_id, signed_request
+from .types import (
+    Accept,
+    AgentIdentity,
+    AttestationOpen,
+    CloseStatement,
+    MessageEnvelope,
+    Mode,
+    Offer,
+    PlatformKey,
+    RecordBundle,
+    Signature,
+)
+
+Visibility = Literal["private", "sealed", "shared"]
+GuardAction = Literal["allow", "warn", "block"]
 
 DEFAULT_BASE_URL = "https://openglass.glass"
 
@@ -50,6 +65,7 @@ class OpenGlassClient:
         self._http = http_client or httpx.Client(timeout=30.0)
         self._owns_http = http_client is None
         self._head_by_session: dict[str, _Head] = {}
+        self._head_by_attestation: dict[str, _Head] = {}
 
     def close(self) -> None:
         if self._owns_http:
@@ -126,6 +142,35 @@ class OpenGlassClient:
 
         return _poll(check, interval_s, timeout_s)
 
+    # ---- Lookup & domain verification (realignment R2/R7) --------------------------------
+
+    def lookup(
+        self, agent_id: str | None = None, domain: str | None = None, agent_card_url: str | None = None, public_key: str | None = None
+    ) -> dict[str, Any]:
+        """``GET /v1/lookup`` — check any agent, registered or not, before offering or
+        accepting a session with it. Public: no auth, no signing, works before you've even
+        registered yourself. Pass exactly one of the four keyword arguments."""
+        provided = [v for v in (agent_id, domain, agent_card_url, public_key) if v is not None]
+        if len(provided) != 1:
+            raise ValueError("Provide exactly one of agent_id, domain, agent_card_url, public_key.")
+        query = urlencode(
+            {k: v for k, v in {"agentId": agent_id, "domain": domain, "agentCardUrl": agent_card_url, "publicKey": public_key}.items() if v is not None}
+        )
+        return self._public("GET", f"/v1/lookup?{query}")
+
+    def request_domain_verification(self) -> dict[str, Any]:
+        """Starts domain verification for your own ``meta.homepage``: generates a token and
+        returns instructions for all three proof methods (a DNS TXT record, or one of two
+        well-known files)."""
+        return self._signed("POST", "/v1/agents/me/domain-verification")["domainVerification"]
+
+    def verify_domain(self) -> dict[str, Any]:
+        """Checks whether any of the three proof methods ``request_domain_verification()``
+        described now succeed — call after actually publishing the token. Raises
+        ``OpenGlassApiError`` (``domain_verification_not_requested``) if you haven't called
+        ``request_domain_verification()`` first."""
+        return self._signed("POST", "/v1/agents/me/domain-verification/check")["domainVerification"]
+
     # ---- Sessions ----------------------------------------------------------
 
     def offer_session(
@@ -136,9 +181,13 @@ class OpenGlassClient:
         session_id: str | None = None,
         idle_timeout_sec: int = 86400,
         ttl_s: float = 86400.0,
+        visibility: Visibility | None = None,
     ) -> dict[str, Any]:
         """Builds, signs, and submits a session offer. Omit ``counterparty_agent_id`` for
-        an open (bearer-link) invite instead of one addressed to a specific agent."""
+        an open (bearer-link) invite instead of one addressed to a specific agent.
+        ``visibility`` (realignment R1, SPEC §13) defaults to "sealed" server-side when
+        omitted; a "private" request gracefully degrades to "sealed" if the platform lacks
+        content encryption."""
         identity, agent_id = self._require_registered()
         sid = session_id or random_session_id()
         now = datetime.now(timezone.utc)
@@ -155,7 +204,10 @@ class OpenGlassClient:
             "expiresAt": _iso(now + timedelta(seconds=ttl_s)),
         }
         offer_signature = _sign_purpose("offer", offer, identity)
-        result = self._signed("POST", "/v1/sessions", {"offer": offer, "offerSignature": offer_signature})
+        body: dict[str, Any] = {"offer": offer, "offerSignature": offer_signature}
+        if visibility is not None:
+            body["visibility"] = visibility
+        result = self._signed("POST", "/v1/sessions", body)
         session = result["session"]
         if session["status"] == "active" and session.get("genesisHash"):
             self._head_by_session[sid] = _Head(seq=0, prev_hash=session["genesisHash"])
@@ -297,6 +349,172 @@ class OpenGlassClient:
 
     def get_record_bundle(self, record_id: str) -> RecordBundle:
         return self._signed("GET", f"/v1/records/{record_id}/bundle")
+
+    # ---- Attestations (SPEC §12) — the one-party counterpart to a session ----------------
+
+    def open_attestation(
+        self,
+        purpose: str,
+        mode: Mode = "relay",
+        attestation_id: str | None = None,
+        idle_timeout_sec: int = 86400,
+        visibility: Visibility | None = None,
+    ) -> dict[str, Any]:
+        """Logs one of your own agent's actions — a payment, a tool call, a policy match —
+        with no counterparty to invite or accept. Activates immediately. ``visibility``
+        defaults to "private" server-side when omitted (unlike a session, which defaults
+        to "sealed"). There is no separate per-call "retention" parameter here — retention
+        on "private" records is an owner-dashboard setting
+        (``PATCH /v1/owner/agents/{id}/retention``), not something an agent's own signed
+        request can set; this client is agent-authenticated only."""
+        identity, agent_id = self._require_registered()
+        aid = attestation_id or random_attestation_id()
+        open_obj: AttestationOpen = {
+            "v": 1,
+            "type": "openglass.attestation_open",
+            "attestationId": aid,
+            "mode": mode,
+            "purpose": purpose,
+            "attestor": {"agentId": agent_id, "kid": identity.kid, "publicKey": base64url_encode(identity.public_key)},
+            "createdAt": _iso(datetime.now(timezone.utc)),
+        }
+        open_signature = _sign_purpose("attestation_open", open_obj, identity)
+        body: dict[str, Any] = {"open": open_obj, "openSignature": open_signature, "idleTimeoutSec": idle_timeout_sec}
+        if visibility is not None:
+            body["visibility"] = visibility
+        result = self._signed("POST", "/v1/attestations", body)
+        attestation = result["attestation"]
+        if attestation.get("genesisHash"):
+            self._head_by_attestation[aid] = _Head(seq=0, prev_hash=attestation["genesisHash"])
+        return result
+
+    def get_attestation(self, attestation_id: str) -> dict[str, Any]:
+        return self._signed("GET", f"/v1/attestations/{attestation_id}")["attestation"]
+
+    def send_attestation_event(
+        self, attestation_id: str, payload: Any, content_type: str = "application/json", seq: int | None = None, prev_hash: str | None = None
+    ) -> dict[str, Any]:
+        """Appends one signed, hash-chained event — the one-party counterpart to
+        ``send_message``. ``seq``/``prev_hash`` are tracked automatically from
+        ``open_attestation``, same as sessions."""
+        identity, agent_id = self._require_registered()
+        tracked = self._head_by_attestation.get(attestation_id)
+        resolved_seq = seq if seq is not None else (tracked.seq + 1 if tracked else None)
+        resolved_prev_hash = prev_hash if prev_hash is not None else (tracked.prev_hash if tracked else None)
+        if resolved_seq is None or resolved_prev_hash is None:
+            raise RuntimeError(f"No tracked head for attestation {attestation_id} — call open_attestation first, or pass seq/prev_hash explicitly.")
+
+        payload_hash = to_hex(sha256(canonicalize(payload).encode("utf-8")))
+        envelope: MessageEnvelope = {
+            "v": 1,
+            "type": "openglass.message",
+            "sessionId": attestation_id,
+            "seq": resolved_seq,
+            "prevHash": resolved_prev_hash,
+            "sender": {"agentId": agent_id, "kid": identity.kid},
+            "contentType": content_type,
+            "payloadHash": payload_hash,
+            "sentAt": _iso(datetime.now(timezone.utc)),
+        }
+        hash_bytes = sha256(bytes.fromhex(resolved_prev_hash) + canonicalize(envelope).encode("utf-8"))
+        h = to_hex(hash_bytes)
+        signature: Signature = {"alg": "Ed25519", "kid": identity.kid, "sig": base64url_encode(sign_ed25519(sig_input("message", hash_bytes), identity.private_key))}
+
+        result = self._signed("POST", f"/v1/attestations/{attestation_id}/events", {"envelope": envelope, "hash": h, "signature": signature, "payload": payload})
+        head = result["head"]
+        self._head_by_attestation[attestation_id] = _Head(seq=head["seq"], prev_hash=head["hash"])
+        return result
+
+    def close_attestation(self, attestation_id: str) -> None:
+        identity = self._require_identity()
+        tracked = self._head_by_attestation.get(attestation_id)
+        if tracked:
+            head_seq = tracked.seq
+            head_hash = None if tracked.seq == 0 else tracked.prev_hash
+        else:
+            attestation = self.get_attestation(attestation_id)
+            head_seq = attestation["head"]["seq"]
+            head_hash = attestation["head"]["hash"]
+        statement: CloseStatement = {
+            "v": 1,
+            "type": "openglass.close",
+            "sessionId": attestation_id,
+            "headSeq": head_seq,
+            "headHash": head_hash,
+            "closedAt": _iso(datetime.now(timezone.utc)),
+        }
+        signature = _sign_purpose("close", statement, identity)
+        self._signed("POST", f"/v1/attestations/{attestation_id}/close", {"statement": statement, "signature": signature})
+
+    def wait_for_attestation_record(self, attestation_id: str, interval_s: float = 2.0, timeout_s: float | None = None) -> str:
+        """Polls until the attestation is ``"closed"`` and a record has been issued;
+        returns the ``recordId``."""
+
+        def check() -> str | None:
+            attestation = self.get_attestation(attestation_id)
+            return attestation["recordId"] if attestation["status"] == "closed" and attestation.get("recordId") else None
+
+        return _poll(check, interval_s, timeout_s)
+
+    # ---- Sealed record ceremony (realignment R1/R4, docs/SPEC.md §13.2) ------------------
+
+    def request_unseal(self, record_id: str) -> dict[str, Any]:
+        """For a ``visibility: "sealed"`` record: requests the unseal ceremony, implicitly
+        counting your own approval."""
+        return self._signed("POST", f"/v1/records/{record_id}/unseal-request")
+
+    def approve_unseal(self, record_id: str) -> dict[str, Any]:
+        """Adds your own approval; the record fully unseals once every participant owner
+        has called this."""
+        return self._signed("POST", f"/v1/records/{record_id}/unseal-approve")
+
+    def dispute(self, record_id: str) -> dict[str, Any]:
+        """Force-unseals a sealed record immediately, bypassing the other owner's consent —
+        for when you need to contest what's in it."""
+        return self._signed("POST", f"/v1/records/{record_id}/dispute")
+
+    # ---- guard() (realignment R7) ---------------------------------------------------------
+
+    def guard(
+        self,
+        risk: str,
+        counterparty_agent_id: str | None = None,
+        min_risk_to_check: Literal["low", "medium", "high"] = "high",
+        on_unverified_domain: GuardAction = "warn",
+        on_new_counterparty: GuardAction = "allow",
+    ) -> dict[str, Any]:
+        """A pre-flight check for a tool call your own policy layer (e.g. ``openglass-policy``
+        via ``core-js``/``core-py``) has already marked as worth a second look. ``guard()``
+        doesn't run policy itself — pass in the risk level you've already computed. When
+        that risk meets ``min_risk_to_check`` (default "high") and a
+        ``counterparty_agent_id`` is given, it looks the counterparty up (``lookup()``) and
+        decides "allow" / "warn" / "block" from your own ``on_unverified_domain`` /
+        ``on_new_counterparty`` policy — there's no server-side "owner config" this reads;
+        you configure it locally, since only you (the integration) knows what's appropriate
+        for your own agent's risk tolerance. **Fails open**: if OpenGlass itself is
+        unreachable, returns "allow" rather than block a real task on an infrastructure
+        hiccup — this is advisory, not a hard gate. Returns
+        ``{"action", "reason", "lookup": <LookupResult | None>}``."""
+        rank = {"low": 0, "medium": 1, "high": 2}
+        threshold = rank[min_risk_to_check]
+        actual = rank.get(risk, rank["high"])  # unknown risk labels are treated as high, not skipped
+        if actual < threshold:
+            return {"action": "allow", "reason": f'risk "{risk}" is below the check threshold', "lookup": None}
+        if not counterparty_agent_id:
+            return {"action": "allow", "reason": "no counterparty to check", "lookup": None}
+
+        try:
+            info = self.lookup(agent_id=counterparty_agent_id)
+        except Exception as err:  # noqa: BLE001 - deliberately broad: any failure here must fail open
+            return {"action": "allow", "reason": f"OpenGlass unreachable, failing open: {err}", "lookup": None}
+
+        if not info.get("registered"):
+            return {"action": on_new_counterparty, "reason": "counterparty is not registered with OpenGlass at all", "lookup": info}
+        if info.get("flags", {}).get("unverifiedDomain"):
+            return {"action": on_unverified_domain, "reason": "counterparty's domain is not verified", "lookup": info}
+        if info.get("flags", {}).get("newAgent"):
+            return {"action": on_new_counterparty, "reason": "first time seeing this counterparty", "lookup": info}
+        return {"action": "allow", "reason": "counterparty is registered, claimed, and domain-verified", "lookup": info}
 
     def fetch_trusted_keys(self) -> list[PlatformKey]:
         """``{apiUrl}/.well-known/openglass-keys.json`` — the platform's current and

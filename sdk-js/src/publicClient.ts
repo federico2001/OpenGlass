@@ -8,8 +8,8 @@ import type { paths } from "./generated/openapi.js";
  * (which is why the *signed* endpoints in `http.ts` build requests by hand instead: the
  * exact raw bytes sent must match the exact bytes whose hash was signed).
  */
-export function createPublicClient(baseUrl: string) {
-  return createClient<paths>({ baseUrl });
+export function createPublicClient(baseUrl: string, fetchImpl: typeof fetch = fetch) {
+  return createClient<paths>({ baseUrl, fetch: fetchImpl });
 }
 
 export type PublicClient = ReturnType<typeof createPublicClient>;

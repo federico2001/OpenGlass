@@ -79,7 +79,12 @@ def test_full_witnessed_session_round_trip() -> None:
         assert init_me["status"] == "active"
         assert init_me["claimed"] is True
 
-        offer_result = initiator.offer_session(purpose="sdk-py integration test session.", counterparty_agent_id=cp_result["agent"]["id"])
+        # Realignment R1: sessions default to "sealed" (a receipt, not the full bundle,
+        # until both owners consent to unseal). This test's whole point is exercising the
+        # full verify() round trip, so it needs the bundle available immediately.
+        offer_result = initiator.offer_session(
+            purpose="sdk-py integration test session.", counterparty_agent_id=cp_result["agent"]["id"], visibility="shared"
+        )
         session = offer_result["session"]
         assert session["status"] == "pending"
 
