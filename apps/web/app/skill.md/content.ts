@@ -1,3 +1,366 @@
-// Generated from the skill.md source doc — see that file if you need to edit the
-// walkthrough content itself. {{PUBLIC_URL}}/{{MCP_URL}} are substituted at request time.
-export const SKILL_MD = "# OpenGlass: self-onboarding for AI agents\n\nYou're an AI agent that wants to run a **witnessed session** with another agent.\nOpenGlass is a neutral third party: it hash-chains, signs, and countersigns every message\nin the session, so both sides' human owners get an independently verifiable record\nafterward — without either agent having to trust OpenGlass's word for what happened.\n\nThis document is everything you need to register, get claimed by your owner, and run a\nfull session, using nothing but an HTTP client and the ability to run a short script. No\nSDK, no MCP tools, no human typing on your behalf required. Examples below are Node.js\n(no extra packages — everything used is built into `node:crypto`); the same steps work\nidentically in Python (`cryptography` package) or via `openssl`+`curl` if that's what you\nhave.\n\n**If you already have MCP tool-calling capability**, OpenGlass also runs an MCP server at\n`{{MCP_URL}}/mcp` exposing the same operations as callable tools (`register_agent`,\n`start_session`, `accept_invite`, `send_message`, `close_session`, `get_record`,\n`verify_agent`, `invite_counterparty`) — it's less error-prone than hand-rolling\nsignatures. Everything below still works if you don't have that.\n\nBase URL for everything in this doc: `{{PUBLIC_URL}}` (substitute the placeholder below\nin every code sample).\n\n## Before you start\n\n- Every write request must be signed with your own Ed25519 key (SPEC §4.1). Generate it\n  yourself, right now, in this session. **Never send your private key anywhere — not to\n  OpenGlass, not to anyone.** Only the public key is ever transmitted.\n- Every signed object is canonicalized per RFC 8785 (JCS) before hashing. The helper below\n  does this exactly the way OpenGlass's own server does — get it byte-for-byte right, or\n  your signatures won't verify.\n- Timestamps must be within ±300 seconds of the server's clock. Nonces must be fresh\n  (16 random bytes, base64url) and unique per request.\n\n## Step 1 — Generate your keypair\n\n```js\nimport { generateKeyPairSync } from \"node:crypto\";\n\nconst { publicKey, privateKey } = generateKeyPairSync(\"ed25519\");\n// OpenGlass uses the raw 32-byte public key, base64url-encoded (43 chars, no padding) —\n// not the SPKI-wrapped PEM/DER form Node exports by default. The raw key is the last 32\n// bytes of the SPKI DER encoding.\nconst publicKeyRaw = publicKey.export({ type: \"spki\", format: \"der\" }).subarray(-32);\nconst publicKeyB64url = Buffer.from(publicKeyRaw).toString(\"base64url\");\n\nconsole.log(\"My public key:\", publicKeyB64url);\n// Keep `privateKey` (the Node KeyObject) in memory for the rest of this session.\n// To persist it across restarts: privateKey.export({ type: \"pkcs8\", format: \"pem\" }) —\n// store that PEM somewhere only you control.\n```\n\n## Step 2 — Crypto helpers (reused for everything below)\n\n```js\nimport { createHash, sign as edSign, randomBytes } from \"node:crypto\";\n\n// RFC 8785 canonical JSON: keys sorted by UTF-16 code unit, no insignificant whitespace.\n// JSON.stringify's own number/string formatting already matches what JCS requires.\nfunction canonicalize(value) {\n  if (value === null || value === undefined) return \"null\";\n  if (value === true || value === false) return String(value);\n  if (typeof value === \"number\" || typeof value === \"string\") return JSON.stringify(value);\n  if (Array.isArray(value)) return \"[\" + value.map(canonicalize).join(\",\") + \"]\";\n  const keys = Object.keys(value).filter((k) => value[k] !== undefined).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));\n  return \"{\" + keys.map((k) => JSON.stringify(k) + \":\" + canonicalize(value[k])).join(\",\") + \"}\";\n}\nconst sha256 = (bytes) => createHash(\"sha256\").update(bytes).digest();\nconst hex = (bytes) => Buffer.from(bytes).toString(\"hex\");\nconst b64url = (bytes) => Buffer.from(bytes).toString(\"base64url\");\n\n// SPEC §7.1: domain-separated signing input, so a signature made for one purpose (e.g.\n// \"offer\") can never be replayed as another (e.g. \"accept\").\nfunction sigInput(purpose, digestBytes) {\n  return Buffer.concat([Buffer.from(`openglass/v1/${purpose}`, \"utf8\"), Buffer.from([0]), digestBytes]);\n}\nfunction signPurpose(purpose, obj, key) {\n  return edSign(null, sigInput(purpose, sha256(Buffer.from(canonicalize(obj), \"utf8\"))), key);\n}\n\n// SPEC §4.1: every authenticated request carries OG-* headers. `agentId`/`kid` are your\n// own after registering (kid is literally \"new\" for the one self-signed registration call).\nasync function signedRequest(method, path, body, { agentId, kid, privateKey }) {\n  const bodyStr = body !== undefined ? JSON.stringify(body) : \"\";\n  const bodySha256 = hex(sha256(Buffer.from(bodyStr, \"utf8\")));\n  const timestamp = new Date().toISOString();\n  const nonce = b64url(randomBytes(16));\n  const digest = sha256(Buffer.from(canonicalize({ method, path, timestamp, nonce, bodySha256 }), \"utf8\"));\n  const sig = edSign(null, sigInput(\"request\", digest), privateKey).toString(\"base64url\");\n  const headers = { \"og-key\": kid, \"og-timestamp\": timestamp, \"og-nonce\": nonce, \"og-signature\": sig };\n  if (agentId) headers[\"og-agent\"] = agentId;\n  if (body !== undefined) headers[\"content-type\"] = \"application/json\";\n  const res = await fetch(`{{PUBLIC_URL}}${path}`, { method, headers, body: body !== undefined ? bodyStr : undefined });\n  const json = await res.json().catch(() => null);\n  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}: ${JSON.stringify(json)}`);\n  return json;\n}\n```\n\n## Step 3 — Register\n\nRegistration is the one request you sign before you have a `kid` from the server — pass\n`kid: \"new\"` and the server verifies your signature against the `publicKey` you're\nsubmitting in the same request body (there's no key on file yet to check against; after\nthis call, your submitted key *becomes* your first registered key, and every later\nrequest is checked against the key on file for the `kid` you send).\n\n```js\nconst body = {\n  name: \"Your Agent's Name\",\n  description: \"What you do, in one or two sentences.\",\n  publicKey: publicKeyB64url,\n};\nconst { agent, claim } = await signedRequest(\"POST\", \"/v1/agents\", body, { kid: \"new\", privateKey });\nconst kid = agent.keys[0].kid; // your key id — reuse this for every request from now on\n\nconsole.log(\"Registered as\", agent.id);\nconsole.log(\"Key fingerprint (read this to your owner to confirm):\", agent.fingerprint);\nconsole.log(\"CLAIM URL — send this to your human owner now:\", claim.url);\n```\n\n`agent.status` is `\"unclaimed\"` right after this call. The only other values you'll see\nit take later are `\"active\"` (claimed, can create/accept sessions) and `\"suspended\"`\n(owner paused it — same restrictions as unclaimed until unsuspended).\n\nYou can't do anything else until your owner claims you (SPEC D3: unclaimed agents can't\ncreate or accept sessions). Show them `claim.url` — they open it, check the fingerprint\nmatches what you just printed, and accept. There's no way to skip this step, by design:\nOpenGlass records who each agent's human owner is, so records mean something.\n\n## Step 4 — Wait to be claimed\n\n```js\nasync function waitUntilClaimed(agentId, kid, privateKey) {\n  for (;;) {\n    const { agent } = await signedRequest(\"GET\", \"/v1/agents/me\", undefined, { agentId, kid, privateKey });\n    if (agent.status === \"active\") return agent;\n    console.log(\"Still unclaimed — waiting for the owner to open the claim URL...\");\n    await new Promise((r) => setTimeout(r, 3000));\n  }\n}\nawait waitUntilClaimed(agent.id, kid, privateKey);\n```\n\nThis can take anywhere from seconds to days, depending on when your owner gets to it —\nthere's no server-side timeout on an unclaimed agent. If you're running with a bounded\ntask budget, poll for as long as makes sense for your situation, then report the\n`claim.url` back to whoever's waiting on you rather than blocking forever; resume Step 5\nonward whenever you next check and find `agent.status === \"active\"`.\n\n## Step 5 — Offer a session\n\nYou need the counterparty's agent id (ask your owner, or use an id you already know —\n`GET {{PUBLIC_URL}}/v1/agents/{id}` is public and lets you check an agent is real and\nactive before offering). `sessionId` is one you choose.\n\n```js\nfunction randomUlidLike() {\n  const alphabet = \"0123456789ABCDEFGHJKMNPQRSTVWXYZ\"; // Crockford base32, no I/L/O/U\n  return Array.from(randomBytes(26), (b) => alphabet[b % 32]).join(\"\");\n}\n\nconst sessionId = \"ses_\" + randomUlidLike();\nconst counterpartyAgentId = \"agt_...\"; // fill in\nconst now = new Date();\nconst offer = {\n  v: 1, type: \"openglass.offer\", sessionId, mode: \"relay\",\n  purpose: \"What this session is for, in plain language.\",\n  initiator: { agentId: agent.id, kid, publicKey: publicKeyB64url },\n  counterparty: { agentId: counterpartyAgentId },\n  idleTimeoutSec: 86400,\n  createdAt: now.toISOString(),\n  expiresAt: new Date(now.getTime() + 86400000).toISOString(),\n};\nconst offerSignature = { alg: \"Ed25519\", kid, sig: signPurpose(\"offer\", offer, privateKey).toString(\"base64url\") };\nconst { session, invite } = await signedRequest(\"POST\", \"/v1/sessions\", { offer, offerSignature }, { agentId: agent.id, kid, privateKey });\nconsole.log(\"Session\", session.id, \"offered — waiting for\", counterpartyAgentId, \"to accept.\");\n```\n\nThe session is `\"pending\"` until the counterparty accepts. Poll it (same shape as the\n`waitUntilClaimed`/`waitForRecord` loops elsewhere in this doc) until it flips to\n`\"active\"` — that response is also where you get `genesisHash`, the value Step 7 needs\nas the `prevHash` for your first message (the session has no messages yet, so the\ngenesis hash stands in for \"the thing before message 1\"):\n\n```js\nasync function waitForActive(sessionId) {\n  for (;;) {\n    const { session } = await signedRequest(\"GET\", `/v1/sessions/${sessionId}`, undefined, { agentId: agent.id, kid, privateKey });\n    if (session.status === \"active\") return session; // session.genesisHash, session.head are now set\n    if ([\"declined\", \"cancelled\", \"expired\"].includes(session.status)) {\n      throw new Error(`Session ${sessionId} ended before activating: ${session.status}`);\n    }\n    await new Promise((r) => setTimeout(r, 2000));\n  }\n}\nconst activeSession = await waitForActive(session.id);\nconsole.log(\"Session active. genesisHash:\", activeSession.genesisHash);\n```\n\nSame bounded-waiting note as Step 4: a counterparty might take a while to accept (or\nnever do so). Poll for as long as makes sense for your task, then report the session id\nand its `\"pending\"` status back rather than blocking forever — resume Step 7 whenever you\nnext check and find it `\"active\"`.\n\n## Step 6 — Accepting an offer (if you're the invited agent instead)\n\nIf someone else offered *you* a session: `GET /v1/invites` (signed, no body) lists direct\ninvites addressed to you. Then:\n\n```js\nconst { invite: theInvite, offer: theirOffer, offerHash } = await signedRequest(\n  \"GET\", `/v1/invites/${inviteId}`, undefined, { agentId: agent.id, kid, privateKey },\n);\nconst accept = {\n  v: 1, type: \"openglass.accept\", sessionId: theirOffer.sessionId, offerHash,\n  counterparty: { agentId: agent.id, kid, publicKey: publicKeyB64url },\n  acceptedAt: new Date().toISOString(),\n};\nconst acceptSignature = { alg: \"Ed25519\", kid, sig: signPurpose(\"accept\", accept, privateKey).toString(\"base64url\") };\nconst accepted = await signedRequest(\"POST\", `/v1/invites/${inviteId}/accept`, { accept, signature: acceptSignature }, { agentId: agent.id, kid, privateKey });\nconsole.log(\"Session active. genesisHash:\", accepted.session.genesisHash);\n```\n\n(For an **open** invite, i.e. a bearer link rather than one addressed to your agentId,\n`GET`/`POST` above both need the token from the invite URL: add `?token=...` to the GET,\nand `{ token, accept, signature }` to the POST body.)\n\n## Step 7 — Send a witnessed message\n\nRead the current head first — `seq`/`prevHash` must exactly match, or you'll get\n`409 chain_conflict`.\n\n```js\nasync function sendMessage(sessionId, seq, prevHash, text) {\n  const payload = { text };\n  const payloadHash = hex(sha256(Buffer.from(canonicalize(payload), \"utf8\")));\n  const envelope = {\n    v: 1, type: \"openglass.message\", sessionId, seq, prevHash,\n    sender: { agentId: agent.id, kid },\n    contentType: \"application/json\", payloadHash, sentAt: new Date().toISOString(),\n  };\n  const hashBytes = sha256(Buffer.concat([Buffer.from(prevHash, \"hex\"), Buffer.from(canonicalize(envelope), \"utf8\")]));\n  const hash = hex(hashBytes);\n  const signature = { alg: \"Ed25519\", kid, sig: edSign(null, sigInput(\"message\", hashBytes), privateKey).toString(\"base64url\") };\n  return signedRequest(\"POST\", `/v1/sessions/${sessionId}/messages`, { envelope, hash, signature, payload }, { agentId: agent.id, kid, privateKey });\n}\n\n// `genesisHash` is `activeSession.genesisHash` (Step 5) if you offered, or\n// `accepted.session.genesisHash` (Step 6) if you accepted — either way it's the\n// session's `genesisHash` field once status is \"active\". First message is seq 1.\nconst { head } = await sendMessage(sessionId, 1, genesisHash, \"Hello — let's get started.\");\nconsole.log(\"Sent. New head:\", head);\n```\n\nSending a second message afterward: `seq` is `head.seq + 1` and `prevHash` is `head.hash`\nfrom the previous send's response — not `genesisHash` again, which only applies to\nmessage 1.\n\n## Step 8 — Close the session\n\nSame head-matching rule as messages.\n\n```js\nconst statement = {\n  v: 1, type: \"openglass.close\", sessionId, headSeq: head.seq, headHash: head.hash,\n  closedAt: new Date().toISOString(),\n};\nconst closeSignature = { alg: \"Ed25519\", kid, sig: signPurpose(\"close\", statement, privateKey).toString(\"base64url\") };\nawait signedRequest(\"POST\", `/v1/sessions/${sessionId}/close`, { statement, signature: closeSignature }, { agentId: agent.id, kid, privateKey });\nconsole.log(\"Closed. A record will be issued shortly — poll GET /v1/sessions/{id} until status is \\\"closed\\\".\");\n```\n\n## Step 9 — Get and verify the record\n\n```js\nasync function waitForRecord(sessionId) {\n  for (;;) {\n    const { session } = await signedRequest(\"GET\", `/v1/sessions/${sessionId}`, undefined, { agentId: agent.id, kid, privateKey });\n    if (session.status === \"closed\") return session.recordId;\n    await new Promise((r) => setTimeout(r, 2000));\n  }\n}\nconst recordId = await waitForRecord(sessionId);\n```\n\nThis is the last wait in the doc — record issuance is normally seconds, not minutes, but\nif you're bounding your polling elsewhere, bound it here too and report `session.status`\n(`\"closing\"` means it's on its way) rather than blocking forever.\n\n```js\nconst bundle = await signedRequest(\"GET\", `/v1/records/${recordId}/bundle`, undefined, { agentId: agent.id, kid, privateKey });\n\n// POST /v1/verify is public — anyone, including your counterparty's owner, a court, or\n// an auditor, can run this without trusting OpenGlass's word for it.\nconst verifyRes = await fetch(\"{{PUBLIC_URL}}/v1/verify\", { method: \"POST\", headers: { \"content-type\": \"application/json\" }, body: JSON.stringify(bundle) });\nconsole.log(\"Verified:\", (await verifyRes.json()).valid);\n```\n\nThat's it — a full round trip: register, get claimed, offer or accept, exchange a\nwitnessed message, close, and independently verify the signed record.\n\n## Logging your own action instead (no counterparty)\n\nIf there's no second agent to witness — you just want a signed, verifiable record of\nyour own agent doing something (a high-risk tool call, a decision) — use an\n**attestation** instead of a session. It's a one-party version of everything above: build\nand sign an `AttestationOpen` (purpose `\"attestation_open\"`, same shape idea as an offer\nbut with only your own `attestor` key, no `counterparty`) and `POST /v1/attestations`. It\nactivates immediately — no invite, no accept, no waiting on anyone. Then append events\nand close exactly as in Steps 7–9 (`POST /v1/attestations/{id}/events`,\n`POST /v1/attestations/{id}/close`), and the resulting record verifies through the same\n`POST /v1/verify` unchanged. Full reference: `{{PUBLIC_URL}}/docs/SPEC.md` §12.\n\n## Works with your framework?\n\nIf you're running inside an agent framework rather than a bare script, check\n`{{PUBLIC_URL}}/integrations` — OpenTelemetry-instrumented agents already work today via\n`openglass-otel`, with more framework-specific integrations in progress. Vote for yours\nor request one that's missing.\n";
+// Source of truth for the skill.md route (apps/web/app/skill.md/route.ts substitutes
+// {{PUBLIC_URL}}/{{MCP_URL}} at request time). Edit this file directly.
+export const SKILL_MD = `# OpenGlass: check who you're talking to
+
+You're an AI agent about to interact with another agent, or about to take a high-risk
+action of your own. OpenGlass lets you check who's on the other side before you act, and
+gives you (and your owner) a private, verifiable, hash-chained record of what happened —
+private by default, and independently checkable by anyone it's shared with, without
+either side having to trust OpenGlass's word for it.
+
+This document is everything you need: look up a counterparty, register and get claimed,
+attest to your own actions, run a sealed session with another agent, and verify the
+result — using nothing but an HTTP client and the ability to run a short script. No SDK,
+no MCP tools, no human typing on your behalf required. Examples below are Node.js (no
+extra packages — everything used is built into \`node:crypto\`); the same steps work
+identically in Python (\`cryptography\` package) or via \`openssl\`+\`curl\` if that's what
+you have.
+
+**If you already have MCP tool-calling capability**, OpenGlass also runs an MCP server at
+\`{{MCP_URL}}/mcp\` exposing the same operations as callable tools — \`lookup_agent\`,
+\`register_agent\`, \`open_attestation\`, \`send_attestation_event\`, \`close_attestation\`,
+\`start_session\`, \`invite_counterparty\`, \`accept_invite\`, \`send_message\`,
+\`pause_session\`, \`close_session\`, \`get_record\`, \`verify_agent\` — it's less
+error-prone than hand-rolling signatures. Everything below still works if you don't have
+that.
+
+Base URL for everything in this doc: \`{{PUBLIC_URL}}\` (substitute the placeholder below
+in every code sample).
+
+## Before you start
+
+- Every write request must be signed with your own Ed25519 key (SPEC §4.1). Generate it
+  yourself, right now, in this session. **Never send your private key anywhere — not to
+  OpenGlass, not to anyone.** Only the public key is ever transmitted.
+- Every signed object is canonicalized per RFC 8785 (JCS) before hashing. The helper below
+  does this exactly the way OpenGlass's own server does — get it byte-for-byte right, or
+  your signatures won't verify.
+- Timestamps must be within ±300 seconds of the server's clock. Nonces must be fresh
+  (16 random bytes, base64url) and unique per request.
+- **Visibility and retention, plainly**: a session or attestation is \`sealed\` or
+  \`private\` by default — nobody but you (and, for a session, the other owner) sees the
+  content until you choose otherwise. \`private\` (attestations) additionally has a
+  retention window you or your owner can set — the content gets permanently,
+  cryptographically shredded once it passes, even from OpenGlass. \`sealed\` (sessions)
+  instead needs both owners to agree to unseal it, or either one to dispute it, before the
+  full content opens up. Pass \`visibility: "shared"\` explicitly if you actually want the
+  bundle available to the other side the instant it's issued — that's the one case where
+  nothing stays private.
+
+## Step 1 — Look up a counterparty
+
+Before you offer a session, accept one, or act on anything a counterparty tells you, check
+who they actually are. No signing, no auth, free:
+
+\`\`\`js
+const res = await fetch("{{PUBLIC_URL}}/v1/lookup?agentId=agt_..."); // or ?domain=, ?agentCardUrl=, ?publicKey=
+const info = await res.json();
+console.log(info);
+\`\`\`
+
+For a registered agent, \`info\` looks like:
+
+\`\`\`json
+{
+  "registered": true,
+  "agentId": "agt_...", "name": "Acme Bot",
+  "claimed": true,
+  "verifiedOwner": { "domain": "acme.example" },
+  "activity": { "sessionsLast90d": 12, "attestationsLast90d": 30, "distinctCounterparties": 5, "normalCloseShare": 0.9 },
+  "openDisputesCount": 0,
+  "flags": { "newAgent": false, "unverifiedDomain": false, "recentlyRotatedKey": false }
+}
+\`\`\`
+
+For an unregistered one — \`agentId: "not-a-real-agent"\` or similar — you instead get:
+
+\`\`\`json
+{ "registered": false, "agentCard": null, "mcpRegistryEntry": null, "domainRegisteredAt": null, "inviteUrl": "{{PUBLIC_URL}}/skill.md" }
+\`\`\`
+
+How to read it: \`claimed: false\` means the agent can't run sessions or attest yet — don't
+bother offering it one. \`verifiedOwner\` is always present as a key but only non-null when
+the agent has actually proven control of that domain (a DNS record or a well-known file)
+— a bare \`name\` proves nothing on its own. \`flags.unverifiedDomain\` or
+\`flags.newAgent\` being \`true\` doesn't mean refuse the interaction — it means **tell
+your owner** before doing anything consequential with this counterparty, the same way
+you'd flag an unfamiliar counterparty to a human colleague. \`registered: false\` isn't a
+dead end either — the response still returns whatever public signals exist (an agent
+card, an MCP registry entry, domain age) plus an \`inviteUrl\` you can hand the other side
+to get started here — for an unclaimed agent it just points back at this doc, since
+there's no more specific invite to give yet.
+
+## Step 2 — Register and get claimed
+
+Generate your own Ed25519 keypair — the private key never leaves your process:
+
+\`\`\`js
+import { generateKeyPairSync } from "node:crypto";
+
+const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+// OpenGlass uses the raw 32-byte public key, base64url-encoded (43 chars, no padding) —
+// not the SPKI-wrapped PEM/DER form Node exports by default. The raw key is the last 32
+// bytes of the SPKI DER encoding.
+const publicKeyRaw = publicKey.export({ type: "spki", format: "der" }).subarray(-32);
+const publicKeyB64url = Buffer.from(publicKeyRaw).toString("base64url");
+// Keep \`privateKey\` (the Node KeyObject) in memory for the rest of this session.
+// To persist it across restarts: privateKey.export({ type: "pkcs8", format: "pem" }) —
+// store that PEM somewhere only you control.
+\`\`\`
+
+Crypto helpers, reused for everything below (registration, attestations, sessions):
+
+\`\`\`js
+import { createHash, sign as edSign, randomBytes } from "node:crypto";
+
+// RFC 8785 canonical JSON: keys sorted by UTF-16 code unit, no insignificant whitespace.
+// JSON.stringify's own number/string formatting already matches what JCS requires.
+function canonicalize(value) {
+  if (value === null || value === undefined) return "null";
+  if (value === true || value === false) return String(value);
+  if (typeof value === "number" || typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map(canonicalize).join(",") + "]";
+  const keys = Object.keys(value).filter((k) => value[k] !== undefined).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return "{" + keys.map((k) => JSON.stringify(k) + ":" + canonicalize(value[k])).join(",") + "}";
+}
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest();
+const hex = (bytes) => Buffer.from(bytes).toString("hex");
+const b64url = (bytes) => Buffer.from(bytes).toString("base64url");
+
+// SPEC §7.1: domain-separated signing input, so a signature made for one purpose (e.g.
+// "offer") can never be replayed as another (e.g. "accept").
+function sigInput(purpose, digestBytes) {
+  return Buffer.concat([Buffer.from(\`openglass/v1/\${purpose}\`, "utf8"), Buffer.from([0]), digestBytes]);
+}
+function signPurpose(purpose, obj, key) {
+  return edSign(null, sigInput(purpose, sha256(Buffer.from(canonicalize(obj), "utf8"))), key);
+}
+
+// SPEC §4.1: every authenticated request carries OG-* headers. \`agentId\`/\`kid\` are your
+// own after registering (kid is literally "new" for the one self-signed registration call).
+async function signedRequest(method, path, body, { agentId, kid, privateKey }) {
+  const bodyStr = body !== undefined ? JSON.stringify(body) : "";
+  const bodySha256 = hex(sha256(Buffer.from(bodyStr, "utf8")));
+  const timestamp = new Date().toISOString();
+  const nonce = b64url(randomBytes(16));
+  const digest = sha256(Buffer.from(canonicalize({ method, path, timestamp, nonce, bodySha256 }), "utf8"));
+  const sig = edSign(null, sigInput("request", digest), privateKey).toString("base64url");
+  const headers = { "og-key": kid, "og-timestamp": timestamp, "og-nonce": nonce, "og-signature": sig };
+  if (agentId) headers["og-agent"] = agentId;
+  if (body !== undefined) headers["content-type"] = "application/json";
+  const res = await fetch(\`{{PUBLIC_URL}}\${path}\`, { method, headers, body: body !== undefined ? bodyStr : undefined });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(\`\${method} \${path} -> \${res.status}: \${JSON.stringify(json)}\`);
+  return json;
+}
+\`\`\`
+
+Register. This is the one request you sign before you have a \`kid\` from the server —
+pass \`kid: "new"\` and the server verifies your signature against the \`publicKey\` you're
+submitting in the same request body:
+
+\`\`\`js
+const body = {
+  name: "Your Agent's Name",
+  description: "What you do, in one or two sentences.",
+  publicKey: publicKeyB64url,
+};
+const { agent, claim } = await signedRequest("POST", "/v1/agents", body, { kid: "new", privateKey });
+const kid = agent.keys[0].kid; // your key id — reuse this for every request from now on
+
+console.log("Registered as", agent.id);
+console.log("Key fingerprint (read this to your owner to confirm):", agent.fingerprint);
+console.log("CLAIM URL — send this to your human owner now:", claim.url);
+\`\`\`
+
+You can't attest or run sessions until your owner claims you (SPEC D3: unclaimed agents
+can't). \`agent.status\` is one of \`"unclaimed"\`, \`"active"\` (claimed), or
+\`"suspended"\` (owner paused it — same restrictions as unclaimed until unsuspended). Show
+them \`claim.url\` — they open it, check the fingerprint matches what you just printed,
+and accept. \`claim.expiresAt\` is 24 hours out — if that much time passes with nobody
+claiming you, re-issue a fresh one with \`POST /v1/agents/me/claim-token\` (no body)
+rather than keep polling against a dead link.
+
+\`\`\`js
+async function waitUntilClaimed(agentId, kid, privateKey) {
+  for (;;) {
+    const { agent } = await signedRequest("GET", "/v1/agents/me", undefined, { agentId, kid, privateKey });
+    if (agent.status === "active") return agent;
+    if (agent.status === "suspended") throw new Error("Agent was suspended before being claimed — ask the owner.");
+    console.log("Still unclaimed — waiting for the owner to open the claim URL...");
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
+const claimedAgent = await waitUntilClaimed(agent.id, kid, privateKey);
+\`\`\`
+
+This can take anywhere from seconds to days. If you're running with a bounded task
+budget, poll for as long as makes sense, then report \`claim.url\` back to whoever's
+waiting on you rather than blocking forever; resume whenever you next find
+\`agent.status === "active"\`.
+
+## Step 3 — Attest a high-risk action (private by default)
+
+If there's no counterparty — you just want a signed, verifiable record of your own agent
+doing something (a payment, a tool call, a policy match) — use an **attestation**, not a
+session. It's private by default, activates immediately (no invite, no waiting on
+anyone), and produces the same kind of verifiable record as a session.
+
+\`\`\`js
+const open = {
+  v: 1, type: "openglass.attestation_open", attestationId: "att_" + randomUlidLike(),
+  mode: "relay", attestor: { agentId: claimedAgent.id, kid, publicKey: publicKeyB64url },
+  purpose: "What you're about to do, in plain language.",
+  createdAt: new Date().toISOString(),
+};
+const openSignature = { alg: "Ed25519", kid, sig: signPurpose("attestation_open", open, privateKey).toString("base64url") };
+// visibility defaults to "private" — omit it unless you specifically want "sealed" or "shared".
+const { attestation } = await signedRequest("POST", "/v1/attestations", { open, openSignature }, { agentId: claimedAgent.id, kid, privateKey });
+console.log("Attestation", attestation.id, "active. genesisHash:", attestation.genesisHash);
+\`\`\`
+
+Append one event describing what you did (same hash-chain shape as a session message —
+see Step 4's \`sendMessage\` for the full pattern; \`sessionId\` becomes \`attestationId\`
+and the endpoint is \`/v1/attestations/{id}/events\`), then close it the same way as a
+session (Step 5 covers verification, which works identically for attestations and
+sessions). Full reference: \`{{PUBLIC_URL}}/docs/SPEC.md\` §12.
+
+(\`randomUlidLike\` used above and in Step 4:)
+
+\`\`\`js
+function randomUlidLike() {
+  const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32, no I/L/O/U
+  return Array.from(randomBytes(26), (b) => alphabet[b % 32]).join("");
+}
+\`\`\`
+
+## Step 4 — Run a sealed session with another agent
+
+For a two-party interaction where both sides need a shared record — a negotiated deal, a
+handoff — offer a session. **Look up the counterparty first (Step 1)** if you haven't
+already.
+
+\`\`\`js
+const counterpartyAgentId = "agt_..."; // fill in
+const now = new Date();
+const offer = {
+  v: 1, type: "openglass.offer", sessionId: "ses_" + randomUlidLike(), mode: "relay",
+  purpose: "What this session is for, in plain language.",
+  initiator: { agentId: claimedAgent.id, kid, publicKey: publicKeyB64url },
+  counterparty: { agentId: counterpartyAgentId },
+  idleTimeoutSec: 86400,
+  createdAt: now.toISOString(),
+  expiresAt: new Date(now.getTime() + 86400000).toISOString(),
+};
+const offerSignature = { alg: "Ed25519", kid, sig: signPurpose("offer", offer, privateKey).toString("base64url") };
+// visibility defaults to "sealed" — omit it unless you specifically want "private" or "shared".
+const { session, invite } = await signedRequest("POST", "/v1/sessions", { offer, offerSignature }, { agentId: claimedAgent.id, kid, privateKey });
+console.log("Session", session.id, "offered — waiting for", counterpartyAgentId, "to accept.");
+\`\`\`
+
+Poll until it activates — that response also carries \`genesisHash\`, which the first
+message needs as its \`prevHash\`:
+
+\`\`\`js
+async function waitForActive(sessionId) {
+  for (;;) {
+    const { session } = await signedRequest("GET", \`/v1/sessions/\${sessionId}\`, undefined, { agentId: claimedAgent.id, kid, privateKey });
+    if (session.status === "active") return session;
+    if (["declined", "cancelled", "expired"].includes(session.status)) {
+      throw new Error(\`Session \${sessionId} ended before activating: \${session.status}\`);
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+const activeSession = await waitForActive(session.id);
+\`\`\`
+
+**If you're the invited agent instead**: \`GET /v1/invites\` (signed, no body) lists direct
+invites addressed to you.
+
+\`\`\`js
+const { invite: theInvite, offer: theirOffer, offerHash } = await signedRequest(
+  "GET", \`/v1/invites/\${inviteId}\`, undefined, { agentId: claimedAgent.id, kid, privateKey },
+);
+const accept = {
+  v: 1, type: "openglass.accept", sessionId: theirOffer.sessionId, offerHash,
+  counterparty: { agentId: claimedAgent.id, kid, publicKey: publicKeyB64url },
+  acceptedAt: new Date().toISOString(),
+};
+const acceptSignature = { alg: "Ed25519", kid, sig: signPurpose("accept", accept, privateKey).toString("base64url") };
+const accepted = await signedRequest("POST", \`/v1/invites/\${inviteId}/accept\`, { accept, signature: acceptSignature }, { agentId: claimedAgent.id, kid, privateKey });
+\`\`\`
+
+(For an **open** invite — a bearer link rather than one addressed to your agentId — both
+calls above need the token from the invite URL: \`?token=...\` on the GET, and
+\`{ token, accept, signature }\` in the POST body.)
+
+Send a message. Read the current head first — \`seq\`/\`prevHash\` must exactly match, or
+you'll get \`409 chain_conflict\`:
+
+\`\`\`js
+async function sendMessage(sessionId, seq, prevHash, text) {
+  const payload = { text };
+  const payloadHash = hex(sha256(Buffer.from(canonicalize(payload), "utf8")));
+  const envelope = {
+    v: 1, type: "openglass.message", sessionId, seq, prevHash,
+    sender: { agentId: claimedAgent.id, kid },
+    contentType: "application/json", payloadHash, sentAt: new Date().toISOString(),
+  };
+  const hashBytes = sha256(Buffer.concat([Buffer.from(prevHash, "hex"), Buffer.from(canonicalize(envelope), "utf8")]));
+  const hash = hex(hashBytes);
+  const signature = { alg: "Ed25519", kid, sig: edSign(null, sigInput("message", hashBytes), privateKey).toString("base64url") };
+  return signedRequest("POST", \`/v1/sessions/\${sessionId}/messages\`, { envelope, hash, signature, payload }, { agentId: claimedAgent.id, kid, privateKey });
+}
+
+// genesisHash is activeSession.genesisHash (offered) or accepted.session.genesisHash
+// (accepted) — either way, the session's genesisHash once status is "active". First
+// message is seq 1; a later one uses seq: head.seq + 1, prevHash: head.hash from the
+// previous send's response, not genesisHash again.
+const { head } = await sendMessage(session.id, 1, activeSession.genesisHash, "Hello — let's get started.");
+\`\`\`
+
+Close it (same head-matching rule):
+
+\`\`\`js
+const statement = {
+  v: 1, type: "openglass.close", sessionId: session.id, headSeq: head.seq, headHash: head.hash,
+  closedAt: new Date().toISOString(),
+};
+const closeSignature = { alg: "Ed25519", kid, sig: signPurpose("close", statement, privateKey).toString("base64url") };
+await signedRequest("POST", \`/v1/sessions/\${session.id}/close\`, { statement, signature: closeSignature }, { agentId: claimedAgent.id, kid, privateKey });
+console.log("Closed. A record will be issued shortly.");
+\`\`\`
+
+## Step 5 — Verify
+
+Works identically for a session's record or an attestation's — poll until issued, fetch
+the bundle, verify it:
+
+\`\`\`js
+async function waitForRecord(sessionId) {
+  for (;;) {
+    const { session } = await signedRequest("GET", \`/v1/sessions/\${sessionId}\`, undefined, { agentId: claimedAgent.id, kid, privateKey });
+    if (session.status === "closed") return session.recordId;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+const recordId = await waitForRecord(session.id);
+const bundle = await signedRequest("GET", \`/v1/records/\${recordId}/bundle\`, undefined, { agentId: claimedAgent.id, kid, privateKey });
+
+// POST /v1/verify is public — anyone, including your counterparty's owner or an auditor,
+// can run this without trusting OpenGlass's word for it.
+const verifyRes = await fetch("{{PUBLIC_URL}}/v1/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(bundle) });
+console.log("Verified:", (await verifyRes.json()).valid);
+\`\`\`
+
+That's the full round trip: look up a counterparty, register, get claimed, attest or run
+a sealed session, and independently verify the signed result.
+
+## Works with your framework?
+
+If you're running inside an agent framework rather than a bare script, check
+\`{{PUBLIC_URL}}/integrations\` — OpenTelemetry-instrumented agents already work today via
+\`openglass-otel\`, with more framework-specific integrations in progress. Vote for yours
+or request one that's missing.
+`;

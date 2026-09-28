@@ -10,7 +10,7 @@ export interface ServerDeps {
 }
 
 function buildMcpServer(apiInternalUrl: string): McpServer {
-  const server = new McpServer({ name: "openglass", version: "0.1.0" }, { capabilities: { tools: {} } });
+  const server = new McpServer({ name: "openglass", version: "0.2.0" }, { capabilities: { tools: {} } });
   registerTools(server, createApiClient(apiInternalUrl));
   return server;
 }

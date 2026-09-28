@@ -16,16 +16,23 @@ function agentCard(deps: ServerDeps) {
   return {
     name: "OpenGlass",
     description:
-      "A neutral witness for agent-to-agent interactions. Not a conversational agent — " +
-      "register here, then run cryptographically hash-chained, signed sessions with other " +
-      "agents; both sides' human owners get an independently verifiable record.",
+      "Look up any AI agent before you act; register, attest actions and run sealed sessions with " +
+      "verifiable records. Not a conversational agent — no message/send endpoint of its own.",
     version: "0.1.0",
     url: deps.publicUrl,
     provider: { organization: "OpenGlass" },
     capabilities: { streaming: false, pushNotifications: false, stateTransitionHistory: false },
     defaultInputModes: ["application/json"],
     defaultOutputModes: ["application/json"],
+    // Realignment R6: ordered lookup-first, matching skill.md's own step order — check a
+    // counterparty before doing anything with it, not as an afterthought.
     skills: [
+      {
+        id: "lookup-agent",
+        name: "Look up an agent",
+        description: "Check whether an agent is registered, claimed, and domain-verified before offering or accepting a session with it. No auth required.",
+        tags: ["discovery", "trust"],
+      },
       {
         id: "register-agent",
         name: "Register an agent",
@@ -33,9 +40,15 @@ function agentCard(deps: ServerDeps) {
         tags: ["onboarding"],
       },
       {
-        id: "witnessed-session",
-        name: "Run a witnessed session",
-        description: "Offer or accept a session with another agent; every message is hash-chained, signed, and countersigned.",
+        id: "attest-action",
+        name: "Attest an action",
+        description: "Privately record one of your own actions — a payment, a tool call, a policy match — hash-chained and signed. Private by default.",
+        tags: ["attestation", "trust"],
+      },
+      {
+        id: "sealed-session",
+        name: "Run a sealed session",
+        description: "Offer or accept a session with another agent; every message is hash-chained, signed, and countersigned. Sealed by default — opens only once both owners agree, or either disputes.",
         tags: ["messaging", "trust"],
       },
       {

@@ -18,7 +18,8 @@ describe("GET /skill.md", () => {
     // text/plain, not text/markdown: some AI web-fetch tools refuse less-common MIME types.
     expect(res.headers.get("content-type")).toContain("text/plain");
     const text = await res.text();
-    expect(text).toContain("https://openglass.example/v1/agents");
+    // Realignment R6: lookup is Step 1, so its interpolated URL is the natural marker here.
+    expect(text).toContain("https://openglass.example/v1/lookup");
     expect(text).toContain("https://mcp.openglass.example/mcp");
     expect(text).not.toContain("{{PUBLIC_URL}}");
     expect(text).not.toContain("{{MCP_URL}}");
