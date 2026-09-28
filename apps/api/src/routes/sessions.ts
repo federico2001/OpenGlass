@@ -51,8 +51,8 @@ export function registerSessionsRoutes(app: FastifyInstance, deps: ServerDeps): 
       const body = parseOrError(CreateSessionBody, req.body, reply);
       if (!body) return;
       const { offer, offerSignature } = body;
-      const visibility = effectiveVisibility(body.visibility, "sealed", deps.contentEncryption);
       const initiator = req.agent!.doc;
+      const visibility = effectiveVisibility(body.visibility, initiator.defaultVisibility, "sealed", deps.contentEncryption);
 
       if (offer.initiator.agentId !== initiator._id) {
         return sendError(reply, 422, "offer_invalid", "offer.initiator.agentId must be the authenticated agent");

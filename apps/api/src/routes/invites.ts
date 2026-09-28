@@ -14,6 +14,7 @@ import {
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { agentPublicView } from "../domain/agentViews.js";
+import { notifyCounterpartyAlerts } from "../domain/alerts.js";
 import { computeGenesisHash, withinClockSkew } from "../domain/genesis.js";
 import { inviteView, sessionView } from "../domain/sessionViews.js";
 import { hashToken } from "../domain/tokens.js";
@@ -156,6 +157,9 @@ export function registerInvitesRoutes(app: FastifyInstance, deps: ServerDeps): v
         lastActivityAt: now,
       });
       const updatedInvite = await invites.update(invite._id, { status: "accepted", respondedAt: now });
+      notifyCounterpartyAlerts(deps.db, deps.mailer, req.log, updatedSession!, deps.publicUrl).catch((err) =>
+        req.log.warn({ err }, "failed to run oversight alert checks"),
+      );
       return reply.send({ invite: inviteView(updatedInvite!), session: sessionView(updatedSession!) });
     },
   );

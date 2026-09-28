@@ -8,19 +8,23 @@ export const Visibility = z.enum(["private", "sealed", "shared"]);
 export type VisibilityValue = z.infer<typeof Visibility>;
 
 /**
- * Resolves the caller's requested `visibility` to what's actually stored: falls back to
- * `defaultVisibility` when omitted (CLAUDE.md "Positioning (Sept 2026)": attestations
- * default `private`, sessions default `sealed`), and gracefully degrades an unsatisfiable
- * `private` request to `sealed` when no `ContentEncryptionDeps` are configured yet — the
- * platform hasn't been given a KMS key/master key to actually encrypt anything with, so it
- * ships the closest available protection instead of erroring. Never silently *upgrades* a
- * caller's explicit `sealed`/`shared` choice.
+ * Resolves the caller's requested `visibility` to what's actually stored, in priority
+ * order: (1) the request's own explicit `visibility`, (2) the initiating agent's own
+ * `agents.defaultVisibility` (realignment R4, owner-set via
+ * `PATCH /v1/owner/agents/{id}/visibility-default`), (3) the platform default
+ * (CLAUDE.md "Positioning (Sept 2026)": attestations default `private`, sessions default
+ * `sealed`) — then gracefully degrades an unsatisfiable `private` result to `sealed` when
+ * no `ContentEncryptionDeps` are configured yet, the platform hasn't been given a KMS
+ * key/master key to actually encrypt anything with, so it ships the closest available
+ * protection instead of erroring. Never silently *upgrades* a caller's explicit
+ * `sealed`/`shared` choice — an agent-level default only ever fills in an omission.
  */
 export function effectiveVisibility(
   requested: VisibilityValue | undefined,
-  defaultVisibility: VisibilityValue,
+  agentDefault: VisibilityValue | null | undefined,
+  platformDefault: VisibilityValue,
   contentEncryption: ContentEncryptionDeps | null,
 ): VisibilityValue {
-  const chosen = requested ?? defaultVisibility;
+  const chosen = requested ?? agentDefault ?? platformDefault;
   return chosen === "private" && !contentEncryption ? "sealed" : chosen;
 }

@@ -58,7 +58,19 @@ afterAll(async () => {
   await s3.cleanup();
 });
 beforeEach(async () => {
-  for (const c of ["agents", "owners", "sessions", "invites", "messages", "records", "viewer_grants", "web_sessions", "request_nonces", "rate_limits"]) {
+  for (const c of [
+    "agents",
+    "owners",
+    "sessions",
+    "invites",
+    "messages",
+    "records",
+    "viewer_grants",
+    "viewer_access_log",
+    "web_sessions",
+    "request_nonces",
+    "rate_limits",
+  ]) {
     await t.db.collection(c).deleteMany({});
   }
   mailer.sent.length = 0;
@@ -99,12 +111,12 @@ function signClose(sessionId: string, headSeq: number, headHash: string | null, 
   return { statement, signature };
 }
 
-function inviteViewer(agentId: string, ownerCookie: string, email: string, label?: string) {
+function inviteViewer(agentId: string, ownerCookie: string, email: string, label?: string, scope?: "read" | "export" | "manage") {
   return app.inject({
     method: "POST",
     url: `/v1/owner/agents/${agentId}/viewers`,
     headers: { cookie: ownerCookie, origin: "https://localhost", "content-type": "application/json" },
-    payload: { email, ...(label ? { label } : {}) },
+    payload: { email, ...(label ? { label } : {}), ...(scope ? { scope } : {}) },
   });
 }
 
@@ -244,7 +256,13 @@ describe("viewer read access", () => {
     expect(messagesRes.json().items).toHaveLength(1);
 
     expect((await app.inject({ method: "GET", url: `/v1/records/${recordId}`, headers: { cookie: viewerCookie } })).statusCode).toBe(200);
-    expect((await app.inject({ method: "GET", url: `/v1/records/${recordId}/bundle`, headers: { cookie: viewerCookie } })).statusCode).toBe(200);
+
+    // Realignment R4: this grant was invited without an explicit scope, so it defaults to
+    // "read" — enough for the record summary above, but not for the full evidence bundle,
+    // which needs "export" (or "manage"). Covered with its own scope in "viewer grant scopes".
+    const readScopeBundleRes = await app.inject({ method: "GET", url: `/v1/records/${recordId}/bundle`, headers: { cookie: viewerCookie } });
+    expect(readScopeBundleRes.statusCode).toBe(403);
+    expect(readScopeBundleRes.json().error.code).toBe("export_scope_required");
 
     const recordsListRes = await app.inject({ method: "GET", url: "/v1/owner/viewer-access/records", headers: { cookie: viewerCookie } });
     expect((recordsListRes.json().items as { id: string }[]).map((r) => r.id)).toContain(recordId);
@@ -266,5 +284,127 @@ describe("viewer read access", () => {
     expect((await app.inject({ method: "GET", url: `/v1/records/${recordId}`, headers: { cookie: viewerCookie } })).statusCode).toBe(404);
     const afterRevokeAccessRes = await app.inject({ method: "GET", url: "/v1/owner/viewer-access", headers: { cookie: viewerCookie } });
     expect(afterRevokeAccessRes.json().items).toHaveLength(0);
+  });
+});
+
+/** Realignment R4 (docs/SPEC.md §15): the three-tier viewer scope ("read" / "export" /
+ * "manage") and the resulting access-log audit trail — see domain/access.ts's
+ * `isViewerOnlyAccess`/`viewerScopeFor` and routes/records.ts's bundle route. */
+describe("viewer grant scopes & audit log", () => {
+  async function setupClosedRecord() {
+    const ownerA = await insertTestOwner(t.db, `ownerA_${newId("own").slice(-6)}@example.com`);
+    const ownerB = await insertTestOwner(t.db, `ownerB_${newId("own").slice(-6)}@example.com`);
+    const agentA = await registerAndClaimFor(`agentA_${newId("agt").slice(-6)}`, ownerA._id);
+    const agentB = await registerAndClaimFor(`agentB_${newId("agt").slice(-6)}`, ownerB._id);
+    const { sessionId, genesisHash } = await activateSession(agentA, agentB);
+
+    const msg = buildMessage({ sessionId, seq: 1, prevHash: genesisHash, sender: agentA, mode: "relay", payload: { text: "hi" } });
+    const msgPath = `/v1/sessions/${sessionId}/messages`;
+    const msgHeaders = signedRequestHeaders({ method: "POST", path: msgPath, body: msg, identity: agentA });
+    expect((await app.inject({ method: "POST", url: msgPath, headers: msgHeaders, payload: msg })).statusCode).toBe(201);
+
+    const { statement, signature } = signClose(sessionId, 1, msg.hash, agentA);
+    const closePath = `/v1/sessions/${sessionId}/close`;
+    const closeBody = { statement, signature };
+    const closeHeaders = signedRequestHeaders({ method: "POST", path: closePath, body: closeBody, identity: agentA });
+    expect((await app.inject({ method: "POST", url: closePath, headers: closeHeaders, payload: closeBody })).statusCode).toBe(202);
+
+    const issueResult = await issueRecords({
+      db: t.db,
+      s3: s3.client,
+      s3Bucket: s3.bucket,
+      signer,
+      mailer: createWorkerMailer(),
+      publicUrl: "https://localhost",
+      contentEncryption: null,
+    });
+    expect(issueResult.issued).toBe(1);
+
+    const ownerACookie = await createOwnerSessionCookie(t.db, ownerA._id);
+    const sessionAfterClose = await app.inject({ method: "GET", url: `/v1/sessions/${sessionId}`, headers: { cookie: ownerACookie } });
+    const recordId = sessionAfterClose.json().session.recordId as string;
+    expect(recordId).toBeTruthy();
+
+    return { ownerA, ownerACookie, agentA, recordId };
+  }
+
+  it.each(["export", "manage"] as const)("a %s-scope viewer can download the full bundle, and it's written to the agent's access log", async (scope) => {
+    const { ownerA, ownerACookie, agentA, recordId } = await setupClosedRecord();
+    const viewerEmail = `viewer_${newId("own").slice(-6)}@example.com`.toLowerCase();
+    expect((await inviteViewer(agentA.agentId, ownerACookie, viewerEmail, "Auditor", scope)).statusCode).toBe(201);
+
+    const viewerOwnerDoc = await insertTestOwner(t.db, viewerEmail);
+    const viewerCookie = await createOwnerSessionCookie(t.db, viewerOwnerDoc._id);
+
+    const bundleRes = await app.inject({ method: "GET", url: `/v1/records/${recordId}/bundle`, headers: { cookie: viewerCookie } });
+    expect(bundleRes.statusCode).toBe(200);
+
+    const logRes = await app.inject({
+      method: "GET",
+      url: `/v1/owner/agents/${agentA.agentId}/access-log`,
+      headers: { cookie: ownerACookie },
+    });
+    expect(logRes.statusCode).toBe(200);
+    expect(logRes.json().items).toHaveLength(1);
+    expect(logRes.json().items[0]).toMatchObject({ viewerEmail, action: "view_record_bundle", resourceId: recordId });
+  });
+
+  it("PATCH .../viewers/:grantId/scope upgrades a read grant to export, taking effect on the next bundle request", async () => {
+    const { ownerACookie, agentA, recordId } = await setupClosedRecord();
+    const viewerEmail = `viewer_${newId("own").slice(-6)}@example.com`.toLowerCase();
+    const inviteRes = await inviteViewer(agentA.agentId, ownerACookie, viewerEmail, "Auditor"); // no scope -> defaults to "read"
+    expect(inviteRes.statusCode).toBe(201);
+    expect(inviteRes.json().grant.scope).toBe("read");
+    const grantId = inviteRes.json().grant.id as string;
+
+    const viewerOwnerDoc = await insertTestOwner(t.db, viewerEmail);
+    const viewerCookie = await createOwnerSessionCookie(t.db, viewerOwnerDoc._id);
+
+    const beforeRes = await app.inject({ method: "GET", url: `/v1/records/${recordId}/bundle`, headers: { cookie: viewerCookie } });
+    expect(beforeRes.statusCode).toBe(403);
+
+    const patchRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/owner/agents/${agentA.agentId}/viewers/${grantId}/scope`,
+      headers: { cookie: ownerACookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { scope: "export" },
+    });
+    expect(patchRes.statusCode).toBe(200);
+    expect(patchRes.json().grant.scope).toBe("export");
+
+    const afterRes = await app.inject({ method: "GET", url: `/v1/records/${recordId}/bundle`, headers: { cookie: viewerCookie } });
+    expect(afterRes.statusCode).toBe(200);
+  });
+
+  it("never writes an access-log entry for an owner reading their own agent's record bundle", async () => {
+    const { ownerACookie, agentA, recordId } = await setupClosedRecord();
+
+    const ownBundleRes = await app.inject({ method: "GET", url: `/v1/records/${recordId}/bundle`, headers: { cookie: ownerACookie } });
+    expect(ownBundleRes.statusCode).toBe(200);
+
+    const logRes = await app.inject({
+      method: "GET",
+      url: `/v1/owner/agents/${agentA.agentId}/access-log`,
+      headers: { cookie: ownerACookie },
+    });
+    expect(logRes.json().items).toHaveLength(0);
+  });
+
+  it("404s scope changes on a grant the caller doesn't own", async () => {
+    const { ownerACookie, agentA } = await setupClosedRecord();
+    const stranger = await insertTestOwner(t.db, `stranger_${newId("own").slice(-6)}@example.com`);
+    const strangerCookie = await createOwnerSessionCookie(t.db, stranger._id);
+
+    const viewerEmail = `viewer_${newId("own").slice(-6)}@example.com`.toLowerCase();
+    const inviteRes = await inviteViewer(agentA.agentId, ownerACookie, viewerEmail);
+    const grantId = inviteRes.json().grant.id as string;
+
+    const patchRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/owner/agents/${agentA.agentId}/viewers/${grantId}/scope`,
+      headers: { cookie: strangerCookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { scope: "export" },
+    });
+    expect(patchRes.statusCode).toBe(404);
   });
 });

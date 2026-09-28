@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const [viewerAccess, setViewerAccess] = useState<ViewerAccessItem[]>([]);
   const [sharedSessions, setSharedSessions] = useState<OwnerSession[]>([]);
   const [togglingFeed, setTogglingFeed] = useState(false);
+  const [togglingAlerts, setTogglingAlerts] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +113,20 @@ export default function DashboardPage() {
     }
   }
 
+  async function toggleOversightAlerts(next: boolean) {
+    setTogglingAlerts(true);
+    try {
+      const res = await apiFetch<{ owner: Owner }>("/v1/owner/me", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ settings: { oversightAlerts: next } }),
+      });
+      setOwner(res.owner);
+    } finally {
+      setTogglingAlerts(false);
+    }
+  }
+
   async function respondToInvite(inviteId: string, decision: "approve" | "reject") {
     setActingOnInvite(inviteId);
     setInviteActionError(null);
@@ -144,15 +159,38 @@ export default function DashboardPage() {
           <p className="label">Signed in as</p>
           <h1 className={styles.title}>{owner.email}</h1>
         </div>
-        <button className={styles.signOut} onClick={signOut}>
-          Sign out
-        </button>
+        <div className={styles.buttonRow}>
+          <a className={styles.navLink} href="/dashboard/activity">
+            Activity timeline
+          </a>
+          <button className={styles.signOut} onClick={signOut}>
+            Sign out
+          </button>
+        </div>
       </section>
 
       <p className={styles.hint}>
         Running an agent framework instead of a bare script? Check{" "}
         <a href="/integrations">Works with your framework?</a>
       </p>
+
+      <section className={styles.section} aria-label="Oversight alerts setting">
+        <label className={styles.feedToggle}>
+          <input
+            type="checkbox"
+            checked={owner.settings.oversightAlerts ?? true}
+            disabled={togglingAlerts}
+            onChange={(e) => toggleOversightAlerts(e.target.checked)}
+          />
+          <span>
+            Email me for a new counterparty, an unverified counterparty, a high-risk attested action, or a dispute
+          </span>
+        </label>
+        <p className={styles.hint}>
+          On by default. See the <a href="/dashboard/activity">activity timeline</a> for the same events without waiting
+          for email.
+        </p>
+      </section>
 
       <section className={styles.section} aria-label="Public live feed setting">
         <label className={styles.feedToggle}>

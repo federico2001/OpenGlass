@@ -10,6 +10,8 @@ export interface AccessRequest {
   agent?: { doc: { _id: string } };
   owner?: { _id: string };
   viewerAgentIds?: Set<string>;
+  /** Realignment R4 (docs/SPEC.md §15). See plugins/ownerAuth.ts. */
+  viewerGrantScopes?: Map<string, "read" | "export" | "manage">;
 }
 
 /** Returns the caller's own participant record (initiator or counterparty side) on this
@@ -54,4 +56,32 @@ export function canAccessRecord(record: RecordDoc, req: AccessRequest): boolean 
   if (req.owner && record.participantOwnerIds.includes(req.owner._id)) return true;
   if (req.viewerAgentIds && record.participantAgentIds.some((id) => req.viewerAgentIds!.has(id))) return true;
   return false;
+}
+
+/** Realignment R4 (docs/SPEC.md §15): distinguishes a direct participant (agent or its
+ * owner) from someone who can only see this record because of a viewer grant — a direct
+ * participant never needs an access-log entry for reading their own data, and isn't
+ * subject to a viewer grant's scope limit. Assumes `canAccessRecord(record, req)` already
+ * passed; returns `"viewer"` as the fallback since that's the only other way in. */
+export function isViewerOnlyAccess(record: RecordDoc, req: AccessRequest): boolean {
+  if (req.agent && record.participantAgentIds.includes(req.agent.doc._id)) return false;
+  if (req.owner && record.participantOwnerIds.includes(req.owner._id)) return false;
+  return true;
+}
+
+const SCOPE_RANK: Record<"read" | "export" | "manage", number> = { read: 0, export: 1, manage: 2 };
+
+/** The most permissive scope any of the caller's viewer grants gives them over this
+ * record's participant agents — `null` if none apply. If a viewer has grants covering
+ * both participants of a two-party session with different scopes, the more permissive one
+ * wins (a viewer trusted with "export" on one side shouldn't be quietly downgraded just
+ * because the record also happens to involve an agent they only have "read" on). */
+export function viewerScopeFor(record: RecordDoc, req: AccessRequest): "read" | "export" | "manage" | null {
+  if (!req.viewerGrantScopes) return null;
+  let best: "read" | "export" | "manage" | null = null;
+  for (const agentId of record.participantAgentIds) {
+    const scope = req.viewerGrantScopes.get(agentId);
+    if (scope && (!best || SCOPE_RANK[scope] > SCOPE_RANK[best])) best = scope;
+  }
+  return best;
 }

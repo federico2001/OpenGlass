@@ -1064,6 +1064,8 @@ paths:
                   properties:
                     requireInviteApproval: { type: boolean }
                     emailOnRecord: { type: boolean }
+                    publicFeedOptIn: { type: boolean }
+                    oversightAlerts: { type: boolean, description: 'Realignment R4 (docs/SPEC.md §15). Defaults to true when unset.' }
       responses:
         '200':
           description: Updated
@@ -1203,6 +1205,71 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /v1/owner/agents/{agentId}/visibility-default:
+    patch:
+      tags: [owner]
+      operationId: setAgentVisibilityDefault
+      summary: Set or clear the agent's default visibility (realignment R4)
+      description: >-
+        Used when a session/attestation-open request this agent makes omits `visibility`
+        itself (docs/SPEC.md §13/§15) — checked ahead of the platform default (sealed for
+        sessions, private for attestations). `null` clears the override.
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [defaultVisibility]
+              properties:
+                defaultVisibility:
+                  oneOf: [{ $ref: '#/components/schemas/Visibility' }, { type: 'null' }]
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/owner/agents/{agentId}/access-log:
+    get:
+      tags: [owner]
+      operationId: getAgentAccessLog
+      summary: Who viewed this agent's data via a viewer grant, and when (realignment R4)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Access log entries, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [viewerEmail, action, resourceId, at]
+                      properties:
+                        viewerEmail: { type: string, format: email }
+                        action: { type: string, enum: [list_sessions, list_attestations, list_records, view_record_bundle] }
+                        resourceId: { type: [string, 'null'] }
+                        at: { $ref: '#/components/schemas/Timestamp' }
+                  nextCursor: { $ref: '#/components/schemas/NextCursor' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /v1/owner/sessions:
     get:
       tags: [owner]
@@ -1219,6 +1286,24 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SessionPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/owner/attestations:
+    get:
+      tags: [owner]
+      operationId: listOwnerAttestations
+      summary: List attestations of the owner's agents (realignment R4)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AttestationStatusFilter'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Attestations of the owner's agents
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttestationPage' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /v1/owner/invites:
@@ -1359,7 +1444,7 @@ paths:
     post:
       tags: [owner]
       operationId: inviteViewer
-      summary: Invite a human to read-only access on an owned agent
+      summary: Invite a human to viewer access on an owned agent
       security: [ { ownerSession: [] } ]
       parameters:
         - $ref: '#/components/parameters/AgentId'
@@ -1373,6 +1458,10 @@ paths:
               properties:
                 email: { type: string, format: email, maxLength: 254 }
                 label: { type: [string, 'null'], maxLength: 100 }
+                scope:
+                  description: Realignment R4 (docs/SPEC.md §15). Defaults to "read" when omitted.
+                  type: string
+                  enum: [read, export, manage]
       responses:
         '201':
           description: Grant created (or reactivated, if it was previously revoked)
@@ -1430,6 +1519,38 @@ paths:
                 required: [grant]
                 properties:
                   grant: { $ref: '#/components/schemas/ViewerGrant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/owner/agents/{agentId}/viewers/{grantId}/scope:
+    patch:
+      tags: [owner]
+      operationId: setViewerGrantScope
+      summary: Change a viewer grant's scope (realignment R4)
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+        - $ref: '#/components/parameters/GrantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope]
+              properties:
+                scope: { type: string, enum: [read, export, manage] }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grant]
+                properties:
+                  grant: { $ref: '#/components/schemas/ViewerGrant' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -1883,6 +2004,8 @@ components:
           properties:
             requireInviteApproval: { type: boolean }
             emailOnRecord: { type: boolean }
+            publicFeedOptIn: { type: boolean }
+            oversightAlerts: { type: boolean }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
     AgentMeta:
       type: object
@@ -2034,6 +2157,14 @@ components:
                 - type: integer
                   minimum: 1
                   maximum: 3650
+                - type: 'null'
+            defaultVisibility:
+              description: >-
+                Realignment R4 (docs/SPEC.md §13/§15). Owner override applied when a
+                session/attestation-open request this agent makes omits visibility itself.
+                null means "use the platform default".
+              oneOf:
+                - $ref: '#/components/schemas/Visibility'
                 - type: 'null'
     AgentEnvelope:
       type: object
@@ -2477,7 +2608,7 @@ components:
     # ------------------------------------------------------------ records
     Record:
       type: object
-      required: [id, sessionId, statement, statementHash, platformSignature, evidence, createdAt]
+      required: [id, sessionId, statement, statementHash, platformSignature, evidence, createdAt, visibility, sealedState]
       properties:
         id: { type: string }
         sessionId: { $ref: '#/components/schemas/SessionId' }
@@ -2491,9 +2622,12 @@ components:
             sha256: { $ref: '#/components/schemas/Hash' }
             bytes: { type: integer, minimum: 0 }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
+        visibility:
+          oneOf: [{ $ref: '#/components/schemas/Visibility' }, { type: 'null' }]
+        sealedState: { $ref: '#/components/schemas/SealedState' }
     ViewerGrant:
       type: object
-      required: [id, ownerId, agentId, viewerEmail, label, status, createdAt, revokedAt]
+      required: [id, ownerId, agentId, viewerEmail, label, status, createdAt, revokedAt, scope]
       properties:
         id: { type: string }
         ownerId: { $ref: '#/components/schemas/OwnerId' }
@@ -2503,6 +2637,13 @@ components:
         status: { type: string, enum: [active, revoked] }
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         revokedAt: { oneOf: [{ type: 'null' }, { $ref: '#/components/schemas/Timestamp' }] }
+        scope:
+          description: >-
+            Realignment R4 (docs/SPEC.md §15). "read": view only. "export": also download a
+            record's full bundle. "manage" is reserved — stored and shown, but doesn't yet
+            grant any capability beyond export.
+          type: string
+          enum: [read, export, manage]
     ViewerAccessItem:
       type: object
       required: [grant, agent]

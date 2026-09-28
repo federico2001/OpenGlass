@@ -1,19 +1,24 @@
 import {
   agentsRepository,
+  attestationsRepository,
   invitesRepository,
   listRecordsForAgents,
   listRecordsForOwner,
   newId,
   ownersRepository,
   sessionsRepository,
+  viewerAccessLogRepository,
   viewerGrantsRepository,
   type ViewerGrantDoc,
 } from "@openglass/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { agentFullView, agentPublicView } from "../domain/agentViews.js";
+import { notifyCounterpartyAlerts } from "../domain/alerts.js";
+import { attestationView } from "../domain/attestationViews.js";
 import { computeGenesisHash } from "../domain/genesis.js";
 import { inviteView, sessionView } from "../domain/sessionViews.js";
+import { Visibility } from "../domain/visibility.js";
 import { parseOrError, sendError } from "../errors.js";
 import { rateLimit } from "../plugins/rateLimit.js";
 import { verifyOwnerSession } from "../plugins/ownerAuth.js";
@@ -26,14 +31,22 @@ const PatchOwnerBody = z.strictObject({
       requireInviteApproval: z.boolean().optional(),
       emailOnRecord: z.boolean().optional(),
       publicFeedOptIn: z.boolean().optional(),
+      oversightAlerts: z.boolean().optional(),
     })
     .optional(),
 });
 
+/** Realignment R4 (docs/SPEC.md §15): defaults to "read" when omitted — the original,
+ * only-ever behavior before scoped grants existed. */
+const ViewerScope = z.enum(["read", "export", "manage"]);
+
 const InviteViewerBody = z.strictObject({
   email: z.string().email().max(254),
   label: z.string().max(100).nullable().optional(),
+  scope: ViewerScope.optional(),
 });
+
+const UpdateViewerScopeBody = z.strictObject({ scope: ViewerScope });
 
 const SpendLimitBody = z.strictObject({
   /** US cents; null clears the limit (unlimited). */
@@ -47,6 +60,12 @@ const PatchAgentBody = z.strictObject({ publicDirectory: z.boolean() });
  * `SpendLimitBody` above. Only affects new records issued after the change; an already-
  * issued record's `retention.expiresAt` was signed at issuance and never moves. */
 const RetentionBody = z.strictObject({ privateRetentionDays: z.int().min(1).max(3650).nullable() });
+
+/** Realignment R4 (docs/SPEC.md §13/§15). `null` clears the override, falling back to the
+ * platform default (sealed for sessions, private for attestations) — see
+ * apps/api/src/domain/visibility.ts's `effectiveVisibility`. Only affects a session/
+ * attestation-open request that doesn't set `visibility` itself. */
+const VisibilityDefaultBody = z.strictObject({ defaultVisibility: Visibility.nullable() });
 
 function paginationOf(query: unknown): { limit: number; cursor?: string } {
   const q = query as { limit?: string; cursor?: string };
@@ -78,15 +97,20 @@ function viewerGrantView(doc: ViewerGrantDoc) {
     status: doc.status,
     createdAt: doc.createdAt.toISOString(),
     revokedAt: doc.revokedAt?.toISOString() ?? null,
+    /** Realignment R4 (docs/SPEC.md §15). Absent on a grant created before scopes existed
+     * — treated the same as "read" everywhere it's checked, never widened by default. */
+    scope: doc.scope ?? "read",
   };
 }
 
 export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const agents = agentsRepository(deps.db);
   const sessions = sessionsRepository(deps.db);
+  const attestations = attestationsRepository(deps.db);
   const invites = invitesRepository(deps.db);
   const owners = ownersRepository(deps.db);
   const viewerGrants = viewerGrantsRepository(deps.db);
+  const viewerAccessLog = viewerAccessLogRepository(deps.db);
   const ownerAuth = verifyOwnerSession(deps.db, { webOrigin: deps.webOrigin });
 
   app.get("/v1/owner/me", { preHandler: ownerAuth }, async (req) => ({ owner: ownerView(req.owner!) }));
@@ -116,6 +140,20 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
     if (cursor) filter._id = { $lt: cursor };
     const items = await sessions.collection.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit).toArray();
     return { items: items.map(sessionView), nextCursor: items.length === limit ? items[items.length - 1]!._id : null };
+  });
+
+  // Realignment R4 (docs/SPEC.md §3/§12): the attestation counterpart to
+  // GET /v1/owner/sessions above — needed so the dashboard's activity timeline can show
+  // both kinds of record-producing activity in one place.
+  app.get("/v1/owner/attestations", { preHandler: ownerAuth }, async (req) => {
+    const { limit, cursor } = paginationOf(req.query);
+    const q = req.query as { status?: string };
+    const items = await attestations.listByAttestor("attestor.ownerId", req.owner!._id, {
+      limit,
+      cursor,
+      status: q.status as "active" | "closing" | "closed" | undefined,
+    });
+    return { items: items.map(attestationView), nextCursor: items.length === limit ? items[items.length - 1]!._id : null };
   });
 
   app.get("/v1/owner/invites", { preHandler: ownerAuth }, async (req) => {
@@ -183,6 +221,15 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
     return { agent: agentFullView(updated!) };
   });
 
+  app.patch<{ Params: { agentId: string } }>("/v1/owner/agents/:agentId/visibility-default", { preHandler: ownerAuth }, async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+    const body = parseOrError(VisibilityDefaultBody, req.body, reply);
+    if (!body) return;
+    const updated = await agents.update(agent._id, { defaultVisibility: body.defaultVisibility });
+    return { agent: agentFullView(updated!) };
+  });
+
   app.post<{ Params: { inviteId: string } }>("/v1/owner/invites/:inviteId/approve", { preHandler: ownerAuth }, async (req, reply) => {
     const invite = await invites.findById(req.params.inviteId);
     if (!invite || invite.status !== "awaiting_owner") return sendError(reply, 409, "invite_not_pending", "Invite is not awaiting approval");
@@ -205,6 +252,9 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
       respondedAt: now,
       ownerApproval: { required: true, decision: "approved", decidedBy: req.owner!._id, decidedAt: now },
     });
+    notifyCounterpartyAlerts(deps.db, deps.mailer, req.log, updatedSession!, deps.publicUrl).catch((err) =>
+      req.log.warn({ err }, "failed to run oversight alert checks"),
+    );
     return { invite: inviteView(updatedInvite!), session: sessionView(updatedSession!) };
   });
 
@@ -277,7 +327,12 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
       const existing = await viewerGrants.findByAgentAndEmail(agent._id, viewerEmail);
       if (existing) {
         if (existing.status === "active") return sendError(reply, 409, "viewer_exists", "This email already has viewer access to this agent");
-        const reactivated = await viewerGrants.update(existing._id, { status: "active", revokedAt: null, label: body.label ?? existing.label });
+        const reactivated = await viewerGrants.update(existing._id, {
+          status: "active",
+          revokedAt: null,
+          label: body.label ?? existing.label,
+          scope: body.scope ?? existing.scope,
+        });
         await deps.mailer
           .sendViewerInvite(viewerEmail, agent.name, `${deps.webOrigin}/login?redirectTo=/dashboard`)
           .catch((err) => req.log.error({ err }, "failed to send viewer invite email"));
@@ -294,6 +349,7 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
         status: "active",
         createdAt: now,
         revokedAt: null,
+        scope: body.scope,
       });
       await deps.mailer
         .sendViewerInvite(viewerEmail, agent.name, `${deps.webOrigin}/login?redirectTo=/dashboard`)
@@ -323,6 +379,35 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
       return { grant: viewerGrantView(updated!) };
     },
   );
+
+  app.patch<{ Params: { agentId: string; grantId: string } }>(
+    "/v1/owner/agents/:agentId/viewers/:grantId/scope",
+    { preHandler: ownerAuth },
+    async (req, reply) => {
+      const agent = await agents.findById(req.params.agentId);
+      if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+      const grant = await viewerGrants.findById(req.params.grantId);
+      if (!grant || grant.agentId !== agent._id) return sendError(reply, 404, "not_found", "Viewer grant not found");
+      const body = parseOrError(UpdateViewerScopeBody, req.body, reply);
+      if (!body) return;
+      const updated = await viewerGrants.update(grant._id, { scope: body.scope });
+      return { grant: viewerGrantView(updated!) };
+    },
+  );
+
+  // Realignment R4 (docs/SPEC.md §15): "an audit log of who viewed what" — who's read this
+  // agent's sessions/attestations/records via a viewer grant (never the owner's own reads,
+  // which don't need auditing against themselves).
+  app.get<{ Params: { agentId: string } }>("/v1/owner/agents/:agentId/access-log", { preHandler: ownerAuth }, async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+    const { limit, cursor } = paginationOf(req.query);
+    const items = await viewerAccessLog.listForAgent(req.owner!._id, agent._id, { limit, cursor });
+    return {
+      items: items.map((i) => ({ viewerEmail: i.viewerEmail, action: i.action, resourceId: i.resourceId, at: i.at.toISOString() })),
+      nextCursor: items.length === limit ? items[items.length - 1]!._id : null,
+    };
+  });
 
   app.get("/v1/owner/viewer-access", { preHandler: ownerAuth }, async (req) => {
     const grants = await viewerGrants.listActiveForViewer(req.owner!.email);

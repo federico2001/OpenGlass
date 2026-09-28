@@ -8,6 +8,7 @@ import {
   apiFetch,
   formatDate,
   formatUsdCents,
+  type AccessLogEntry,
   type AgentPublic,
   type OwnerAgent,
   type OwnerSession,
@@ -28,13 +29,21 @@ export default function AgentDetailPage() {
   const [viewers, setViewers] = useState<ViewerGrant[]>([]);
   const [viewerEmail, setViewerEmail] = useState("");
   const [viewerLabel, setViewerLabel] = useState("");
+  const [viewerScope, setViewerScope] = useState<"read" | "export" | "manage">("read");
   const [invitingViewer, setInvitingViewer] = useState(false);
   const [revokingViewerId, setRevokingViewerId] = useState<string | null>(null);
+  const [changingScopeId, setChangingScopeId] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
+  const [accessLog, setAccessLog] = useState<AccessLogEntry[]>([]);
 
   const [spendLimitInput, setSpendLimitInput] = useState("");
   const [settingSpendLimit, setSettingSpendLimit] = useState(false);
   const [spendLimitError, setSpendLimitError] = useState<string | null>(null);
+
+  const [retentionInput, setRetentionInput] = useState("");
+  const [settingRetention, setSettingRetention] = useState(false);
+  const [retentionError, setRetentionError] = useState<string | null>(null);
+  const [settingVisibilityDefault, setSettingVisibilityDefault] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +62,12 @@ export default function AgentDetailPage() {
           apiFetch<{ items: ViewerGrant[] }>(`/v1/owner/agents/${id}/viewers?limit=200`)
             .then((r) => {
               if (!cancelled) setViewers(r.items);
+            })
+            .catch(() => {});
+          // Realignment R4 (docs/SPEC.md §15): "an audit log of who viewed what".
+          apiFetch<{ items: AccessLogEntry[] }>(`/v1/owner/agents/${id}/access-log?limit=50`)
+            .then((r) => {
+              if (!cancelled) setAccessLog(r.items);
             })
             .catch(() => {});
         }
@@ -113,11 +128,12 @@ export default function AgentDetailPage() {
       const res = await apiFetch<{ grant: ViewerGrant }>(`/v1/owner/agents/${agent.id}/viewers`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: viewerEmail, label: viewerLabel || null }),
+        body: JSON.stringify({ email: viewerEmail, label: viewerLabel || null, scope: viewerScope }),
       });
       setViewers((prev) => [res.grant, ...prev.filter((v) => v.id !== res.grant.id)]);
       setViewerEmail("");
       setViewerLabel("");
+      setViewerScope("read");
     } catch (err) {
       setViewerError(err instanceof Error ? err.message : "Could not invite this viewer.");
     } finally {
@@ -179,6 +195,81 @@ export default function AgentDetailPage() {
       setSpendLimitError(err instanceof Error ? err.message : "Could not clear the spend limit.");
     } finally {
       setSettingSpendLimit(false);
+    }
+  }
+
+  async function setRetention(e: FormEvent) {
+    e.preventDefault();
+    if (!agent) return;
+    setSettingRetention(true);
+    setRetentionError(null);
+    try {
+      const days = Number(retentionInput);
+      if (!Number.isInteger(days) || days < 1 || days > 3650) throw new Error("Enter a whole number of days, 1–3650.");
+      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}/retention`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ privateRetentionDays: days }),
+      });
+      setAgent(res.agent);
+      setRetentionInput("");
+    } catch (err) {
+      setRetentionError(err instanceof Error ? err.message : "Could not set retention.");
+    } finally {
+      setSettingRetention(false);
+    }
+  }
+
+  async function clearRetention() {
+    if (!agent) return;
+    setSettingRetention(true);
+    setRetentionError(null);
+    try {
+      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}/retention`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ privateRetentionDays: null }),
+      });
+      setAgent(res.agent);
+    } catch (err) {
+      setRetentionError(err instanceof Error ? err.message : "Could not clear retention.");
+    } finally {
+      setSettingRetention(false);
+    }
+  }
+
+  async function setVisibilityDefault(next: "private" | "sealed" | "shared" | null) {
+    if (!agent) return;
+    setSettingVisibilityDefault(true);
+    try {
+      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}/visibility-default`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ defaultVisibility: next }),
+      });
+      setAgent(res.agent);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not set the default visibility.");
+    } finally {
+      setSettingVisibilityDefault(false);
+    }
+  }
+
+  async function changeViewerScope(grantId: string, scope: "read" | "export" | "manage") {
+    if (!agent) return;
+    setChangingScopeId(grantId);
+    setViewerError(null);
+    try {
+      const res = await apiFetch<{ grant: ViewerGrant }>(`/v1/owner/agents/${agent.id}/viewers/${grantId}/scope`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope }),
+      });
+      setViewers((prev) => prev.map((v) => (v.id === res.grant.id ? res.grant : v)));
+    } catch (err) {
+      setViewerError(err instanceof Error ? err.message : "Could not change this viewer's scope.");
+    } finally {
+      setChangingScopeId(null);
     }
   }
 
@@ -305,11 +396,65 @@ export default function AgentDetailPage() {
         </label>
       </section>
 
-      <section className={styles.section} aria-label="Viewers with read-only access to this agent">
+      <section className={styles.section} aria-label="Visibility and retention defaults">
+        <p className="label">Privacy &amp; retention</p>
+        <p className={styles.hint}>
+          When this agent offers a session or opens an attestation without specifying visibility itself, this default
+          applies — see <a href="/docs/SPEC.md">SPEC.md §13/§15</a> for what each visibility means.
+        </p>
+        <div className={styles.viewerForm}>
+          <select
+            value={agent.defaultVisibility ?? ""}
+            disabled={settingVisibilityDefault}
+            onChange={(e) => setVisibilityDefault(e.target.value === "" ? null : (e.target.value as "private" | "sealed" | "shared"))}
+            className={styles.viewerInput}
+          >
+            <option value="">Platform default</option>
+            <option value="private">Private</option>
+            <option value="sealed">Sealed</option>
+            <option value="shared">Shared</option>
+          </select>
+        </div>
+
+        <p className={styles.hint} style={{ marginTop: 16 }}>
+          For <code>visibility: &quot;private&quot;</code> records this agent participates in as the private-choosing
+          party: how many days until content is crypto-shredded.{" "}
+          {agent.privateRetentionDays !== null ? (
+            <>Currently <strong>{agent.privateRetentionDays} days</strong>.</>
+          ) : (
+            <>Currently the platform default.</>
+          )}
+        </p>
+        <form onSubmit={setRetention} className={styles.viewerForm}>
+          <input
+            type="number"
+            min="1"
+            max="3650"
+            step="1"
+            placeholder="Days, e.g. 90"
+            value={retentionInput}
+            onChange={(e) => setRetentionInput(e.target.value)}
+            className={styles.viewerInput}
+          />
+          <button type="submit" className={styles.smallButton} disabled={settingRetention || !retentionInput}>
+            {settingRetention ? "Saving…" : "Set retention"}
+          </button>
+          {agent.privateRetentionDays !== null && (
+            <button type="button" className={styles.smallButtonGhost} onClick={clearRetention} disabled={settingRetention}>
+              Use platform default
+            </button>
+          )}
+        </form>
+        {retentionError && <p className={styles.error}>{retentionError}</p>}
+      </section>
+
+      <section className={styles.section} aria-label="Viewers with access to this agent">
         <p className="label">Viewers ({viewers.filter((v) => v.status === "active").length})</p>
         <p className={styles.hint}>
-          Give a human — legal, a manager, an auditor — read-only access to this agent&apos;s sessions and records. They
-          sign in the same way you did, with a one-time email link.
+          Give a human — legal, a manager, an auditor — access to this agent&apos;s sessions and records. They sign in
+          the same way you did, with a one-time email link. <strong>Read</strong>: view only. <strong>Export</strong>:
+          also download a record&apos;s full bundle. <strong>Manage</strong> is reserved — it doesn&apos;t yet grant
+          anything beyond export.
         </p>
         <form onSubmit={inviteViewer} className={styles.viewerForm}>
           <input
@@ -328,6 +473,11 @@ export default function AgentDetailPage() {
             className={styles.viewerInput}
             maxLength={100}
           />
+          <select value={viewerScope} onChange={(e) => setViewerScope(e.target.value as "read" | "export" | "manage")} className={styles.viewerInput}>
+            <option value="read">Read</option>
+            <option value="export">Export</option>
+            <option value="manage">Manage (reserved)</option>
+          </select>
           <button type="submit" className={styles.smallButton} disabled={invitingViewer}>
             {invitingViewer ? "Inviting…" : "Invite viewer"}
           </button>
@@ -347,7 +497,20 @@ export default function AgentDetailPage() {
                   </p>
                 </div>
                 <div className={styles.viewerRowActions}>
-                  <StatusBadge status={v.status} />
+                  {v.status === "active" ? (
+                    <select
+                      value={v.scope}
+                      disabled={changingScopeId === v.id}
+                      onChange={(e) => changeViewerScope(v.id, e.target.value as "read" | "export" | "manage")}
+                      className={styles.viewerInput}
+                    >
+                      <option value="read">Read</option>
+                      <option value="export">Export</option>
+                      <option value="manage">Manage</option>
+                    </select>
+                  ) : (
+                    <StatusBadge status={v.status} />
+                  )}
                   {v.status === "active" && (
                     <button className={styles.smallButtonGhost} onClick={() => revokeViewer(v.id)} disabled={revokingViewerId === v.id}>
                       {revokingViewerId === v.id ? "Revoking…" : "Revoke"}
@@ -357,6 +520,25 @@ export default function AgentDetailPage() {
               </li>
             ))}
           </ul>
+        )}
+
+        {accessLog.length > 0 && (
+          <div className={styles.section} aria-label="Access log">
+            <p className="label">Access log</p>
+            <ul className={styles.viewerList}>
+              {accessLog.map((entry, i) => (
+                <li key={i} className={styles.viewerRow}>
+                  <div>
+                    <p className={styles.viewerEmail}>{entry.viewerEmail}</p>
+                    <p className={styles.hint}>
+                      {entry.action.replace(/_/g, " ")}
+                      {entry.resourceId && <> · {entry.resourceId}</>} · {formatDate(entry.at)}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </section>
 

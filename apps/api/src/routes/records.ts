@@ -1,7 +1,7 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { decryptPayload, findRecordById, type RecordDoc } from "@openglass/db";
-import type { FastifyInstance } from "fastify";
-import { canAccessRecord } from "../domain/access.js";
+import { decryptPayload, findRecordById, viewerAccessLogRepository, type RecordDoc } from "@openglass/db";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { canAccessRecord, isViewerOnlyAccess, viewerScopeFor } from "../domain/access.js";
 import { trustedPlatformKeys } from "../domain/platformKeys.js";
 import { sendError } from "../errors.js";
 import { verifyAgentOrOwner } from "../plugins/agentOrOwnerAuth.js";
@@ -52,7 +52,38 @@ function recordView(doc: RecordDoc) {
     platformSignature: doc.platformSignature,
     evidence: { sha256: doc.evidence.sha256, bytes: doc.evidence.bytes },
     createdAt: doc.createdAt.toISOString(),
+    // Realignment R1/R4 (docs/SPEC.md §13.2, §15): lets a caller show sealing state (and
+    // offer unseal/dispute actions) without needing the full bundle first.
+    visibility: doc.visibility ?? null,
+    sealedState: doc.sealedState
+      ? {
+          status: doc.sealedState.status,
+          requestedBy: doc.sealedState.requestedBy,
+          approvals: doc.sealedState.approvals,
+          unsealedAt: doc.sealedState.unsealedAt?.toISOString() ?? null,
+          disputedBy: doc.sealedState.disputedBy,
+          disputedAt: doc.sealedState.disputedAt?.toISOString() ?? null,
+        }
+      : null,
   };
+}
+
+/** Realignment R4 (docs/SPEC.md §15): "an audit log of who viewed what" — a direct
+ * participant (agent or its own owner) reading their own record never needs auditing
+ * against themselves; only a viewer-grant-based read does. One entry per participant
+ * agent the caller's grants actually cover, using `record.statement.participants` (the
+ * signed statement, not a separate agents lookup) to resolve each agent's owner. Never
+ * throws into the caller — a failed audit write shouldn't turn a successful read into an
+ * error response. */
+async function logViewerAccessIfApplicable(deps: ServerDeps, record: RecordDoc, req: FastifyRequest): Promise<void> {
+  if (!isViewerOnlyAccess(record, req) || !req.owner) return;
+  const log = viewerAccessLogRepository(deps.db);
+  for (const p of record.statement.participants) {
+    if (!req.viewerAgentIds?.has(p.agentId)) continue;
+    await log
+      .record({ ownerId: p.ownerId, agentId: p.agentId, viewerEmail: req.owner.email, action: "view_record_bundle", resourceId: record._id })
+      .catch((err) => req.log.warn({ err, recordId: record._id }, "failed to write viewer access log entry"));
+  }
 }
 
 export function registerRecordsRoutes(app: FastifyInstance, deps: ServerDeps): void {
@@ -72,6 +103,17 @@ export function registerRecordsRoutes(app: FastifyInstance, deps: ServerDeps): v
     async (req, reply) => {
       const record = await findRecordById(deps.db, req.params.recordId);
       if (!record || !canAccessRecord(record, req)) return sendError(reply, 404, "not_found", "Record not found");
+
+      // Realignment R4 (docs/SPEC.md §15): a viewer-grant holder needs "export" (or
+      // "manage") scope to download the full bundle — "read" alone covers the summary
+      // route and the dashboard's session/record lists, not the raw evidence.
+      if (isViewerOnlyAccess(record, req)) {
+        const scope = viewerScopeFor(record, req);
+        if (scope === "read" || scope === null) {
+          return sendError(reply, 403, "export_scope_required", "Viewing the full bundle needs export (or manage) scope on this grant");
+        }
+      }
+      await logViewerAccessIfApplicable(deps, record, req);
 
       if (isSealedAndUnresolved(record)) return receiptView(record);
 

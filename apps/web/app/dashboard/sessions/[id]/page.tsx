@@ -9,6 +9,7 @@ import {
   formatDate,
   shortHash,
   type AgentPublic,
+  type LookupResult,
   type MessageView,
   type Owner,
   type OwnerSession,
@@ -33,6 +34,10 @@ export default function SessionDetailPage() {
 
   const [resolvingPause, setResolvingPause] = useState(false);
   const [pauseError, setPauseError] = useState<string | null>(null);
+
+  const [counterpartyLookup, setCounterpartyLookup] = useState<LookupResult | null>(null);
+  const [sealingAction, setSealingAction] = useState<"unseal-request" | "unseal-approve" | "dispute" | null>(null);
+  const [sealingError, setSealingError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +64,22 @@ export default function SessionDetailPage() {
         const map: Record<string, AgentPublic> = {};
         for (const pair of pairs) if (pair) map[pair[0]] = pair[1];
         setParticipants(map);
+
+        // Realignment R4 (docs/SPEC.md §15): counterparty panel — the side that isn't the
+        // viewing owner's own agent, looked up via realignment R2's public GET /v1/lookup
+        // so this shows the same independently-verifiable facts anyone could check.
+        const mine = ownerRes ? new Set([sessionRes.session.initiator.ownerId, sessionRes.session.counterparty.ownerId].filter((o) => o === ownerRes.owner.id)) : new Set<string>();
+        const otherAgentId =
+          mine.has(sessionRes.session.initiator.ownerId ?? "")
+            ? sessionRes.session.counterparty.agentId
+            : sessionRes.session.initiator.agentId;
+        if (otherAgentId) {
+          apiFetch<LookupResult>(`/v1/lookup?agentId=${otherAgentId}`)
+            .then((r) => {
+              if (!cancelled) setCounterpartyLookup(r);
+            })
+            .catch(() => {});
+        }
 
         if (sessionRes.session.recordId) {
           apiFetch<{ record: RecordSummary }>(`/v1/records/${sessionRes.session.recordId}`)
@@ -108,6 +129,21 @@ export default function SessionDetailPage() {
       setVerifyError(err instanceof Error ? err.message : "Could not run verification.");
     } finally {
       setVerifying(false);
+    }
+  }
+
+  async function runSealingAction(action: "unseal-request" | "unseal-approve" | "dispute") {
+    if (!session?.recordId) return;
+    setSealingAction(action);
+    setSealingError(null);
+    try {
+      await apiFetch(`/v1/records/${session.recordId}/${action}`, { method: "POST" });
+      const r = await apiFetch<{ record: RecordSummary }>(`/v1/records/${session.recordId}`);
+      setRecord(r.record);
+    } catch (err) {
+      setSealingError(err instanceof Error ? err.message : "Could not update the seal state.");
+    } finally {
+      setSealingAction(null);
     }
   }
 
@@ -185,6 +221,38 @@ export default function SessionDetailPage() {
         </div>
       </section>
 
+      {counterpartyLookup && (
+        <section className={styles.card} aria-label="Counterparty facts">
+          <p className="label">Who&apos;s on the other side</p>
+          {counterpartyLookup.registered ? (
+            <>
+              <p className={styles.hint}>
+                {counterpartyLookup.verifiedOwner
+                  ? `Operated by ${counterpartyLookup.verifiedOwner.domain} (verified)`
+                  : "No verified domain on file for this agent."}
+                {" · "}first seen {formatDate(counterpartyLookup.firstSeen)}
+              </p>
+              {(counterpartyLookup.flags.newAgent || counterpartyLookup.flags.unverifiedDomain || counterpartyLookup.flags.recentlyRotatedKey) && (
+                <p className={styles.error}>
+                  {[
+                    counterpartyLookup.flags.newAgent && "This agent registered less than 7 days ago.",
+                    counterpartyLookup.flags.unverifiedDomain && "It claims a domain it hasn't verified.",
+                    counterpartyLookup.flags.recentlyRotatedKey && "Its signing key was recently rotated.",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                </p>
+              )}
+              <a className={styles.downloadLink} href={`/agents/${counterpartyLookup.agentId}`}>
+                View full profile →
+              </a>
+            </>
+          ) : (
+            <p className={styles.error}>This counterparty isn&apos;t registered on OpenGlass — nothing about it could be verified.</p>
+          )}
+        </section>
+      )}
+
       <section className={styles.card}>
         <table className={styles.table}>
           <tbody>
@@ -230,12 +298,57 @@ export default function SessionDetailPage() {
               <table className={styles.table}>
                 <tbody>
                   <tr><td>Record ID</td><td><code>{record.id}</code></td></tr>
+                  <tr><td>Visibility</td><td>{record.visibility ?? "shared"}</td></tr>
                   <tr><td>Close reason</td><td>{record.statement.closeReason}</td></tr>
                   <tr><td>Evidence size</td><td>{record.evidence.bytes.toLocaleString()} bytes</td></tr>
                   <tr><td>Issued</td><td>{formatDate(record.statement.issuedAt)}</td></tr>
                 </tbody>
               </table>
             )}
+
+            {record?.visibility === "sealed" && record.sealedState && (
+              <div className={styles.hint} aria-label="Sealed record status">
+                {record.sealedState.status === "sealed" && (
+                  <>
+                    <p>
+                      Sealed — only a receipt (hashes, signatures, record id) is available until both owners consent to
+                      unseal, or either disputes.
+                    </p>
+                    <div className={styles.buttonRow}>
+                      <button className={styles.button} onClick={() => runSealingAction("unseal-request")} disabled={sealingAction !== null}>
+                        {sealingAction === "unseal-request" ? "Working…" : "Request unseal"}
+                      </button>
+                      <button className={styles.secondaryButton} onClick={() => runSealingAction("dispute")} disabled={sealingAction !== null}>
+                        {sealingAction === "dispute" ? "Working…" : "Dispute"}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {record.sealedState.status === "unseal_requested" && (
+                  <>
+                    <p>
+                      {isParticipantOwner && owner && record.sealedState.approvals.includes(owner.id)
+                        ? "You've requested/approved unsealing — waiting on the other owner."
+                        : "The other owner has requested to unseal this record."}
+                    </p>
+                    <div className={styles.buttonRow}>
+                      {!(owner && record.sealedState.approvals.includes(owner.id)) && (
+                        <button className={styles.button} onClick={() => runSealingAction("unseal-approve")} disabled={sealingAction !== null}>
+                          {sealingAction === "unseal-approve" ? "Working…" : "Approve unseal"}
+                        </button>
+                      )}
+                      <button className={styles.secondaryButton} onClick={() => runSealingAction("dispute")} disabled={sealingAction !== null}>
+                        {sealingAction === "dispute" ? "Working…" : "Dispute instead"}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {record.sealedState.status === "unsealed" && <p>Unsealed — both owners consented. The full bundle is available below.</p>}
+                {record.sealedState.status === "disputed" && <p>Disputed — force-unsealed for fairness. The full bundle is available below.</p>}
+                {sealingError && <p className={styles.error}>{sealingError}</p>}
+              </div>
+            )}
+
             <div className={styles.verifyRow}>
               <button className={styles.button} onClick={verifyRecord} disabled={verifying}>
                 {verifying ? "Verifying…" : "Verify independently"}

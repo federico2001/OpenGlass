@@ -652,6 +652,43 @@ export interface paths {
         patch: operations["setAgentPrivateRetention"];
         trace?: never;
     };
+    "/v1/owner/agents/{agentId}/visibility-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set or clear the agent's default visibility (realignment R4)
+         * @description Used when a session/attestation-open request this agent makes omits `visibility` itself (docs/SPEC.md §13/§15) — checked ahead of the platform default (sealed for sessions, private for attestations). `null` clears the override.
+         */
+        patch: operations["setAgentVisibilityDefault"];
+        trace?: never;
+    };
+    "/v1/owner/agents/{agentId}/access-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who viewed this agent's data via a viewer grant, and when (realignment R4) */
+        get: operations["getAgentAccessLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/owner/sessions": {
         parameters: {
             query?: never;
@@ -661,6 +698,23 @@ export interface paths {
         };
         /** List sessions of the owner's agents */
         get: operations["listOwnerSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/attestations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List attestations of the owner's agents (realignment R4) */
+        get: operations["listOwnerAttestations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -781,7 +835,7 @@ export interface paths {
         /** List viewer grants (active and revoked) for an owned agent */
         get: operations["listAgentViewers"];
         put?: never;
-        /** Invite a human to read-only access on an owned agent */
+        /** Invite a human to viewer access on an owned agent */
         post: operations["inviteViewer"];
         delete?: never;
         options?: never;
@@ -804,6 +858,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/agents/{agentId}/viewers/{grantId}/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a viewer grant's scope (realignment R4) */
+        patch: operations["setViewerGrantScope"];
         trace?: never;
     };
     "/v1/owner/viewer-access": {
@@ -1035,6 +1106,8 @@ export interface components {
             settings: {
                 requireInviteApproval: boolean;
                 emailOnRecord: boolean;
+                publicFeedOptIn?: boolean;
+                oversightAlerts?: boolean;
             };
             createdAt: components["schemas"]["Timestamp"];
         };
@@ -1122,6 +1195,8 @@ export interface components {
             domainVerification?: components["schemas"]["DomainVerification"] | null;
             /** @description Realignment R1 (docs/SPEC.md §13). Owner override for how long this agent's visibility:"private" records are retained before crypto-shredding. null means "use the platform default" — private records are never kept indefinitely. */
             privateRetentionDays?: number | null;
+            /** @description Realignment R4 (docs/SPEC.md §13/§15). Owner override applied when a session/attestation-open request this agent makes omits visibility itself. null means "use the platform default". */
+            defaultVisibility?: components["schemas"]["Visibility"] | null;
         };
         AgentEnvelope: {
             agent: components["schemas"]["Agent"];
@@ -1417,6 +1492,8 @@ export interface components {
                 bytes: number;
             };
             createdAt: components["schemas"]["Timestamp"];
+            visibility: components["schemas"]["Visibility"] | null;
+            sealedState: components["schemas"]["SealedState"];
         };
         ViewerGrant: {
             id: string;
@@ -1429,6 +1506,11 @@ export interface components {
             status: "active" | "revoked";
             createdAt: components["schemas"]["Timestamp"];
             revokedAt: null | components["schemas"]["Timestamp"];
+            /**
+             * @description Realignment R4 (docs/SPEC.md §15). "read": view only. "export": also download a record's full bundle. "manage" is reserved — stored and shown, but doesn't yet grant any capability beyond export.
+             * @enum {string}
+             */
+            scope: "read" | "export" | "manage";
         };
         ViewerAccessItem: {
             grant: components["schemas"]["ViewerGrant"];
@@ -2926,6 +3008,9 @@ export interface operations {
                     settings?: {
                         requireInviteApproval?: boolean;
                         emailOnRecord?: boolean;
+                        publicFeedOptIn?: boolean;
+                        /** @description Realignment R4 (docs/SPEC.md §15). Defaults to true when unset. */
+                        oversightAlerts?: boolean;
                     };
                 };
             };
@@ -3083,6 +3168,74 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    setAgentVisibilityDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    defaultVisibility: components["schemas"]["Visibility"] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentAccessLog: {
+        parameters: {
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Access log entries, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            /** Format: email */
+                            viewerEmail: string;
+                            /** @enum {string} */
+                            action: "list_sessions" | "list_attestations" | "list_records" | "view_record_bundle";
+                            resourceId: string | null;
+                            at: components["schemas"]["Timestamp"];
+                        }[];
+                        nextCursor: components["schemas"]["NextCursor"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listOwnerSessions: {
         parameters: {
             query?: {
@@ -3103,6 +3256,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listOwnerAttestations: {
+        parameters: {
+            query?: {
+                status?: components["parameters"]["AttestationStatusFilter"];
+                cursor?: components["parameters"]["Cursor"];
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attestations of the owner's agents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttestationPage"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -3326,6 +3504,11 @@ export interface operations {
                     /** Format: email */
                     email: string;
                     label?: string | null;
+                    /**
+                     * @description Realignment R4 (docs/SPEC.md §15). Defaults to "read" when omitted.
+                     * @enum {string}
+                     */
+                    scope?: "read" | "export" | "manage";
                 };
             };
         };
@@ -3369,6 +3552,41 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setViewerGrantScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+                grantId: components["parameters"]["GrantId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    scope: "read" | "export" | "manage";
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        grant: components["schemas"]["ViewerGrant"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };

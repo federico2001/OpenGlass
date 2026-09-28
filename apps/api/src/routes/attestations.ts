@@ -16,6 +16,7 @@ import { z } from "zod";
 import { canAccessAttestation } from "../domain/access.js";
 import { appendAttestationEvent } from "../domain/appendAttestationEvent.js";
 import { computeAttestationGenesisHash } from "../domain/attestationGenesis.js";
+import { notifyHighRiskAction } from "../domain/alerts.js";
 import { attestationView } from "../domain/attestationViews.js";
 import { messageView } from "../domain/messageViews.js";
 import { withinClockSkew } from "../domain/genesis.js";
@@ -89,7 +90,7 @@ export function registerAttestationsRoutes(app: FastifyInstance, deps: ServerDep
 
       const now = new Date();
       const idleTimeoutSec = body.idleTimeoutSec ?? DEFAULT_IDLE_SEC;
-      const visibility = effectiveVisibility(body.visibility, "private", deps.contentEncryption);
+      const visibility = effectiveVisibility(body.visibility, attestor.defaultVisibility, "private", deps.contentEncryption);
       const doc: AttestationDoc = {
         _id: open.attestationId,
         mode: open.mode,
@@ -156,6 +157,11 @@ export function registerAttestationsRoutes(app: FastifyInstance, deps: ServerDep
       if (!body) return;
       const result = await appendAttestationEvent(deps, req.agent!.doc, req.params.attestationId, body);
       if (!result.ok) return sendError(reply, result.error.status, result.error.code, result.error.message, result.error.details);
+      if (req.agent!.doc.ownerId) {
+        notifyHighRiskAction(deps.db, deps.mailer, req.log, req.agent!.doc.ownerId, req.params.attestationId, body.payload, deps.publicUrl).catch(
+          (err) => req.log.warn({ err }, "failed to run high-risk oversight alert check"),
+        );
+      }
       return reply.code(201).send({ event: messageView(result.event), head: result.head });
     },
   );

@@ -86,6 +86,10 @@ export const validDocs: Record<string, Record<string, unknown>> = {
     _id: `vwg_${U}`, ownerId: `own_${U}`, agentId: `agt_${U}`, viewerEmail: "legal@example.com",
     label: "Legal counsel", status: "active", createdAt: now, revokedAt: null,
   },
+  viewer_access_log: {
+    _id: `val_${U}`, ownerId: `own_${U}`, agentId: `agt_${U}`, viewerEmail: "legal@example.com",
+    action: "list_sessions", resourceId: null, at: now,
+  },
   integration_status: { _id: "langchain", status: "in_progress", updatedAt: now, updatedBy: `own_${U}` },
   integration_votes: { _id: `ivt_${U}`, slug: "langchain", ownerId: `own_${U}`, createdAt: now },
   integration_requests: {
