@@ -43,6 +43,10 @@ export interface RegisteredLookupResult {
   verifiedOwner: { domain: string } | null;
   firstSeen: string;
   keyAgeDays: number;
+  /** Self-reported (`meta.software`, e.g. "acme-agent/2.3") — not independently verified,
+   * shown as-is for realignment R3's public profile pages ("integrations used"). There's
+   * no dedicated integration-tracking system to draw a stronger signal from yet. */
+  software: string | null;
   activity: ActivityFacts;
   openDisputesCount: number;
   flags: LookupFlags;
@@ -141,6 +145,7 @@ async function buildRegisteredResult(db: Db, agent: AgentDoc): Promise<Registere
     verifiedOwner: agent.domainVerification?.status === "verified" ? { domain: agent.domainVerification.domain } : null,
     firstSeen: agent.createdAt.toISOString(),
     keyAgeDays: Math.floor((now.getTime() - activeKey.createdAt.getTime()) / 86_400_000),
+    software: agent.meta.software ?? null,
     activity,
     openDisputesCount,
     flags: {

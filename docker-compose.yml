@@ -162,6 +162,12 @@ services:
     environment:
       PUBLIC_URL: https://localhost
       PUBLIC_MCP_URL: https://mcp.localhost
+      # Realignment R3: /agents/{id}/agent.json and the profile pages fetch from apps/api
+      # server-side. Called directly over the Docker network, never through Caddy/TLS —
+      # same pattern as the mcp service above.
+      API_INTERNAL_URL: http://api:3000
+    depends_on:
+      api: { condition: service_healthy }
 
   caddy:
     image: caddy:2-alpine

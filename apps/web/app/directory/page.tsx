@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiFetch, formatDate, type DirectoryAgent } from "../../lib/dashboard";
 import styles from "./page.module.css";
@@ -65,14 +66,14 @@ export default function DirectoryPage() {
       ) : (
         <div className={styles.grid}>
           {items.map((agent) => (
-            <div key={agent.id} className={styles.card}>
+            <Link key={agent.id} href={`/agents/${agent.id}`} className={styles.card}>
               <div className={styles.cardTop}>
                 <p className={styles.name}>{agent.name}</p>
                 {agent.verifiedBadge && <span className={styles.verifiedBadge}>Verified</span>}
               </div>
               {agent.description && <p className={styles.desc}>{agent.description}</p>}
               <p className={styles.meta}>registered {formatDate(agent.createdAt)}</p>
-            </div>
+            </Link>
           ))}
         </div>
       )}

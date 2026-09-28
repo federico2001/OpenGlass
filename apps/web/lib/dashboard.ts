@@ -169,6 +169,45 @@ export interface DirectoryAgent {
   createdAt: string;
 }
 
+// Realignment R2/R3 (docs/SPEC.md §14) — mirrors apps/api/src/domain/lookup.ts's
+// RegisteredLookupResult/UnregisteredLookupResult exactly.
+export interface LookupActivity {
+  sessionsLast90d: number;
+  attestationsLast90d: number;
+  distinctCounterparties: number;
+  normalCloseShare: number | null;
+}
+
+export interface LookupFlags {
+  newAgent: boolean;
+  unverifiedDomain: boolean;
+  recentlyRotatedKey: boolean;
+}
+
+export interface RegisteredLookupResult {
+  registered: true;
+  agentId: string;
+  name: string;
+  claimed: boolean;
+  verifiedOwner: { domain: string } | null;
+  firstSeen: string;
+  keyAgeDays: number;
+  software: string | null;
+  activity: LookupActivity;
+  openDisputesCount: number;
+  flags: LookupFlags;
+}
+
+export interface UnregisteredLookupResult {
+  registered: false;
+  agentCard: { name?: string; description?: string } | null;
+  mcpRegistryEntry: unknown | null;
+  domainRegisteredAt: string | null;
+  inviteUrl: string;
+}
+
+export type LookupResult = RegisteredLookupResult | UnregisteredLookupResult;
+
 export type IntegrationStatus = "requested" | "in_progress" | "available" | "native";
 
 export interface IntegrationEvidence {

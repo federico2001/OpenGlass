@@ -48,6 +48,11 @@ describe("GET /privacy", () => {
     expect(html).toContain('href="/terms"');
     expect(html).toContain('href="/security"');
   });
+
+  it("documents the correction process for public agent profiles (realignment R3)", () => {
+    expect(html).toContain("Correcting a public agent profile");
+    expect(html).toContain("GET /v1/lookup");
+  });
 });
 
 describe("GET /security", () => {

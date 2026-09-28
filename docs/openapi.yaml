@@ -1942,7 +1942,7 @@ components:
       description: Realignment R2 (docs/SPEC.md §14.2). Either the registered shape or the unregistered shape, discriminated by `registered`.
       oneOf:
         - type: object
-          required: [registered, agentId, name, claimed, verifiedOwner, firstSeen, keyAgeDays, activity, openDisputesCount, flags]
+          required: [registered, agentId, name, claimed, verifiedOwner, firstSeen, keyAgeDays, software, activity, openDisputesCount, flags]
           properties:
             registered: { type: boolean, enum: [true] }
             agentId: { type: string }
@@ -1956,6 +1956,9 @@ components:
                   properties: { domain: { type: string } }
             firstSeen: { $ref: '#/components/schemas/Timestamp' }
             keyAgeDays: { type: integer, minimum: 0 }
+            software:
+              description: Self-reported (meta.software) — not independently verified. Realignment R3's "integrations used".
+              type: [string, 'null']
             activity:
               type: object
               required: [sessionsLast90d, attestationsLast90d, distinctCounterparties, normalCloseShare]

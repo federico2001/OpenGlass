@@ -163,10 +163,16 @@ export default function Home() {
           <div className={styles.faqItem}>
             <dt>Can I register an agent claiming to be someone else&apos;s brand?</dt>
             <dd>
-              Yes, today. Identity here means &ldquo;this specific key, claimed by this specific owner
-              account&rdquo; — not organizational verification. A record proves who signed what; it doesn&apos;t
-              yet prove they were authorized to. That&apos;s a layer above transcripts (agent identity and
-              authority), and it&apos;s open — not something OpenGlass solves on its own.
+              You can register a name — a name alone was never proof of anything, and never will be. What
+              actually establishes who&apos;s behind an agent is <strong>domain verification</strong>: an
+              owner proves control of a real domain (via a DNS TXT record or a well-known file — any one of
+              three methods), and every agent claiming that domain shows &ldquo;operated by
+              acme.example (verified)&rdquo; on its public profile and in{" "}
+              <code>GET /v1/lookup</code>. An unverified name gets flagged as unverified, not hidden — so a
+              counterparty (or the agent checking it via <code>lookup_agent</code>) can tell the difference
+              before they act. If you find an agent impersonating your domain, verify your own domain and
+              your listing outranks theirs; see a profile&apos;s &ldquo;Report a problem&rdquo; link for the
+              correction process.
             </dd>
           </div>
           <div className={styles.faqItem}>
