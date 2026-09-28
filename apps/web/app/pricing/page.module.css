@@ -1,0 +1,185 @@
+.main {
+  padding-block: 48px 64px;
+}
+
+.masthead {
+  margin-bottom: 20px;
+  max-width: var(--measure);
+}
+
+.title {
+  font-size: clamp(26px, 4.5vw, 36px);
+  line-height: 1.15;
+  margin: 10px 0 14px;
+}
+
+.lede {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.block {
+  padding-block: 28px;
+  border-top: 1px solid var(--rule);
+}
+
+.block:last-of-type {
+  border-bottom: 1px solid var(--rule);
+}
+
+.tag {
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+  margin: 0 0 8px;
+}
+
+.block h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+
+.blockLede {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  margin: 0 0 16px;
+  max-width: var(--measure);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: var(--measure);
+}
+
+.list li {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  padding-left: 16px;
+  position: relative;
+}
+
+.list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent-text);
+}
+
+.list code {
+  font-family: var(--font-data);
+  font-size: 0.92em;
+  color: var(--ink);
+}
+
+.priceList {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.priceList > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding-block: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.priceList dt {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.priceList dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: right;
+}
+
+.price {
+  font-family: var(--font-data);
+  color: var(--accent-text);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+/* ---- Straight answers ---- */
+
+.faq {
+  margin-top: 56px;
+}
+
+.faq dl {
+  margin: 20px 0 0;
+}
+
+.faqItem {
+  padding-block: 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.faqItem:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.faqItem dt {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.faqItem dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: var(--measure);
+}
+
+.faqItem dd a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---- Footer ---- */
+
+.footer {
+  margin-top: 56px;
+  padding-block: 24px 0;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+}
+
+.footer a {
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footer a:hover {
+  color: var(--accent-text);
+}
