@@ -1,6 +1,7 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import { connectFromEnv, createPlatformSigner } from "@openglass/db";
 import { loadConfig } from "./config.js";
+import { createContentEncryptionDeps } from "./domain/contentEncryptionDeps.js";
 import { buildHealthServer } from "./health.js";
 import { closeExpiredAttestations } from "./jobs/closeExpiredAttestations.js";
 import { closeExpiredSessions } from "./jobs/closeExpiredSessions.js";
@@ -8,6 +9,7 @@ import { closeSuspendedAgentSessions } from "./jobs/closeSuspendedAgentSessions.
 import { issueAttestationRecords } from "./jobs/issueAttestationRecords.js";
 import { issueRecords } from "./jobs/issueRecords.js";
 import { recordActivitySnapshot } from "./jobs/recordActivitySnapshot.js";
+import { shredExpiredPrivateRecords } from "./jobs/shredExpiredPrivateRecords.js";
 import { createMailer } from "./mailer.js";
 
 // The api container owns migrations; the worker only connects.
@@ -23,6 +25,8 @@ const signer = createPlatformSigner({
   awsRegion: config.S3_REGION,
 });
 const mailer = createMailer(config, config.S3_REGION);
+const contentEncryption = createContentEncryptionDeps(config);
+if (contentEncryption) console.log(`[content-encryption] visibility=private enabled: mode=${config.CONTENT_ENCRYPTION}`);
 
 const log = (message: string, meta?: Record<string, unknown>) =>
   console.log(`[worker] ${message}${meta ? " " + JSON.stringify(meta) : ""}`);
@@ -40,6 +44,7 @@ async function sweep(): Promise<void> {
       platformKeyValidFrom: config.PLATFORM_KEY_VALID_FROM,
       mailer,
       publicUrl: config.PUBLIC_URL,
+      contentEncryption,
       log,
     });
     const attestationRecords = await issueAttestationRecords({
@@ -48,8 +53,10 @@ async function sweep(): Promise<void> {
       s3Bucket: config.S3_BUCKET,
       signer,
       platformKeyValidFrom: config.PLATFORM_KEY_VALID_FROM,
+      contentEncryption,
       log,
     });
+    const shredded = await shredExpiredPrivateRecords({ db: conn.db, log });
     const snapshot = await recordActivitySnapshot(conn.db, { log });
     if (
       expiry.expired ||
@@ -60,9 +67,10 @@ async function sweep(): Promise<void> {
       records.issued ||
       records.skipped ||
       attestationRecords.issued ||
-      attestationRecords.skipped
+      attestationRecords.skipped ||
+      shredded.shredded
     ) {
-      log("sweep", { ...expiry, ...attestationExpiry, ...suspended, ...records, attestationRecords });
+      log("sweep", { ...expiry, ...attestationExpiry, ...suspended, ...records, attestationRecords, shredded });
     }
     if (snapshot.written) log("activity snapshot written");
   } catch (err) {

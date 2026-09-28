@@ -68,7 +68,7 @@ describe("issueRecords", () => {
     });
 
     const mailer = createCapturingMailer();
-    const result = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer, publicUrl: "https://localhost" });
+    const result = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer, publicUrl: "https://localhost", contentEncryption: null });
     expect(result.issued).toBe(1);
     expect(result.skipped).toBe(0);
 
@@ -89,7 +89,7 @@ describe("issueRecords", () => {
     expect(mailer.sent.length).toBeGreaterThanOrEqual(1);
 
     // re-running the sweep must be a no-op — the session is no longer `closing`.
-    const again = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer, publicUrl: "https://localhost" });
+    const again = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer, publicUrl: "https://localhost", contentEncryption: null });
     expect(again.issued).toBe(0);
   });
 
@@ -102,7 +102,7 @@ describe("issueRecords", () => {
     });
 
     const mailer = createCapturingMailer();
-    const result = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer, publicUrl: "https://localhost" });
+    const result = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer, publicUrl: "https://localhost", contentEncryption: null });
     expect(result.issued).toBe(1);
 
     const bundle = await fetchBundle(signer, session._id);

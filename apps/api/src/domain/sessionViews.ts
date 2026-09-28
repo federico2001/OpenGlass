@@ -23,6 +23,9 @@ export function sessionView(doc: SessionDoc) {
     activatedAt: doc.activatedAt?.toISOString() ?? null,
     lastActivityAt: doc.lastActivityAt.toISOString(),
     expiresAt: doc.expiresAt.toISOString(),
+    /** Realignment R1 (docs/SPEC.md §13). Absent on a session issued before this field
+     * existed — never backfilled, matching every other legacy-absent field in this view. */
+    visibility: doc.visibility ?? null,
     pause: doc.pause
       ? { requestedBy: doc.pause.requestedBy, reason: doc.pause.reason, requestedAt: doc.pause.requestedAt.toISOString() }
       : null,

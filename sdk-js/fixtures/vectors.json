@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-23T15:51:36.864Z",
+  "generatedAt": "2026-09-28T14:15:28.312Z",
   "generatedBy": "packages/db (production crypto), see scripts/generate-vectors.ts",
   "canonicalization": [
     {
@@ -28,7 +28,7 @@
         "initiator": {
           "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
           "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-          "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+          "publicKey": "zJqqX0xpZi_kyTtJgGw-KEwm7KlhnHjhcRy8BSJpcdI"
         },
         "counterparty": {
           "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC"
@@ -37,8 +37,8 @@
         "createdAt": "2026-01-15T12:00:00.000Z",
         "expiresAt": "2026-01-16T12:00:00.000Z"
       },
-      "expected": "{\"counterparty\":{\"agentId\":\"agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC\"},\"createdAt\":\"2026-01-15T12:00:00.000Z\",\"expiresAt\":\"2026-01-16T12:00:00.000Z\",\"idleTimeoutSec\":86400,\"initiator\":{\"agentId\":\"agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA\",\"kid\":\"key_01J8Z3K4M5N6P7Q8R9S0T1V2WB\",\"publicKey\":\"XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E\"},\"mode\":\"relay\",\"purpose\":\"Cross-implementation test vector for sdk-js.\",\"sessionId\":\"ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG\",\"type\":\"openglass.offer\",\"v\":1}",
-      "expectedHex": "d8fc475eea5fa81c65cd420c1401486797973f3f5cbe2d6edc42a4507a053052",
+      "expected": "{\"counterparty\":{\"agentId\":\"agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC\"},\"createdAt\":\"2026-01-15T12:00:00.000Z\",\"expiresAt\":\"2026-01-16T12:00:00.000Z\",\"idleTimeoutSec\":86400,\"initiator\":{\"agentId\":\"agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA\",\"kid\":\"key_01J8Z3K4M5N6P7Q8R9S0T1V2WB\",\"publicKey\":\"zJqqX0xpZi_kyTtJgGw-KEwm7KlhnHjhcRy8BSJpcdI\"},\"mode\":\"relay\",\"purpose\":\"Cross-implementation test vector for sdk-js.\",\"sessionId\":\"ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG\",\"type\":\"openglass.offer\",\"v\":1}",
+      "expectedHex": "50a9462b78837a8f9e8950dbb97e46638bcf54e0909b5947c89ff3a99bdd2403",
       "description": "sha256(canonicalize(offer)) — the offer hash"
     },
     {
@@ -225,32 +225,32 @@
             "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
             "ownerId": "own_01J8Z3K4M5N6P7Q8R9S0T1V2WE",
             "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-            "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+            "publicKey": "zJqqX0xpZi_kyTtJgGw-KEwm7KlhnHjhcRy8BSJpcdI"
           },
           {
             "role": "counterparty",
             "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC",
             "ownerId": "own_01J8Z3K4M5N6P7Q8R9S0T1V2WF",
             "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
-            "publicKey": "erL4yI9jzAGDvnoiuXRfkUbyMwnfeh1KsmSYtTNeUuk"
+            "publicKey": "LCwy6eJTPiAGCApl7rxMRtyd4sdXJ27BMVz3i6LbCrQ"
           }
         ],
-        "genesisHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+        "genesisHash": "daa32793f05f8970fa09bbc7394967f71efa0e726426075dcc0c28057b5bb388",
         "headSeq": 1,
-        "headHash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+        "headHash": "ee438ff7317e2c901ad81916438db330e91e1c77ead8c257674c8fc284baa168",
         "messageCount": 1,
         "activatedAt": "2026-01-15T12:00:01.000Z",
         "closedAt": "2026-01-15T12:00:03.000Z",
         "closeReason": "agent_closed",
         "closedBy": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
-        "evidenceSha256": "74fd19ec58c041e04e47efe4e644f8b550832d594998d57f01910820992c439f",
+        "evidenceSha256": "8ce0ff7df4f707b52a6f2c4d07adcb1521ec6cb196d27c035bf833a613b061a8",
         "issuedAt": "2026-01-15T12:00:04.000Z"
       },
-      "statementHash": "dc79956a6d6e2e4e099c8b8b78ef38e40783d26e24d85e09ed995aa47e1a3a64",
+      "statementHash": "eef6eea5cc2fb4102f1555bac62e0a41da03a897131d9b0ce51354e8c75ed3ea",
       "platformSignature": {
         "alg": "ECDSA_P256_SHA256",
         "kid": "plat_vectors",
-        "sig": "MEYCIQCHScZW5wLd0tpyJO62_FrckQjbg4mO8MXN3WY0TysVawIhAJATTyt9Je1baQ9M-2Qh9HLXlpJtzAHTLAxwz0ieehxZ"
+        "sig": "MEUCIQDVoPhk_b0ZEvIYK46zUeCd8YATPvpJ5GlYo_AeXyjfCgIgNC7EQcVKNvsv3N8TZgTQ1djT_7UJJo4ZNqb7N3u38Ho"
       }
     },
     "evidence": {
@@ -265,7 +265,7 @@
         "initiator": {
           "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
           "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-          "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+          "publicKey": "zJqqX0xpZi_kyTtJgGw-KEwm7KlhnHjhcRy8BSJpcdI"
         },
         "counterparty": {
           "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC"
@@ -277,30 +277,30 @@
       "offerSignature": {
         "alg": "Ed25519",
         "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-        "sig": "nN-mZ-wegftEUx_twYUY2rRAd_oeifW5VXX_X-XAx2KnZQVXcb_hbaL1jGLZbSa9uIekns7_gef8UKvLsvuMBQ"
+        "sig": "VqOsEpsf07FjnrtuSCkukFVte7UzHcQ71OjANwrbHrJvUJ37dfzXWhA3kxzQBuHckxTUqGfeYVnFlSDVv5JXCg"
       },
       "accept": {
         "v": 1,
         "type": "openglass.accept",
         "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
-        "offerHash": "d8fc475eea5fa81c65cd420c1401486797973f3f5cbe2d6edc42a4507a053052",
+        "offerHash": "50a9462b78837a8f9e8950dbb97e46638bcf54e0909b5947c89ff3a99bdd2403",
         "counterparty": {
           "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC",
           "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
-          "publicKey": "erL4yI9jzAGDvnoiuXRfkUbyMwnfeh1KsmSYtTNeUuk"
+          "publicKey": "LCwy6eJTPiAGCApl7rxMRtyd4sdXJ27BMVz3i6LbCrQ"
         },
         "acceptedAt": "2026-01-15T12:00:01.000Z"
       },
       "acceptSignature": {
         "alg": "Ed25519",
         "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
-        "sig": "Q8owfU6xdy7ReiQ7cY3BsIsuI8nO6kQHJevx4Xro8Rcl0aaLG7yTuV-lh1E0J7fgyYyke_bP4Nw1MK4gsj6fAA"
+        "sig": "1ydVhuPX55TzfvcdlxCthcS2O-6vJId4ksA1vel0pnLkdszOzcZC-HVlTlnkTHK-ayToKlexDumDyAuIAml2Dg"
       },
-      "genesisHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+      "genesisHash": "daa32793f05f8970fa09bbc7394967f71efa0e726426075dcc0c28057b5bb388",
       "genesisSignature": {
         "alg": "ECDSA_P256_SHA256",
         "kid": "plat_vectors",
-        "sig": "MEUCIQCFcvNc8ptImSvvJG_iva6qfZgZYtsFfvOxZtyPQK1KfgIgNFSpRdpjeU6T83Fnq_4eYLgWNu6Tk0lWkXbNBQjimpg"
+        "sig": "MEUCIQDQNx-mGjSVgHTUibvQLPcmrq9FpViHdg9jmVTC-qW59AIgcUu4ob4_GCBGcPMWz9jOtzX6u4l8Sy8ziIfIQAPdI2A"
       },
       "messages": [
         {
@@ -309,7 +309,7 @@
             "type": "openglass.message",
             "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
             "seq": 1,
-            "prevHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+            "prevHash": "daa32793f05f8970fa09bbc7394967f71efa0e726426075dcc0c28057b5bb388",
             "sender": {
               "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
               "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB"
@@ -318,17 +318,17 @@
             "payloadHash": "c84ae9338ebc9f3f9fbadf596f8df212cf5e278be598517b9761eac431a7a5da",
             "sentAt": "2026-01-15T12:00:02.000Z"
           },
-          "hash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+          "hash": "ee438ff7317e2c901ad81916438db330e91e1c77ead8c257674c8fc284baa168",
           "signature": {
             "alg": "Ed25519",
             "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-            "sig": "Y-30pJTtywsWEE_2cc453OOrz8PhOJb5_rF8dPb9Lh_9OpaN_PB5Xb4flTFFVSmwyjEZElBLc_nUnE4jCv_gCA"
+            "sig": "0I6Uc2g_EuugOoDIzJOEXSzBP-hUumEJG5msrHaA1II3rsFZNKdh0TSD-i1oyzdvY3PULXQPEeLxrdn0Xbc1CA"
           },
           "receivedAt": "2026-01-15T12:00:02.100Z",
           "platformSignature": {
             "alg": "ECDSA_P256_SHA256",
             "kid": "plat_vectors",
-            "sig": "MEQCIF6wXcKEOE_C8OzqLEHXdwc2yDe8fOnkwRxptdliHkHtAiBApyaJudqHgnwYYe9kcifma694JryKpv5BU0cafK2v0w"
+            "sig": "MEUCIQD0NvLLjqwk-4Rt24qpRc63hsNCG4ndJtYyYKa1TnbmbwIgBwPCiSDxnCX7gwNAjWIduxE-AZcYCddZKciFvaddsRU"
           },
           "payload": {
             "text": "Hello — let's get started.",
@@ -345,13 +345,13 @@
           "type": "openglass.close",
           "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
           "headSeq": 1,
-          "headHash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+          "headHash": "ee438ff7317e2c901ad81916438db330e91e1c77ead8c257674c8fc284baa168",
           "closedAt": "2026-01-15T12:00:03.000Z"
         },
         "signature": {
           "alg": "Ed25519",
           "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-          "sig": "sHcGLsNnseG1jCh-NoU3mFd9IBAawDiBlMaVsTF3ADuk5Jq6cMZgH9kB5cZVkIrAduw_r7FV8vX7Bupmp7epBw"
+          "sig": "kMmE-oksJ5H8cE3yCtDhoUX0w9kynfUu-qWFtvtkOY5WJEK_gvjhQ1Te0Bg6FLaHhYPxkkizAlBZTdF8sUcnAA"
         }
       }
     },
@@ -359,7 +359,7 @@
       {
         "kid": "plat_vectors",
         "alg": "ECDSA_P256_SHA256",
-        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWU8VQpiRRZk35z6k67v8H2NgPyeThHEMwOZTk_sUgEGQmfjZvx2emAufDP9sqELjwsRiJ6BTxK9MYy1OS0j4GQ",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHGJPri6fF4oQEJBsOMP80euqWB5jCRTtcDiHJ5X4ef59IpRHXcJiCvEjLuPb692veurhC5n9etQOdF9EyBB-pA",
         "validFrom": "2026-01-14T12:00:00.000Z",
         "validUntil": null
       }
@@ -382,32 +382,32 @@
             "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
             "ownerId": "own_01J8Z3K4M5N6P7Q8R9S0T1V2WE",
             "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-            "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+            "publicKey": "zJqqX0xpZi_kyTtJgGw-KEwm7KlhnHjhcRy8BSJpcdI"
           },
           {
             "role": "counterparty",
             "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC",
             "ownerId": "own_01J8Z3K4M5N6P7Q8R9S0T1V2WF",
             "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
-            "publicKey": "erL4yI9jzAGDvnoiuXRfkUbyMwnfeh1KsmSYtTNeUuk"
+            "publicKey": "LCwy6eJTPiAGCApl7rxMRtyd4sdXJ27BMVz3i6LbCrQ"
           }
         ],
-        "genesisHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+        "genesisHash": "daa32793f05f8970fa09bbc7394967f71efa0e726426075dcc0c28057b5bb388",
         "headSeq": 1,
-        "headHash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+        "headHash": "ee438ff7317e2c901ad81916438db330e91e1c77ead8c257674c8fc284baa168",
         "messageCount": 1,
         "activatedAt": "2026-01-15T12:00:01.000Z",
         "closedAt": "2026-01-15T12:00:03.000Z",
         "closeReason": "agent_closed",
         "closedBy": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
-        "evidenceSha256": "74fd19ec58c041e04e47efe4e644f8b550832d594998d57f01910820992c439f",
+        "evidenceSha256": "8ce0ff7df4f707b52a6f2c4d07adcb1521ec6cb196d27c035bf833a613b061a8",
         "issuedAt": "2026-01-15T12:00:04.000Z"
       },
-      "statementHash": "dc79956a6d6e2e4e099c8b8b78ef38e40783d26e24d85e09ed995aa47e1a3a64",
+      "statementHash": "eef6eea5cc2fb4102f1555bac62e0a41da03a897131d9b0ce51354e8c75ed3ea",
       "platformSignature": {
         "alg": "ECDSA_P256_SHA256",
         "kid": "plat_vectors",
-        "sig": "MEYCIQCHScZW5wLd0tpyJO62_FrckQjbg4mO8MXN3WY0TysVawIhAJATTyt9Je1baQ9M-2Qh9HLXlpJtzAHTLAxwz0ieehxZ"
+        "sig": "MEUCIQDVoPhk_b0ZEvIYK46zUeCd8YATPvpJ5GlYo_AeXyjfCgIgNC7EQcVKNvsv3N8TZgTQ1djT_7UJJo4ZNqb7N3u38Ho"
       }
     },
     "evidence": {
@@ -422,7 +422,7 @@
         "initiator": {
           "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
           "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-          "publicKey": "XA59PZXdALMAqX2vag4LwPCBC4Yok3prQcIr351783E"
+          "publicKey": "zJqqX0xpZi_kyTtJgGw-KEwm7KlhnHjhcRy8BSJpcdI"
         },
         "counterparty": {
           "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC"
@@ -434,30 +434,30 @@
       "offerSignature": {
         "alg": "Ed25519",
         "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-        "sig": "nN-mZ-wegftEUx_twYUY2rRAd_oeifW5VXX_X-XAx2KnZQVXcb_hbaL1jGLZbSa9uIekns7_gef8UKvLsvuMBQ"
+        "sig": "VqOsEpsf07FjnrtuSCkukFVte7UzHcQ71OjANwrbHrJvUJ37dfzXWhA3kxzQBuHckxTUqGfeYVnFlSDVv5JXCg"
       },
       "accept": {
         "v": 1,
         "type": "openglass.accept",
         "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
-        "offerHash": "d8fc475eea5fa81c65cd420c1401486797973f3f5cbe2d6edc42a4507a053052",
+        "offerHash": "50a9462b78837a8f9e8950dbb97e46638bcf54e0909b5947c89ff3a99bdd2403",
         "counterparty": {
           "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WC",
           "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
-          "publicKey": "erL4yI9jzAGDvnoiuXRfkUbyMwnfeh1KsmSYtTNeUuk"
+          "publicKey": "LCwy6eJTPiAGCApl7rxMRtyd4sdXJ27BMVz3i6LbCrQ"
         },
         "acceptedAt": "2026-01-15T12:00:01.000Z"
       },
       "acceptSignature": {
         "alg": "Ed25519",
         "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WD",
-        "sig": "Q8owfU6xdy7ReiQ7cY3BsIsuI8nO6kQHJevx4Xro8Rcl0aaLG7yTuV-lh1E0J7fgyYyke_bP4Nw1MK4gsj6fAA"
+        "sig": "1ydVhuPX55TzfvcdlxCthcS2O-6vJId4ksA1vel0pnLkdszOzcZC-HVlTlnkTHK-ayToKlexDumDyAuIAml2Dg"
       },
-      "genesisHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+      "genesisHash": "daa32793f05f8970fa09bbc7394967f71efa0e726426075dcc0c28057b5bb388",
       "genesisSignature": {
         "alg": "ECDSA_P256_SHA256",
         "kid": "plat_vectors",
-        "sig": "MEUCIQCFcvNc8ptImSvvJG_iva6qfZgZYtsFfvOxZtyPQK1KfgIgNFSpRdpjeU6T83Fnq_4eYLgWNu6Tk0lWkXbNBQjimpg"
+        "sig": "MEUCIQDQNx-mGjSVgHTUibvQLPcmrq9FpViHdg9jmVTC-qW59AIgcUu4ob4_GCBGcPMWz9jOtzX6u4l8Sy8ziIfIQAPdI2A"
       },
       "messages": [
         {
@@ -466,7 +466,7 @@
             "type": "openglass.message",
             "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
             "seq": 1,
-            "prevHash": "36d5137866047a782471b7c14bc9195215a207111194991409790e82b3c7069e",
+            "prevHash": "daa32793f05f8970fa09bbc7394967f71efa0e726426075dcc0c28057b5bb388",
             "sender": {
               "agentId": "agt_01J8Z3K4M5N6P7Q8R9S0T1V2WA",
               "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB"
@@ -475,17 +475,17 @@
             "payloadHash": "c84ae9338ebc9f3f9fbadf596f8df212cf5e278be598517b9761eac431a7a5da",
             "sentAt": "2026-01-15T12:00:02.000Z"
           },
-          "hash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+          "hash": "ee438ff7317e2c901ad81916438db330e91e1c77ead8c257674c8fc284baa168",
           "signature": {
             "alg": "Ed25519",
             "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-            "sig": "Y-30pJTtywsWEE_2cc453OOrz8PhOJb5_rF8dPb9Lh_9OpaN_PB5Xb4flTFFVSmwyjEZElBLc_nUnE4jCv_gCA"
+            "sig": "0I6Uc2g_EuugOoDIzJOEXSzBP-hUumEJG5msrHaA1II3rsFZNKdh0TSD-i1oyzdvY3PULXQPEeLxrdn0Xbc1CA"
           },
           "receivedAt": "2026-01-15T12:00:02.100Z",
           "platformSignature": {
             "alg": "ECDSA_P256_SHA256",
             "kid": "plat_vectors",
-            "sig": "MEQCIF6wXcKEOE_C8OzqLEHXdwc2yDe8fOnkwRxptdliHkHtAiBApyaJudqHgnwYYe9kcifma694JryKpv5BU0cafK2v0w"
+            "sig": "MEUCIQD0NvLLjqwk-4Rt24qpRc63hsNCG4ndJtYyYKa1TnbmbwIgBwPCiSDxnCX7gwNAjWIduxE-AZcYCddZKciFvaddsRU"
           },
           "payload": {
             "text": "Hello — let's get started.",
@@ -502,13 +502,13 @@
           "type": "openglass.close",
           "sessionId": "ses_01J8Z3K4M5N6P7Q8R9S0T1V2WG",
           "headSeq": 1,
-          "headHash": "cb332bdb38cbabcdaefd1fca2201c5d5208a12f7bfcabb227e788cbc048df398",
+          "headHash": "ee438ff7317e2c901ad81916438db330e91e1c77ead8c257674c8fc284baa168",
           "closedAt": "2026-01-15T12:00:03.000Z"
         },
         "signature": {
           "alg": "Ed25519",
           "kid": "key_01J8Z3K4M5N6P7Q8R9S0T1V2WB",
-          "sig": "sHcGLsNnseG1jCh-NoU3mFd9IBAawDiBlMaVsTF3ADuk5Jq6cMZgH9kB5cZVkIrAduw_r7FV8vX7Bupmp7epBw"
+          "sig": "kMmE-oksJ5H8cE3yCtDhoUX0w9kynfUu-qWFtvtkOY5WJEK_gvjhQ1Te0Bg6FLaHhYPxkkizAlBZTdF8sUcnAA"
         }
       }
     },
@@ -516,7 +516,7 @@
       {
         "kid": "plat_vectors",
         "alg": "ECDSA_P256_SHA256",
-        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWU8VQpiRRZk35z6k67v8H2NgPyeThHEMwOZTk_sUgEGQmfjZvx2emAufDP9sqELjwsRiJ6BTxK9MYy1OS0j4GQ",
+        "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEHGJPri6fF4oQEJBsOMP80euqWB5jCRTtcDiHJ5X4ef59IpRHXcJiCvEjLuPb692veurhC5n9etQOdF9EyBB-pA",
         "validFrom": "2026-01-14T12:00:00.000Z",
         "validUntil": null
       }

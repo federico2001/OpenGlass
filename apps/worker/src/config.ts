@@ -26,6 +26,13 @@ const Env = z
     EMAIL_FROM: z.string().min(1),
     /** How often the poll loop sweeps for expired/closing sessions. */
     WORKER_POLL_INTERVAL_MS: z.coerce.number().int().min(500).default(5_000),
+    /** Same vars/meaning as apps/api/src/config.ts — must match across both, since a
+     * record's data key wrapped by one container has to be unwrapped by whichever
+     * container serves it back later (the API, on GET .../bundle). */
+    CONTENT_ENCRYPTION: z.enum(["local", "kms"]).optional(),
+    CONTENT_KMS_KEY_ID: z.string().optional(),
+    CONTENT_ENCRYPTION_LOCAL_KEY: z.string().optional(),
+    DEFAULT_PRIVATE_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
   })
   .superRefine((env, ctx) => {
     if (env.SIGNER === "kms" && !env.KMS_KEY_ID) ctx.addIssue({ code: "custom", path: ["KMS_KEY_ID"], message: "required when SIGNER=kms" });
@@ -33,6 +40,12 @@ const Env = z
       ctx.addIssue({ code: "custom", path: ["PLATFORM_SIGNER_LOCAL_KEY"], message: "required when SIGNER=local" });
     }
     if (env.EMAIL === "smtp" && !env.SMTP_URL) ctx.addIssue({ code: "custom", path: ["SMTP_URL"], message: "required when EMAIL=smtp" });
+    if (env.CONTENT_ENCRYPTION === "kms" && !env.CONTENT_KMS_KEY_ID) {
+      ctx.addIssue({ code: "custom", path: ["CONTENT_KMS_KEY_ID"], message: "required when CONTENT_ENCRYPTION=kms" });
+    }
+    if (env.CONTENT_ENCRYPTION === "local" && !env.CONTENT_ENCRYPTION_LOCAL_KEY) {
+      ctx.addIssue({ code: "custom", path: ["CONTENT_ENCRYPTION_LOCAL_KEY"], message: "required when CONTENT_ENCRYPTION=local" });
+    }
   });
 
 export type Config = z.infer<typeof Env>;

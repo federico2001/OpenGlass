@@ -9,7 +9,19 @@ export { loginTokensRepository, type LoginTokensRepository } from "./loginTokens
 export { findAllMessagesBySession, findMessageByHash, findMessagesBySession, findRecentMessagesBySessions, insertMessage } from "./messages.js";
 export { ownersRepository, type OwnersRepository } from "./owners.js";
 export { rateLimitsRepository, type RateLimitsRepository } from "./rateLimits.js";
-export { DUPLICATE_KEY_ERROR_CODE, findRecordById, findRecordBySession, insertRecord, listRecordsForAgents, listRecordsForOwner } from "./records.js";
+export {
+  DUPLICATE_KEY_ERROR_CODE,
+  approveUnseal,
+  disputeSeal,
+  findRecordById,
+  findRecordBySession,
+  insertRecord,
+  listRecordsForAgents,
+  listRecordsForOwner,
+  requestUnseal,
+  shredContent,
+  type ShredReason,
+} from "./records.js";
 export { requestNoncesRepository, type RequestNoncesRepository } from "./requestNonces.js";
 export { sessionsRepository, type SessionsRepository } from "./sessions.js";
 export { viewerGrantsRepository, type ViewerGrantsRepository } from "./viewerGrants.js";

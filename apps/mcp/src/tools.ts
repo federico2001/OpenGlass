@@ -14,6 +14,12 @@ import { ApiError, type ApiClient, type RequestAuth } from "./apiClient.js";
  * never trusted with anything a normal API caller couldn't already do for themselves.
  */
 
+/** Realignment R1 (docs/SPEC.md §13). A sibling field alongside offer/open, never part of
+ * the signed object — mirrors apps/api/src/domain/visibility.ts's own Visibility schema.
+ * Sessions default "sealed"; attestations default "private". A "private" request
+ * gracefully degrades to "sealed" server-side if content encryption isn't configured. */
+const Visibility = z.enum(["private", "sealed", "shared"]);
+
 const RequestAuthSchema = z.object({
   agentId: z.string().optional().describe("Your own agent id (agt_...). Omit only for register_agent's self-signed call."),
   kid: z.string().describe('Your signing key id (key_...) — or the literal "new" for register_agent.'),
@@ -92,12 +98,15 @@ export function registerTools(server: McpServer, api: ApiClient): void {
       inputSchema: {
         offer: Offer,
         offerSignature: Signature,
+        visibility: Visibility.optional().describe(
+          'Realignment R1 (SPEC §13). Defaults to "sealed" when omitted. "private" gracefully degrades to "sealed" if the platform lacks content encryption.',
+        ),
         auth: RequestAuthSchema,
       },
     },
-    async ({ offer, offerSignature, auth }) =>
+    async ({ offer, offerSignature, visibility, auth }) =>
       guarded(async () => {
-        const res = await api.post("/v1/sessions", { offer, offerSignature }, toAuth(auth));
+        const res = await api.post("/v1/sessions", { offer, offerSignature, visibility }, toAuth(auth));
         return toolJson(res);
       }),
   );
@@ -116,10 +125,13 @@ export function registerTools(server: McpServer, api: ApiClient): void {
       inputSchema: {
         offer: Offer,
         offerSignature: Signature,
+        visibility: Visibility.optional().describe(
+          'Realignment R1 (SPEC §13). Defaults to "sealed" when omitted. "private" gracefully degrades to "sealed" if the platform lacks content encryption.',
+        ),
         auth: RequestAuthSchema,
       },
     },
-    async ({ offer, offerSignature, auth }) =>
+    async ({ offer, offerSignature, visibility, auth }) =>
       guarded(async () => {
         if (!offer.counterparty) {
           return toolError("offer.counterparty is required for invite_counterparty — use start_session for an open invite.");
@@ -128,7 +140,7 @@ export function registerTools(server: McpServer, api: ApiClient): void {
         const agent = (counterparty as { agent?: { status?: string } } | null)?.agent;
         if (!agent) return toolError(`Counterparty ${offer.counterparty.agentId} was not found.`);
         if (agent.status !== "active") return toolError(`Counterparty ${offer.counterparty.agentId} is not active (status: ${agent.status}).`);
-        const res = await api.post("/v1/sessions", { offer, offerSignature }, toAuth(auth));
+        const res = await api.post("/v1/sessions", { offer, offerSignature, visibility }, toAuth(auth));
         return toolJson(res);
       }),
   );
@@ -302,12 +314,15 @@ export function registerTools(server: McpServer, api: ApiClient): void {
         open: AttestationOpen,
         openSignature: Signature,
         idleTimeoutSec: z.number().int().min(60).max(604800).optional(),
+        visibility: Visibility.optional().describe(
+          'Realignment R1 (SPEC §13). Defaults to "private" when omitted. Gracefully degrades to "sealed" if the platform lacks content encryption.',
+        ),
         auth: RequestAuthSchema,
       },
     },
-    async ({ open, openSignature, idleTimeoutSec, auth }) =>
+    async ({ open, openSignature, idleTimeoutSec, visibility, auth }) =>
       guarded(async () => {
-        const res = await api.post("/v1/attestations", { open, openSignature, idleTimeoutSec }, toAuth(auth));
+        const res = await api.post("/v1/attestations", { open, openSignature, idleTimeoutSec, visibility }, toAuth(auth));
         return toolJson(res);
       }),
   );

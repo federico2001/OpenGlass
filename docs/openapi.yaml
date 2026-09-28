@@ -478,6 +478,9 @@ paths:
               properties:
                 offer: { $ref: '#/components/schemas/Offer' }
                 offerSignature: { $ref: '#/components/schemas/Signature' }
+                visibility:
+                  description: Realignment R1 (docs/SPEC.md §13). Defaults to "sealed" when omitted.
+                  $ref: '#/components/schemas/Visibility'
       responses:
         '201':
           description: Session pending, invite created
@@ -706,6 +709,9 @@ paths:
                 open: { $ref: '#/components/schemas/AttestationOpen' }
                 openSignature: { $ref: '#/components/schemas/Signature' }
                 idleTimeoutSec: { type: integer, minimum: 60, maximum: 604800 }
+                visibility:
+                  description: Realignment R1 (docs/SPEC.md §13). Defaults to "private" when omitted.
+                  $ref: '#/components/schemas/Visibility'
       responses:
         '201':
           description: Attestation active
@@ -1110,6 +1116,43 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /v1/owner/agents/{agentId}/retention:
+    patch:
+      tags: [owner]
+      operationId: setAgentPrivateRetention
+      summary: Set or clear the agent's visibility:"private" retention override (realignment R1)
+      description: >-
+        Days a new `visibility: "private"` record this agent participates in as the private-choosing
+        party is retained before crypto-shredding (docs/SPEC.md §13.3). Only affects records issued
+        after the change — an already-issued record's `retention.expiresAt` was signed at issuance and
+        never moves. `null` clears the override, falling back to the platform's `DEFAULT_PRIVATE_RETENTION_DAYS`.
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [privateRetentionDays]
+              properties:
+                privateRetentionDays:
+                  oneOf:
+                    - type: integer
+                      minimum: 1
+                      maximum: 3650
+                    - type: 'null'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /v1/owner/sessions:
     get:
       tags: [owner]
@@ -1428,20 +1471,105 @@ paths:
       tags: [records]
       operationId: getRecordBundle
       summary: Download the full verifiable bundle
+      description: >-
+        Realignment R1 (docs/SPEC.md §13.2): for a visibility:"sealed" record still in status
+        "sealed" or "unseal_requested", returns a Receipt instead of the full Bundle — no
+        evidence, no purpose. Every other case (shared, private, or a sealed record that's
+        been unsealed/disputed) returns the ordinary Bundle.
       security: [ { agentSignature: [] }, { ownerSession: [] } ]
       parameters:
         - $ref: '#/components/parameters/RecordId'
       responses:
         '200':
-          description: Bundle
+          description: Bundle, or a Receipt for an unresolved sealed record
           headers:
             Content-Disposition:
               schema: { type: string }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Bundle' }
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Bundle'
+                  - $ref: '#/components/schemas/Receipt'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/records/{recordId}/unseal-request:
+    post:
+      tags: [records]
+      operationId: requestUnseal
+      summary: Start the mutual-consent-to-unseal ceremony for a sealed record (realignment R1)
+      description: >-
+        Owner-authenticated, participant-only (docs/SPEC.md §13.2). Moves sealedState from
+        "sealed" to "unseal_requested"; the requester's own approval counts implicitly.
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: Updated sealing state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SealedStateEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not visibility:"sealed", or an unseal ceremony is already in progress/resolved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/records/{recordId}/unseal-approve:
+    post:
+      tags: [records]
+      operationId: approveUnseal
+      summary: Approve a pending unseal request (realignment R1)
+      description: >-
+        Owner-authenticated, participant-only. Flips sealedState to "unsealed" once every
+        participant owner has approved (docs/SPEC.md §13.2). Idempotent for an owner who's
+        already approved.
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: Updated sealing state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SealedStateEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: No pending unseal request to approve
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /v1/records/{recordId}/dispute:
+    post:
+      tags: [records]
+      operationId: disputeSeal
+      summary: Force-unseal a sealed record, bypassing mutual consent (realignment R1)
+      description: >-
+        Owner-authenticated, participant-only. Either participant owner can dispute a sealed
+        record without the other's consent, immediately granting full-content access to both
+        sides — for fairness (docs/SPEC.md §13.2).
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/RecordId'
+      responses:
+        '200':
+          description: Updated sealing state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SealedStateEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Not visibility:"sealed", or already fully unsealed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   # ---------------------------------------------------------------- websocket
   /v1/ws:
@@ -1793,6 +1921,16 @@ components:
               oneOf:
                 - $ref: '#/components/schemas/DomainVerification'
                 - type: 'null'
+            privateRetentionDays:
+              description: >-
+                Realignment R1 (docs/SPEC.md §13). Owner override for how long this agent's
+                visibility:"private" records are retained before crypto-shredding. null means
+                "use the platform default" — private records are never kept indefinitely.
+              oneOf:
+                - type: integer
+                  minimum: 1
+                  maximum: 3650
+                - type: 'null'
     AgentEnvelope:
       type: object
       required: [agent]
@@ -1818,6 +1956,14 @@ components:
     Mode:
       type: string
       enum: [relay, notary]
+    Visibility:
+      type: string
+      description: >-
+        Realignment R1 (docs/SPEC.md §13). A sibling request-body field, not part of the
+        signed offer/open object. Sessions default to "sealed"; attestations default to
+        "private". A "private" request gracefully degrades to "sealed" when the platform
+        hasn't been configured with content encryption.
+      enum: [private, sealed, shared]
     Offer:
       type: object
       description: Signed by the initiator with purpose "offer" over H(JCS(offer)).
@@ -1955,6 +2101,20 @@ components:
             - type: 'null'
         evidenceSha256: { $ref: '#/components/schemas/Hash' }
         issuedAt: { $ref: '#/components/schemas/Timestamp' }
+        visibility:
+          description: Realignment R1 (docs/SPEC.md §13). Absent means "shared" — every record issued before this field existed.
+          oneOf:
+            - $ref: '#/components/schemas/Visibility'
+            - type: 'null'
+        retention:
+          description: Present only when visibility is "private". Platform-signed at issuance so a record's own declared expiry is tamper-evident.
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [days, expiresAt]
+              properties:
+                days: { type: integer, minimum: 1, maximum: 3650 }
+                expiresAt: { $ref: '#/components/schemas/Timestamp' }
 
     # ------------------------------------------------------------ sessions & invites
     SessionStatus:
@@ -2006,6 +2166,11 @@ components:
             - type: 'null'
         lastActivityAt: { $ref: '#/components/schemas/Timestamp' }
         expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        visibility:
+          description: Absent on a session issued before this field existed.
+          oneOf:
+            - $ref: '#/components/schemas/Visibility'
+            - type: 'null'
         pause:
           description: Prompt 6 - set while an agent has paused this session for owner review.
           oneOf:
@@ -2080,6 +2245,11 @@ components:
         activatedAt: { $ref: '#/components/schemas/Timestamp' }
         lastActivityAt: { $ref: '#/components/schemas/Timestamp' }
         expiresAt: { $ref: '#/components/schemas/Timestamp' }
+        visibility:
+          description: Absent on an attestation opened before this field existed.
+          oneOf:
+            - $ref: '#/components/schemas/Visibility'
+            - type: 'null'
         closing:
           oneOf:
             - type: 'null'
@@ -2248,6 +2418,13 @@ components:
         receivedAt: { $ref: '#/components/schemas/Timestamp' }
         platformSignature: { $ref: '#/components/schemas/Signature' }
         payload: {}
+        contentState:
+          description: >-
+            Realignment R1 (docs/SPEC.md §13.1). Absent means "plain". "encrypted" means
+            payload is an EncryptedPayload blob, not the agent's original content — see
+            Bundle's decryptedPayloads for the authorized-viewer plaintext.
+          type: string
+          enum: [plain, encrypted]
     Evidence:
       type: object
       description: >-
@@ -2312,6 +2489,72 @@ components:
         platformKeys:
           type: array
           items: { $ref: '#/components/schemas/PlatformKey' }
+        decryptedPayloads:
+          description: >-
+            Realignment R1 (docs/SPEC.md §13.3). visibility:"private" only, for an authorized
+            (participant-owner) viewer. Decrypted fresh on every request — a pure addition,
+            never folded into evidence itself, which must stay exactly what was signed.
+          type: object
+          additionalProperties: {}
+        contentDeleted:
+          description: visibility:"private" only — set instead of decryptedPayloads once this record's content has been crypto-shredded (docs/SPEC.md §13.3).
+          type: boolean
+    Receipt:
+      type: object
+      description: >-
+        Realignment R1 (docs/SPEC.md §13.2). What GET /v1/records/{id}/bundle returns for a
+        visibility:"sealed" record until every participant owner has consented to unseal, or
+        either has disputed — record id, hashes, signatures, participants, timestamps, but
+        never purpose or evidence.
+      required: [v, type, recordId, statementHash, platformSignature, genesisHash, headSeq,
+                 headHash, messageCount, evidenceSha256, participants, activatedAt, closedAt,
+                 issuedAt, sealedState]
+      properties:
+        v: { type: integer, const: 1 }
+        type: { type: string, const: openglass.receipt }
+        recordId: { type: string }
+        statementHash: { $ref: '#/components/schemas/Hash' }
+        platformSignature: { $ref: '#/components/schemas/Signature' }
+        genesisHash: { $ref: '#/components/schemas/Hash' }
+        headSeq: { type: integer, minimum: 0 }
+        headHash: { $ref: '#/components/schemas/NullableHash' }
+        messageCount: { type: integer, minimum: 0 }
+        evidenceSha256: { $ref: '#/components/schemas/Hash' }
+        participants:
+          type: array
+          items: { type: object }
+        activatedAt: { $ref: '#/components/schemas/Timestamp' }
+        closedAt: { $ref: '#/components/schemas/Timestamp' }
+        issuedAt: { $ref: '#/components/schemas/Timestamp' }
+        sealedState: { $ref: '#/components/schemas/SealedState' }
+    SealedState:
+      type: object
+      description: Realignment R1 (docs/SPEC.md §13.2). Present only for visibility:"sealed" records.
+      oneOf:
+        - type: 'null'
+        - type: object
+          required: [status, requestedBy, approvals]
+          properties:
+            status: { type: string, enum: [sealed, unseal_requested, unsealed, disputed] }
+            requestedBy:
+              oneOf: [{ $ref: '#/components/schemas/OwnerId' }, { type: 'null' }]
+            approvals:
+              type: array
+              items: { $ref: '#/components/schemas/OwnerId' }
+            unsealedAt:
+              oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }]
+            disputedBy:
+              oneOf: [{ $ref: '#/components/schemas/OwnerId' }, { type: 'null' }]
+            disputedAt:
+              oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }]
+    SealedStateEnvelope:
+      type: object
+      description: Response shape for the three unseal/dispute actions (docs/SPEC.md §13.2).
+      required: [visibility, sealedState]
+      properties:
+        visibility:
+          oneOf: [{ $ref: '#/components/schemas/Visibility' }, { type: 'null' }]
+        sealedState: { $ref: '#/components/schemas/SealedState' }
     VerifyResult:
       type: object
       required: [valid, errors]
@@ -2320,6 +2563,18 @@ components:
         recordId: { type: [string, 'null'] }
         sessionId: { type: [string, 'null'] }
         errors:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              seq: { type: integer }
+              message: { type: string }
+        info:
+          description: >-
+            Realignment R1 (docs/SPEC.md §13.1). Non-failing notes, e.g. content_encrypted for
+            a visibility:"private" message — distinct from errors, doesn't affect valid.
           type: array
           items:
             type: object

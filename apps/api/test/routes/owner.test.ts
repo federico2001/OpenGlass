@@ -155,3 +155,55 @@ describe("owner invite approval (D5)", () => {
     expect(approveRes.json().invite.status).toBe("accepted");
   });
 });
+
+describe("PATCH /v1/owner/agents/{id}/retention (realignment R1, docs/SPEC.md §13)", () => {
+  it("sets and clears the owner's private-retention override", async () => {
+    const owner = await insertTestOwner(t.db, "retention@example.com");
+    const agent = await registerAndClaimFor(`retention_${newId("agt").slice(-6)}`, owner._id);
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const path = `/v1/owner/agents/${agent.agentId}/retention`;
+
+    const setRes = await app().inject({
+      method: "PATCH",
+      url: path,
+      headers: { cookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { privateRetentionDays: 30 },
+    });
+    expect(setRes.statusCode).toBe(200);
+    expect(setRes.json().agent.privateRetentionDays).toBe(30);
+
+    const clearRes = await app().inject({
+      method: "PATCH",
+      url: path,
+      headers: { cookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { privateRetentionDays: null },
+    });
+    expect(clearRes.statusCode).toBe(200);
+    expect(clearRes.json().agent.privateRetentionDays).toBeNull();
+  });
+
+  it("rejects out-of-range values and an agent belonging to a different owner", async () => {
+    const owner = await insertTestOwner(t.db, "retention_range@example.com");
+    const otherOwner = await insertTestOwner(t.db, "retention_other@example.com");
+    const agent = await registerAndClaimFor(`retention_range_${newId("agt").slice(-6)}`, owner._id);
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const otherCookie = await createOwnerSessionCookie(t.db, otherOwner._id);
+    const path = `/v1/owner/agents/${agent.agentId}/retention`;
+
+    const tooLow = await app().inject({
+      method: "PATCH",
+      url: path,
+      headers: { cookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { privateRetentionDays: 0 },
+    });
+    expect(tooLow.statusCode).toBe(400);
+
+    const wrongOwner = await app().inject({
+      method: "PATCH",
+      url: path,
+      headers: { cookie: otherCookie, origin: "https://localhost", "content-type": "application/json" },
+      payload: { privateRetentionDays: 30 },
+    });
+    expect(wrongOwner.statusCode).toBe(404);
+  });
+});

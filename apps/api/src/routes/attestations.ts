@@ -19,6 +19,7 @@ import { computeAttestationGenesisHash } from "../domain/attestationGenesis.js";
 import { attestationView } from "../domain/attestationViews.js";
 import { messageView } from "../domain/messageViews.js";
 import { withinClockSkew } from "../domain/genesis.js";
+import { Visibility, effectiveVisibility } from "../domain/visibility.js";
 import { parseOrError, sendError } from "../errors.js";
 import { verifyAgentRequest } from "../plugins/agentAuth.js";
 import { verifyAgentOrOwner } from "../plugins/agentOrOwnerAuth.js";
@@ -34,6 +35,7 @@ const OpenAttestationBody = z.strictObject({
   open: AttestationOpen,
   openSignature: Signature,
   idleTimeoutSec: z.int().min(MIN_IDLE_SEC).max(MAX_IDLE_SEC).optional(),
+  visibility: Visibility.optional(),
 });
 const AppendEventBody = z.strictObject({
   envelope: MessageEnvelope,
@@ -87,6 +89,7 @@ export function registerAttestationsRoutes(app: FastifyInstance, deps: ServerDep
 
       const now = new Date();
       const idleTimeoutSec = body.idleTimeoutSec ?? DEFAULT_IDLE_SEC;
+      const visibility = effectiveVisibility(body.visibility, "private", deps.contentEncryption);
       const doc: AttestationDoc = {
         _id: open.attestationId,
         mode: open.mode,
@@ -104,6 +107,7 @@ export function registerAttestationsRoutes(app: FastifyInstance, deps: ServerDep
         activatedAt: now,
         lastActivityAt: now,
         expiresAt: new Date(now.getTime() + idleTimeoutSec * 1000),
+        visibility,
         closing: null,
         closedAt: null,
         recordId: null,

@@ -66,7 +66,7 @@ describe("issueAttestationRecords", () => {
       closing: { reason: "agent_closed", requestedBy: attestor.agentId, statement: closeStatement, signature: closeSignature, requestedAt: new Date() },
     });
 
-    const result = await issueAttestationRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer });
+    const result = await issueAttestationRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, contentEncryption: null });
     expect(result.issued).toBe(1);
     expect(result.skipped).toBe(0);
 
@@ -90,7 +90,7 @@ describe("issueAttestationRecords", () => {
     expect(verification.valid).toBe(true);
 
     // re-running the sweep must be a no-op — the attestation is no longer `closing`.
-    const again = await issueAttestationRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer });
+    const again = await issueAttestationRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, contentEncryption: null });
     expect(again.issued).toBe(0);
   });
 
@@ -102,7 +102,7 @@ describe("issueAttestationRecords", () => {
       closing: { reason: "idle_timeout", requestedBy: null, statement: null, signature: null, requestedAt: new Date() },
     });
 
-    const result = await issueAttestationRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer });
+    const result = await issueAttestationRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, contentEncryption: null });
     expect(result.issued).toBe(1);
 
     const bundle = await fetchBundle(signer, attestation._id);

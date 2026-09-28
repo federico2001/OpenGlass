@@ -19,6 +19,9 @@ export function attestationView(doc: AttestationDoc) {
     activatedAt: doc.activatedAt.toISOString(),
     lastActivityAt: doc.lastActivityAt.toISOString(),
     expiresAt: doc.expiresAt.toISOString(),
+    /** Realignment R1 (docs/SPEC.md §13). Absent on an attestation opened before this field
+     * existed — never backfilled, matching sessionView's identical field. */
+    visibility: doc.visibility ?? null,
     closing: doc.closing
       ? {
           reason: doc.closing.reason,

@@ -6,6 +6,7 @@ import {
   canonicalizeToBytes,
   generateEd25519KeyPair,
   hex,
+  LocalContentEncryptor,
   LocalSigner,
   newId,
   ownersRepository,
@@ -22,6 +23,7 @@ import {
   type Signature,
 } from "@openglass/db";
 import type { Db, MongoClient } from "mongodb";
+import type { ContentEncryptionDeps } from "../src/domain/contentEncryptionDeps.js";
 import { hashToken } from "../src/domain/tokens.js";
 import { createCapturingMailer, type Mailer } from "../src/mailer.js";
 import type { ServerDeps } from "../src/server.js";
@@ -61,6 +63,21 @@ export function testServerDeps(
     // this per call, e.g. `{ ...testServerDeps(t), checkDomainVerification: async () => true }`.
     checkDomainVerification: async () => false,
     adminEmails: ["admin@example.com"],
+    // null by default (matches the real "off until CONTENT_ENCRYPTION is configured"
+    // behavior) — tests that need visibility: "private" to actually encrypt override this
+    // with testContentEncryptionDeps() below.
+    contentEncryption: null,
+  };
+}
+
+/** A real (in-memory, no AWS needed) `ContentEncryptionDeps` for tests that exercise
+ * `visibility: "private"` — genuine AES-256-GCM envelope encryption via `LocalContentEncryptor`,
+ * not a mock, mirroring `testSigner`'s "real crypto, throwaway key" approach. */
+export function testContentEncryptionDeps(): ContentEncryptionDeps {
+  return {
+    encryptor: new LocalContentEncryptor(base64UrlEncode(randomBytes(32))),
+    kmsKeyId: null,
+    defaultRetentionDays: 90,
   };
 }
 

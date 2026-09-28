@@ -44,6 +44,14 @@ export interface OpenGlassStackProps extends StackProps {
      * the free public facilitator only settles testnet. */
     cdpApiKeyId?: string;
   };
+  /** Realignment R1 (docs/SPEC.md §13): provisions a symmetric KMS key for envelope-
+   * encrypting `visibility: "private"` record content and points CONTENT_ENCRYPTION at it.
+   * Off by default — no new KMS key, no added cost — and a `visibility: "private"` request
+   * gracefully degrades to `sealed` until this is turned on, the same "ships disabled until
+   * configured" behavior the app layer already applies to an absent CONTENT_ENCRYPTION
+   * (apps/api/src/domain/visibility.ts's effectiveVisibility). This is a genuinely new AWS
+   * resource — deploy it deliberately, not as a side effect of an unrelated stack change. */
+  enablePrivateVisibility?: boolean;
 }
 
 export class OpenGlassStack extends Stack {
@@ -95,6 +103,21 @@ export class OpenGlassStack extends Stack {
       removalPolicy: RemovalPolicy.RETAIN,
     });
 
+    // ------------------------------------------------------------------ KMS content encryption (realignment R1, opt-in)
+    // A *different* key from `signer` above: that one is ECC_NIST_P256/SIGN_VERIFY-only and
+    // structurally can't wrap a data key. This one wraps/unwraps small per-record AES-256
+    // data keys (envelope encryption) — it never encrypts record content directly, so its
+    // usage is cheap regardless of how much private-visibility content exists.
+    const contentEncryptionKey = props.enablePrivateVisibility
+      ? new kms.Key(this, "ContentEncryptionKey", {
+          description: "OpenGlass envelope encryption for visibility: private record content",
+          keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
+          keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
+          alias: "alias/openglass-content-encryption",
+          removalPolicy: RemovalPolicy.RETAIN,
+        })
+      : undefined;
+
     // ------------------------------------------------------------------ Network
     const vpc = new ec2.Vpc(this, "Vpc", {
       maxAzs: 1,
@@ -120,6 +143,7 @@ export class OpenGlassStack extends Stack {
     records.grantRead(role); // GetObject for bundles, ListBucket for the /health HeadBucket check
     deployBucket.grantRead(role);
     signer.grant(role, "kms:Sign", "kms:GetPublicKey");
+    contentEncryptionKey?.grantEncryptDecrypt(role);
     role.addToPolicy(
       new iam.PolicyStatement({
         actions: ["ssm:GetParametersByPath", "ssm:GetParameters", "ssm:GetParameter"],
@@ -215,6 +239,10 @@ export class OpenGlassStack extends Stack {
       params.X402_PAY_TO_ADDRESS = props.x402.payToAddress;
       params.X402_NETWORK = props.x402.network ?? "eip155:8453";
       if (props.x402.cdpApiKeyId) params.CDP_API_KEY_ID = props.x402.cdpApiKeyId;
+    }
+    if (contentEncryptionKey) {
+      params.CONTENT_ENCRYPTION = "kms";
+      params.CONTENT_KMS_KEY_ID = contentEncryptionKey.keyArn;
     }
     for (const [name, value] of Object.entries(params)) {
       new ssm.StringParameter(this, `Param-${name}`, { parameterName: `${ssmPath}/${name}`, stringValue: value });

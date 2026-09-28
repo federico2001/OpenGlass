@@ -214,6 +214,7 @@ describe("viewer read access", () => {
       signer,
       mailer: createWorkerMailer(),
       publicUrl: "https://localhost",
+      contentEncryption: null,
     });
     expect(issueResult.issued).toBe(1);
 

@@ -10,7 +10,18 @@ import type { RecordBundle } from "../../src/models/protocol.js";
  * Ed25519 agent signatures and a genuine local ECDSA P-256 platform signer, not fixture
  * placeholders — for testing `verifyBundle`. `tamper` lets a test corrupt exactly one
  * field of the finished bundle to exercise a specific §7.6 failure. */
-export async function buildTestBundle(opts: { tamper?: (bundle: RecordBundle) => void } = {}): Promise<{
+export async function buildTestBundle(
+  opts: {
+    tamper?: (bundle: RecordBundle) => void;
+    /** Realignment R1: when set, the one relay message's payload is stored as this
+     * encrypted blob instead of plaintext (`contentState: "encrypted"`) — `payloadHash`
+     * in the envelope still commits to the *plaintext* payload, exactly as it would for a
+     * real private-visibility record (the agent signs it before the platform ever
+     * encrypts anything), so `evidenceSha256`/signatures are computed over the correct
+     * final (encrypted) evidence shape from the start, not patched on afterward. */
+    encryptedPayload?: { ciphertext: string; iv: string; authTag: string };
+  } = {},
+): Promise<{
   bundle: RecordBundle;
   platformKid: string;
 }> {
@@ -113,7 +124,10 @@ export async function buildTestBundle(opts: { tamper?: (bundle: RecordBundle) =>
         signature: msgSignature,
         receivedAt,
         platformSignature: msgPlatformSignature,
-        payload,
+        payload: opts.encryptedPayload
+          ? { v: 1 as const, type: "openglass.encrypted-payload" as const, ...opts.encryptedPayload }
+          : payload,
+        ...(opts.encryptedPayload ? { contentState: "encrypted" as const } : {}),
       },
     ],
     close: { statement: closeStatement, signature: closeSignature },

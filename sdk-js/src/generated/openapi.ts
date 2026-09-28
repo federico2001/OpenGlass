@@ -612,6 +612,26 @@ export interface paths {
         patch: operations["setAgentSpendLimit"];
         trace?: never;
     };
+    "/v1/owner/agents/{agentId}/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set or clear the agent's visibility:"private" retention override (realignment R1)
+         * @description Days a new `visibility: "private"` record this agent participates in as the private-choosing party is retained before crypto-shredding (docs/SPEC.md §13.3). Only affects records issued after the change — an already-issued record's `retention.expiresAt` was signed at issuance and never moves. `null` clears the override, falling back to the platform's `DEFAULT_PRIVATE_RETENTION_DAYS`.
+         */
+        patch: operations["setAgentPrivateRetention"];
+        trace?: never;
+    };
     "/v1/owner/sessions": {
         parameters: {
             query?: never;
@@ -841,10 +861,73 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Download the full verifiable bundle */
+        /**
+         * Download the full verifiable bundle
+         * @description Realignment R1 (docs/SPEC.md §13.2): for a visibility:"sealed" record still in status "sealed" or "unseal_requested", returns a Receipt instead of the full Bundle — no evidence, no purpose. Every other case (shared, private, or a sealed record that's been unsealed/disputed) returns the ordinary Bundle.
+         */
         get: operations["getRecordBundle"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/records/{recordId}/unseal-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the mutual-consent-to-unseal ceremony for a sealed record (realignment R1)
+         * @description Owner-authenticated, participant-only (docs/SPEC.md §13.2). Moves sealedState from "sealed" to "unseal_requested"; the requester's own approval counts implicitly.
+         */
+        post: operations["requestUnseal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/records/{recordId}/unseal-approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a pending unseal request (realignment R1)
+         * @description Owner-authenticated, participant-only. Flips sealedState to "unsealed" once every participant owner has approved (docs/SPEC.md §13.2). Idempotent for an owner who's already approved.
+         */
+        post: operations["approveUnseal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/records/{recordId}/dispute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Force-unseal a sealed record, bypassing mutual consent (realignment R1)
+         * @description Owner-authenticated, participant-only. Either participant owner can dispute a sealed record without the other's consent, immediately granting full-content access to both sides — for fairness (docs/SPEC.md §13.2).
+         */
+        post: operations["disputeSeal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -982,6 +1065,8 @@ export interface components {
             totalSpendUsdCents?: number;
             /** @description The pending or verified challenge, if one has ever been requested — only on the agent's own view, never AgentPublic. */
             domainVerification?: components["schemas"]["DomainVerification"] | null;
+            /** @description Realignment R1 (docs/SPEC.md §13). Owner override for how long this agent's visibility:"private" records are retained before crypto-shredding. null means "use the platform default" — private records are never kept indefinitely. */
+            privateRetentionDays?: number | null;
         };
         AgentEnvelope: {
             agent: components["schemas"]["Agent"];
@@ -999,6 +1084,11 @@ export interface components {
         };
         /** @enum {string} */
         Mode: "relay" | "notary";
+        /**
+         * @description Realignment R1 (docs/SPEC.md §13). A sibling request-body field, not part of the signed offer/open object. Sessions default to "sealed"; attestations default to "private". A "private" request gracefully degrades to "sealed" when the platform hasn't been configured with content encryption.
+         * @enum {string}
+         */
+        Visibility: "private" | "sealed" | "shared";
         /** @description Signed by the initiator with purpose "offer" over H(JCS(offer)). */
         Offer: {
             /** @constant */
@@ -1103,6 +1193,13 @@ export interface components {
             closedBy: components["schemas"]["AgentId"] | null;
             evidenceSha256: components["schemas"]["Hash"];
             issuedAt: components["schemas"]["Timestamp"];
+            /** @description Realignment R1 (docs/SPEC.md §13). Absent means "shared" — every record issued before this field existed. */
+            visibility?: components["schemas"]["Visibility"] | null;
+            /** @description Present only when visibility is "private". Platform-signed at issuance so a record's own declared expiry is tamper-evident. */
+            retention?: null | {
+                days: number;
+                expiresAt: components["schemas"]["Timestamp"];
+            };
         };
         /** @enum {string} */
         SessionStatus: "pending" | "active" | "paused" | "closing" | "closed" | "declined" | "cancelled" | "expired";
@@ -1132,6 +1229,8 @@ export interface components {
             activatedAt: components["schemas"]["Timestamp"] | null;
             lastActivityAt: components["schemas"]["Timestamp"];
             expiresAt: components["schemas"]["Timestamp"];
+            /** @description Absent on a session issued before this field existed. */
+            visibility?: components["schemas"]["Visibility"] | null;
             /** @description Prompt 6 - set while an agent has paused this session for owner review. */
             pause: null | {
                 requestedBy: components["schemas"]["AgentId"];
@@ -1176,6 +1275,8 @@ export interface components {
             activatedAt: components["schemas"]["Timestamp"];
             lastActivityAt: components["schemas"]["Timestamp"];
             expiresAt: components["schemas"]["Timestamp"];
+            /** @description Absent on an attestation opened before this field existed. */
+            visibility?: components["schemas"]["Visibility"] | null;
             closing: null | {
                 reason: components["schemas"]["CloseReason"];
                 requestedBy: string | null;
@@ -1285,6 +1386,11 @@ export interface components {
             receivedAt: components["schemas"]["Timestamp"];
             platformSignature: components["schemas"]["Signature"];
             payload?: unknown;
+            /**
+             * @description Realignment R1 (docs/SPEC.md §13.1). Absent means "plain". "encrypted" means payload is an EncryptedPayload blob, not the agent's original content — see Bundle's decryptedPayloads for the authorized-viewer plaintext.
+             * @enum {string}
+             */
+            contentState?: "plain" | "encrypted";
         };
         /** @description offer/accept (session) and open (attestation) are mutually exclusive — exactly one pair is populated, matching the record's kind. */
         Evidence: {
@@ -1318,12 +1424,59 @@ export interface components {
             };
             evidence: components["schemas"]["Evidence"];
             platformKeys: components["schemas"]["PlatformKey"][];
+            /** @description Realignment R1 (docs/SPEC.md §13.3). visibility:"private" only, for an authorized (participant-owner) viewer. Decrypted fresh on every request — a pure addition, never folded into evidence itself, which must stay exactly what was signed. */
+            decryptedPayloads?: {
+                [key: string]: unknown;
+            };
+            /** @description visibility:"private" only — set instead of decryptedPayloads once this record's content has been crypto-shredded (docs/SPEC.md §13.3). */
+            contentDeleted?: boolean;
+        };
+        /** @description Realignment R1 (docs/SPEC.md §13.2). What GET /v1/records/{id}/bundle returns for a visibility:"sealed" record until every participant owner has consented to unseal, or either has disputed — record id, hashes, signatures, participants, timestamps, but never purpose or evidence. */
+        Receipt: {
+            /** @constant */
+            v: 1;
+            /** @constant */
+            type: "openglass.receipt";
+            recordId: string;
+            statementHash: components["schemas"]["Hash"];
+            platformSignature: components["schemas"]["Signature"];
+            genesisHash: components["schemas"]["Hash"];
+            headSeq: number;
+            headHash: components["schemas"]["NullableHash"];
+            messageCount: number;
+            evidenceSha256: components["schemas"]["Hash"];
+            participants: Record<string, never>[];
+            activatedAt: components["schemas"]["Timestamp"];
+            closedAt: components["schemas"]["Timestamp"];
+            issuedAt: components["schemas"]["Timestamp"];
+            sealedState: components["schemas"]["SealedState"];
+        };
+        /** @description Realignment R1 (docs/SPEC.md §13.2). Present only for visibility:"sealed" records. */
+        SealedState: null | {
+            /** @enum {string} */
+            status: "sealed" | "unseal_requested" | "unsealed" | "disputed";
+            requestedBy: components["schemas"]["OwnerId"] | null;
+            approvals: components["schemas"]["OwnerId"][];
+            unsealedAt?: components["schemas"]["Timestamp"] | null;
+            disputedBy?: components["schemas"]["OwnerId"] | null;
+            disputedAt?: components["schemas"]["Timestamp"] | null;
+        };
+        /** @description Response shape for the three unseal/dispute actions (docs/SPEC.md §13.2). */
+        SealedStateEnvelope: {
+            visibility: components["schemas"]["Visibility"] | null;
+            sealedState: components["schemas"]["SealedState"];
         };
         VerifyResult: {
             valid: boolean;
             recordId?: string | null;
             sessionId?: string | null;
             errors: {
+                code: string;
+                seq?: number;
+                message: string;
+            }[];
+            /** @description Realignment R1 (docs/SPEC.md §13.1). Non-failing notes, e.g. content_encrypted for a visibility:"private" message — distinct from errors, doesn't affect valid. */
+            info?: {
                 code: string;
                 seq?: number;
                 message: string;
@@ -2054,6 +2207,8 @@ export interface operations {
                 "application/json": {
                     offer: components["schemas"]["Offer"];
                     offerSignature: components["schemas"]["Signature"];
+                    /** @description Realignment R1 (docs/SPEC.md §13). Defaults to "sealed" when omitted. */
+                    visibility?: components["schemas"]["Visibility"];
                 };
             };
         };
@@ -2331,6 +2486,8 @@ export interface operations {
                     open: components["schemas"]["AttestationOpen"];
                     openSignature: components["schemas"]["Signature"];
                     idleTimeoutSec?: number;
+                    /** @description Realignment R1 (docs/SPEC.md §13). Defaults to "private" when omitted. */
+                    visibility?: components["schemas"]["Visibility"];
                 };
             };
         };
@@ -2786,6 +2943,37 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    setAgentPrivateRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    privateRetentionDays: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listOwnerSessions: {
         parameters: {
             query?: {
@@ -3187,18 +3375,117 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Bundle */
+            /** @description Bundle, or a Receipt for an unresolved sealed record */
             200: {
                 headers: {
                     "Content-Disposition"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Bundle"];
+                    "application/json": components["schemas"]["Bundle"] | components["schemas"]["Receipt"];
                 };
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    requestUnseal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recordId: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated sealing state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SealedStateEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Not visibility:"sealed", or an unseal ceremony is already in progress/resolved */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    approveUnseal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recordId: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated sealing state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SealedStateEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description No pending unseal request to approve */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    disputeSeal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recordId: components["parameters"]["RecordId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated sealing state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SealedStateEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description Not visibility:"sealed", or already fully unsealed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     websocket: {

@@ -164,7 +164,7 @@ describe("Phase 1 sign-off: full two-agent session lifecycle", () => {
     // the worker (not HTTP — it has no routes of its own) picks up the closing session,
     // using the SAME signer the API server used to countersign everything above.
     const workerMailer = createWorkerMailer();
-    const issueResult = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer: workerMailer, publicUrl: "https://localhost" });
+    const issueResult = await issueRecords({ db: t.db, s3: s3.client, s3Bucket: s3.bucket, signer, mailer: workerMailer, publicUrl: "https://localhost", contentEncryption: null });
     expect(issueResult.issued).toBe(1);
 
     const sessionPath = `/v1/sessions/${offer.sessionId}`;

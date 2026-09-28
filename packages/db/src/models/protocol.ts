@@ -77,17 +77,34 @@ export type CloseStatement = z.infer<typeof CloseStatement>;
 
 export const CloseReason = z.enum(["agent_closed", "idle_timeout", "agent_suspended", "message_limit", "owner_declined_pause"]);
 
+/** Realignment R1: a record's declared retention, platform-signed as part of the
+ * statement so it's tamper-evident — a verifier can trust "this record was always going
+ * to expire on `expiresAt`" as an inherent property, not a mutable fact someone could
+ * change after issuance. Present only when `visibility === "private"`. */
+export const RecordRetention = z.strictObject({
+  days: z.int().min(1).max(3650),
+  expiresAt: IsoTimestamp,
+});
+export type RecordRetention = z.infer<typeof RecordRetention>;
+
 /** `kind` discriminates a two-party session record from a one-party attestation record.
  * Optional and defaulting to "session" (`statement.kind ?? "session"`) so every record
  * issued before this field existed remains byte-identical and still verifies — `kind`
  * itself is never retroactively added to an already-signed, already-hashed statement.
  * `sessionId`: see the note on `MessageEnvelope` — holds the attestation id when
  * `kind === "attestation"`. `participants` has exactly 1 entry (role "attestor") for an
- * attestation, 2 (initiator/counterparty) for a session. */
+ * attestation, 2 (initiator/counterparty) for a session.
+ *
+ * `visibility`/`retention` (realignment R1, docs/SPEC.md §13): same optional-and-absent-
+ * means-legacy pattern as `kind` — a record issued before this feature existed has
+ * neither field, and its bundle keeps behaving exactly as it always has (full content,
+ * durable storage). `visibility` is never retroactively added to an existing statement. */
 export const RecordStatement = z.strictObject({
   v: z.literal(1),
   type: z.literal("openglass.record"),
   kind: z.enum(["session", "attestation"]).optional(),
+  visibility: z.enum(["private", "sealed", "shared"]).optional(),
+  retention: RecordRetention.nullable().optional(),
   recordId: z.string(),
   sessionId: ChainSubjectId,
   mode: Mode,
@@ -120,6 +137,21 @@ export type RecordStatement = z.infer<typeof RecordStatement>;
 // §7.4-7.5: the evidence bundle and its wrapper. Not stored documents — these are
 // wire/verification shapes (evidence.json in S3, and the downloadable record bundle).
 
+/** Realignment R1: an encrypted Relay payload — `payload` holds this shape instead of
+ * the plaintext value for a `visibility: "private"` record. AES-256-GCM, keyed by the
+ * record's own per-record data key (see crypto/contentEncryption.ts). Never agent-
+ * controlled content — only ever written by the platform at record-issuance time, which
+ * is what lets `contentState` (below) be trusted without needing its own signature: any
+ * change to it changes `evidenceSha256`, which the platform signature already covers. */
+export const EncryptedPayload = z.strictObject({
+  v: z.literal(1),
+  type: z.literal("openglass.encrypted-payload"),
+  ciphertext: Base64Url,
+  iv: Base64Url,
+  authTag: Base64Url,
+});
+export type EncryptedPayload = z.infer<typeof EncryptedPayload>;
+
 export const EvidenceMessage = z.strictObject({
   envelope: MessageEnvelope,
   hash: Hash,
@@ -128,6 +160,14 @@ export const EvidenceMessage = z.strictObject({
   platformSignature: Signature,
   /** Relay mode only; absent (not null) in notary mode. */
   payload: z.unknown().optional(),
+  /** Realignment R1: absent/"plain" (the only state before this feature existed) means
+   * `payload` is the plaintext value, exactly as today. "encrypted" means `payload` is an
+   * `EncryptedPayload` blob instead — only ever set alongside `visibility: "private"` on
+   * the enclosing record. There is no "shredded" value: crypto-shredding deletes the
+   * record's data-key ciphertext (a separate, mutable field on the `records` Mongo doc),
+   * never rewrites this stored evidence — so `contentState` and `evidenceSha256` both
+   * stay exactly as issued forever, whether or not the content is still decryptable. */
+  contentState: z.enum(["plain", "encrypted"]).optional(),
 });
 export type EvidenceMessage = z.infer<typeof EvidenceMessage>;
 

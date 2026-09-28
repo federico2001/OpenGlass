@@ -110,4 +110,37 @@ describe("verifyBundle (SPEC §7.6)", () => {
     expect(result.valid).toBe(false);
     expect(result.errors.map((e) => e.code)).toContain("head_seq");
   });
+
+  describe("realignment R1: encrypted (private-visibility) content", () => {
+    it("verifies structurally and reports content_encrypted instead of failing payload_hash", async () => {
+      const { bundle } = await buildTestBundle({ encryptedPayload: { ciphertext: "Y2lwaGVydGV4dA", iv: "aXY", authTag: "dGFn" } });
+      const result = verifyBundle(bundle, bundle.platformKeys);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+      expect(result.errors.map((e) => e.code)).not.toContain("payload_hash");
+      expect(result.info).toEqual([{ code: "content_encrypted", seq: 1, message: "content_encrypted" }]);
+    });
+
+    it("still catches real tampering elsewhere in an otherwise-encrypted bundle", async () => {
+      const { bundle } = await buildTestBundle({
+        encryptedPayload: { ciphertext: "Y2lwaGVydGV4dA", iv: "aXY", authTag: "dGFn" },
+        tamper: (b) => {
+          b.evidence.messages[0]!.envelope.prevHash = "4".repeat(64);
+        },
+      });
+      const result = verifyBundle(bundle, bundle.platformKeys);
+      expect(result.valid).toBe(false);
+      expect(result.errors.map((e) => e.code)).toEqual(expect.arrayContaining(["evidence_hash", "prev_hash", "hash"]));
+      // The chain break is still reported alongside the (non-failing) encrypted-content note.
+      expect(result.info).toEqual([{ code: "content_encrypted", seq: 1, message: "content_encrypted" }]);
+    });
+
+    it("a record issued before this field existed (absent contentState) still checks payload_hash normally", async () => {
+      const { bundle } = await buildTestBundle();
+      expect(bundle.evidence.messages[0]!.contentState).toBeUndefined();
+      const result = verifyBundle(bundle, bundle.platformKeys);
+      expect(result.valid).toBe(true);
+      expect(result.info).toEqual([]);
+    });
+  });
 });

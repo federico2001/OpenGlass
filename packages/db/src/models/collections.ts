@@ -3,10 +3,18 @@ import {
   AgentId, AttestationId, ChainSubjectId, Hash, IntegrationRequestId, IntegrationVoteId, InviteId, KeyId, MessageId,
   ObjectIdSchema, OwnerId, PublicKey, RecordId, SessionId, Signature, Kid, ViewerGrantId,
 } from "./common.js";
-import { Accept, AttestationOpen, CloseReason, CloseStatement, MessageEnvelope, Mode, Offer, RecordStatement } from "./protocol.js";
+import { Accept, AttestationOpen, CloseReason, CloseStatement, MessageEnvelope, Mode, Offer, RecordRetention, RecordStatement } from "./protocol.js";
 import { defineCollection } from "./define.js";
 
 // Document shapes follow docs/SPEC.md §3.
+
+/** Realignment R1 (docs/SPEC.md §13): `private | sealed | shared`, chosen by the
+ * offering/opening agent (a sibling request-body field, not part of the signed
+ * offer/open object — same pattern `idleTimeoutSec` already uses for attestations).
+ * Optional/absent on `sessions`/`attestations` means "issued before this field
+ * existed" — those keep behaving exactly as they always have (full content, no sealing),
+ * never retroactively reinterpreted as any of the three named values. */
+const Visibility = z.enum(["private", "sealed", "shared"]);
 
 export const owners = defineCollection({
   name: "owners",
@@ -92,6 +100,13 @@ export const agents = defineCollection({
      * decides what's publicly discoverable about their own agent, not the agent itself.
      * Optional so existing agent documents remain valid — read as `?? false`. */
     publicDirectory: z.boolean().optional(),
+    /** Realignment R1 (docs/SPEC.md §13): how long this agent's `visibility: "private"`
+     * records are kept before crypto-shredding, in days. `null`/absent = the platform
+     * default (see apps/api's `DEFAULT_PRIVATE_RETENTION_DAYS`). Owner-set via
+     * `PATCH /v1/owner/agents/{id}/retention`. Only ever governs *new* records issued
+     * after it's set — an already-issued record's retention was captured once, in its own
+     * signed statement, at issuance time, and never changes underneath it. */
+    privateRetentionDays: z.int().min(1).max(3650).nullable().optional(),
   }),
   indexes: [
     { name: "keys_publicKey_unique", key: { "keys.publicKey": 1 }, unique: true },
@@ -136,6 +151,7 @@ export const sessions = defineCollection({
     activatedAt: z.date().nullable(),
     lastActivityAt: z.date(),
     expiresAt: z.date(),
+    visibility: Visibility.optional(),
     // Prompt 6: an agent can pause an active session pending its owner's (or the
     // counterparty's owner's) explicit go-ahead before it continues — e.g. before a
     // spend-limit-adjacent or otherwise consequential exchange. Cleared on resume;
@@ -193,6 +209,7 @@ export const attestations = defineCollection({
     activatedAt: z.date(),
     lastActivityAt: z.date(),
     expiresAt: z.date(),
+    visibility: Visibility.optional(),
     closing: z
       .strictObject({
         reason: CloseReason,
@@ -287,11 +304,72 @@ export const records = defineCollection({
     participantAgentIds: z.array(AgentId).min(1).max(2),
     participantOwnerIds: z.array(OwnerId).min(1).max(2),
     createdAt: z.date(),
+    /** Realignment R1 (docs/SPEC.md §13): mirrors `statement.visibility`, duplicated here
+     * (not just read out of the signed statement) so routes/jobs can query/index on it
+     * without deserializing `statement`. Optional/absent means "issued before this field
+     * existed" — treated as `shared`, matching legacy behavior. */
+    visibility: Visibility.optional(),
+    /** `sealed`-visibility lifecycle (SPEC §13.2). Absent for `shared`/`private` records —
+     * `shared` has nothing to seal, and `private` uses `encryption`/retention instead of a
+     * mutual-consent ceremony. `approvals` collects owner ids that have consented to
+     * unseal; `unsealed` is reached once both participant owners are present (or a
+     * `disputed` record is force-unsealed for fairness, per SPEC §13.2). */
+    sealedState: z
+      .strictObject({
+        status: z.enum(["sealed", "unseal_requested", "unsealed", "disputed"]),
+        requestedBy: OwnerId.nullable(),
+        approvals: z.array(OwnerId),
+        unsealedAt: z.date().nullable(),
+        disputedBy: OwnerId.nullable(),
+        disputedAt: z.date().nullable(),
+      })
+      .nullable()
+      .optional(),
+    /** `private`-visibility only. Mirrors `statement.retention` (itself platform-signed at
+     * issuance so a record's declared expiry is tamper-evident) as a native `Date` — unlike
+     * the signed statement's ISO-string copy, this one is never hashed/signed, so it can use
+     * the same `z.date()` convention as every other Mongo-stored timestamp in this file, and
+     * exists purely so `shredExpiredPrivateRecords` can index/query on `retention.expiresAt`
+     * without touching `statement`. */
+    retention: z
+      .strictObject({
+        days: z.int().min(1).max(3650),
+        expiresAt: z.date(),
+      })
+      .nullable()
+      .optional(),
+    /** `private`-visibility only: the envelope-encryption state for this record's relay
+     * payloads (docs/SPEC.md §13.3). `dataKeyCiphertext` is the record's AES-256 data key,
+     * wrapped by the platform's long-lived KMS/local master key (see
+     * `packages/db/src/crypto/contentEncryption.ts`) — never the plaintext key. Crypto-
+     * shredding (`records.ts`'s `shredContent`, the one deliberate exception to this
+     * collection's append-only rule) nulls out `dataKeyCiphertext` and sets `shredded: true`
+     * — nothing else in this document, or in the immutable S3 evidence it points at, ever
+     * changes, so `evidenceSha256`/the platform's signature stay valid forever regardless of
+     * shred status. */
+    encryption: z
+      .strictObject({
+        dataKeyCiphertext: z.string().min(1).nullable(),
+        /** Null when the data key was wrapped by a local dev-only master key
+         * (CONTENT_ENCRYPTION=local) rather than a real KMS CMK — there's no key id to
+         * record in that mode. */
+        kmsKeyId: z.string().min(1).nullable(),
+        shredded: z.boolean(),
+        shreddedAt: z.date().nullable(),
+        shreddedReason: z.enum(["retention_expired", "owner_deleted"]).nullable(),
+      })
+      .nullable()
+      .optional(),
   }),
   indexes: [
     { name: "sessionId_unique", key: { sessionId: 1 }, unique: true },
     { name: "owners_createdAt", key: { participantOwnerIds: 1, createdAt: -1 } },
     { name: "agents_createdAt", key: { participantAgentIds: 1, createdAt: -1 } },
+    {
+      name: "shreddable_expiresAt",
+      key: { "retention.expiresAt": 1 },
+      partialFilterExpression: { "encryption.shredded": false, "retention.expiresAt": { $type: "date" } },
+    },
   ],
 });
 

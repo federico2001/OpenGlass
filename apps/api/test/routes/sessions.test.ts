@@ -7,6 +7,7 @@ import {
   claimAgentDirectly,
   insertTestOwner,
   signedRequestHeaders,
+  testContentEncryptionDeps,
   testIdentity,
   testServerDeps,
 } from "../helpers.js";
@@ -100,6 +101,52 @@ describe("POST /v1/sessions", () => {
     const res = await app().inject({ method: "POST", url: "/v1/sessions", headers, payload: body });
     expect(res.statusCode).toBe(422);
     expect(res.json().error.code).toBe("offer_invalid");
+  });
+});
+
+describe("POST /v1/sessions visibility (realignment R1, docs/SPEC.md §13)", () => {
+  it("defaults to sealed when the caller doesn't specify a visibility", async () => {
+    const { identity: initiator } = await registerAndClaim("vis_default");
+    const { offer, offerSignature } = buildOffer({ sessionId: sessionId(), initiator });
+    const body = { offer, offerSignature };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body, identity: initiator });
+    const res = await app().inject({ method: "POST", url: "/v1/sessions", headers, payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().session.visibility).toBe("sealed");
+  });
+
+  it("honors an explicit shared/private request when content encryption is configured", async () => {
+    const { identity: initiator } = await registerAndClaim("vis_explicit");
+    function appWithEncryption() {
+      return buildServer({ ...testServerDeps(t), healthChecks: {}, contentEncryption: testContentEncryptionDeps() });
+    }
+    const { offer, offerSignature } = buildOffer({ sessionId: sessionId(), initiator });
+    const body = { offer, offerSignature, visibility: "private" as const };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body, identity: initiator });
+    const res = await appWithEncryption().inject({ method: "POST", url: "/v1/sessions", headers, payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().session.visibility).toBe("private");
+  });
+
+  it("gracefully degrades an explicit private request to sealed when content encryption isn't configured", async () => {
+    const { identity: initiator } = await registerAndClaim("vis_fallback");
+    const { offer, offerSignature } = buildOffer({ sessionId: sessionId(), initiator });
+    const body = { offer, offerSignature, visibility: "private" as const };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body, identity: initiator });
+    // app() (see top of file) always uses testServerDeps(t)'s default contentEncryption: null.
+    const res = await app().inject({ method: "POST", url: "/v1/sessions", headers, payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().session.visibility).toBe("sealed");
+  });
+
+  it("honors an explicit shared request", async () => {
+    const { identity: initiator } = await registerAndClaim("vis_shared");
+    const { offer, offerSignature } = buildOffer({ sessionId: sessionId(), initiator });
+    const body = { offer, offerSignature, visibility: "shared" as const };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body, identity: initiator });
+    const res = await app().inject({ method: "POST", url: "/v1/sessions", headers, payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().session.visibility).toBe("shared");
   });
 });
 

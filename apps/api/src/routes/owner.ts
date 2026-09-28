@@ -42,6 +42,12 @@ const SpendLimitBody = z.strictObject({
 
 const PatchAgentBody = z.strictObject({ publicDirectory: z.boolean() });
 
+/** Realignment R1 (docs/SPEC.md §13). `null` clears the override, falling back to the
+ * platform's `DEFAULT_PRIVATE_RETENTION_DAYS` — same "null clears it" shape as
+ * `SpendLimitBody` above. Only affects new records issued after the change; an already-
+ * issued record's `retention.expiresAt` was signed at issuance and never moves. */
+const RetentionBody = z.strictObject({ privateRetentionDays: z.int().min(1).max(3650).nullable() });
+
 function paginationOf(query: unknown): { limit: number; cursor?: string } {
   const q = query as { limit?: string; cursor?: string };
   return { limit: Math.min(Math.max(Number(q.limit) || 50, 1), 200), cursor: q.cursor };
@@ -165,6 +171,15 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
     const body = parseOrError(PatchAgentBody, req.body, reply);
     if (!body) return;
     const updated = await agents.update(agent._id, { publicDirectory: body.publicDirectory });
+    return { agent: agentFullView(updated!) };
+  });
+
+  app.patch<{ Params: { agentId: string } }>("/v1/owner/agents/:agentId/retention", { preHandler: ownerAuth }, async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+    const body = parseOrError(RetentionBody, req.body, reply);
+    if (!body) return;
+    const updated = await agents.update(agent._id, { privateRetentionDays: body.privateRetentionDays });
     return { agent: agentFullView(updated!) };
   });
 
