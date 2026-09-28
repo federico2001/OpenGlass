@@ -1,5 +1,5 @@
 import { base64UrlEncode, canonicalizeToBytes, newId, sha256, signEd25519, sigInput, verifyBundle, type RecordBundle, type RecordDoc } from "@openglass/db";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { openTestDb } from "../../../../packages/db/test/testDb.js";
 import { openTestS3 } from "../../../../packages/db/test/testS3.js";
 import { issueRecords } from "../../../worker/src/jobs/issueRecords.js";
@@ -37,6 +37,15 @@ beforeAll(async () => {
 afterAll(async () => {
   await t.cleanup();
   await s3.cleanup();
+});
+beforeEach(async () => {
+  // Each test in this file registers fresh agents/owners through the real HTTP routes
+  // (registration is rate-limited per IP, and app.inject() reuses the same fake IP across
+  // calls) — reset between tests so one test's registrations don't count against the
+  // next's limit, the same convention sessions.test.ts/attestations.test.ts use.
+  for (const c of ["agents", "owners", "sessions", "invites", "messages", "records", "request_nonces", "rate_limits", "web_sessions"]) {
+    await t.db.collection(c).deleteMany({});
+  }
 });
 
 function signClose(sessionId: string, headSeq: number, headHash: string | null, identity: TestAgentIdentity) {
@@ -161,7 +170,7 @@ describe("visibility: sealed — receipt-only until mutual unseal or dispute", (
     const requestRes = await app.inject({
       method: "POST",
       url: `/v1/records/${recordId}/unseal-request`,
-      headers: { cookie: aliceCookie, origin: "https://localhost" },
+      headers: { cookie: aliceCookie, origin: "https://localhost", "content-type": "application/json" },
     });
     expect(requestRes.statusCode).toBe(200);
     expect(requestRes.json().sealedState.status).toBe("unseal_requested");
@@ -172,7 +181,7 @@ describe("visibility: sealed — receipt-only until mutual unseal or dispute", (
     const approveRes = await app.inject({
       method: "POST",
       url: `/v1/records/${recordId}/unseal-approve`,
-      headers: { cookie: bobCookie, origin: "https://localhost" },
+      headers: { cookie: bobCookie, origin: "https://localhost", "content-type": "application/json" },
     });
     expect(approveRes.statusCode).toBe(200);
     expect(approveRes.json().sealedState.status).toBe("unsealed");
@@ -194,7 +203,7 @@ describe("visibility: sealed — receipt-only until mutual unseal or dispute", (
     const disputeRes = await app.inject({
       method: "POST",
       url: `/v1/records/${recordId}/dispute`,
-      headers: { cookie: bobCookie, origin: "https://localhost" },
+      headers: { cookie: bobCookie, origin: "https://localhost", "content-type": "application/json" },
     });
     expect(disputeRes.statusCode).toBe(200);
     expect(disputeRes.json().sealedState.status).toBe("disputed");
@@ -213,7 +222,7 @@ describe("visibility: sealed — receipt-only until mutual unseal or dispute", (
     const res = await app.inject({
       method: "POST",
       url: `/v1/records/${recordId}/unseal-request`,
-      headers: { cookie: outsiderCookie, origin: "https://localhost" },
+      headers: { cookie: outsiderCookie, origin: "https://localhost", "content-type": "application/json" },
     });
     expect(res.statusCode).toBe(404);
   });
