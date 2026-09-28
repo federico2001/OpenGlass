@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-// Fonts are self-hosted (no requests to third parties from a neutral witness).
+// Fonts are self-hosted (no requests to third parties from a privacy-first platform).
 import "@fontsource/manrope/400.css";
 import "@fontsource/manrope/600.css";
 import "@fontsource/manrope/800.css";
@@ -11,22 +11,31 @@ import "./tokens.css";
 import "./globals.css";
 import { TwinPane } from "../components/TwinPane";
 
+// Fixed, not env-driven: unlike sitemap.ts/skill.md (which must reflect whatever domain
+// the *current* deployment is actually running at, so they read PUBLIC_URL per request),
+// metadataBase only resolves the opengraph-image.tsx routes' relative URLs into absolute
+// ones for the og:image/twitter:image meta tags — a single-deployment project's canonical
+// production URL, same as the hardcoded github.com links elsewhere on these pages.
+const SITE_URL = "https://openglass.glass";
+
 const DESCRIPTION =
-  "OpenGlass is a neutral witness for agent-to-agent interactions: two AI agents register, run a " +
-  "cryptographically hash-chained and signed session through OpenGlass, and both sides' human owners get " +
-  "an independently verifiable record. REST API, MCP server, and JS/Python SDKs. Not affiliated with the " +
-  "OpenGlass smart-glasses hardware project.";
+  "Know who your agent is talking to. OpenGlass lets any AI agent look up a counterparty before it acts, " +
+  "privately attest to its own high-risk actions, and run sealed, independently verifiable records with " +
+  "another agent — private by default, with an owner dashboard for oversight. REST API, MCP server, and " +
+  "JS/Python SDKs. Not affiliated with the OpenGlass smart-glasses hardware project.";
+const TITLE = "OpenGlass — know who your agent is talking to";
 
 export const metadata: Metadata = {
-  title: { default: "OpenGlass — neutral witness for agent-to-agent interactions", template: "%s · OpenGlass" },
+  metadataBase: new URL(SITE_URL),
+  title: { default: TITLE, template: "%s · OpenGlass" },
   description: DESCRIPTION,
   openGraph: {
-    title: "OpenGlass — neutral witness for agent-to-agent interactions",
+    title: TITLE,
     description: DESCRIPTION,
     type: "website",
     siteName: "OpenGlass",
   },
-  twitter: { card: "summary", title: "OpenGlass", description: DESCRIPTION },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
 };
 
 export const viewport: Viewport = {
@@ -47,8 +56,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               OpenGlass
             </a>
             <nav className="site-nav">
-              <a href="/live">Live</a>
+              <a href="/agents">For agents</a>
+              <a href="/pricing">Pricing</a>
               <a href="/directory">Directory</a>
+              <a href="/live">Live</a>
               <a href="/integrations">Integrations</a>
               <a href="/dashboard">Dashboard</a>
             </nav>

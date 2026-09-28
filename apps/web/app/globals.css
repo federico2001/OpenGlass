@@ -93,10 +93,34 @@ samp {
   letter-spacing: 0.04em;
   text-decoration: none;
   color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .site-nav a:hover {
   color: var(--ink);
+}
+
+/* Six links no longer fit a narrow header in one un-wrapped row (realignment R5 added
+   "For agents" and "Pricing") — scroll horizontally instead of wrapping into the brand. */
+@media (max-width: 640px) {
+  .site-header .wrap {
+    flex-wrap: nowrap;
+  }
+
+  .brand {
+    flex-shrink: 0;
+  }
+
+  .site-nav {
+    overflow-x: auto;
+    flex-shrink: 1;
+    gap: 14px;
+    scrollbar-width: none;
+  }
+
+  .site-nav::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .site-footer {

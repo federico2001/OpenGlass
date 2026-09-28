@@ -6,31 +6,47 @@ import { TwinPane } from "../components/TwinPane";
 describe("GET / (home)", () => {
   const html = renderToStaticMarkup(<Home />);
 
-  it("renders the Clear Channel headline and both audiences", () => {
-    expect(html).toContain("Every agent conversation, on the record.");
-    expect(html).toContain("For agents");
-    expect(html).toContain("For humans");
-    expect(html).toContain("Transparency isn&#x27;t a feature. It&#x27;s the whole product.");
+  it("renders the R5 headline, subhead, and links to both onward audiences", () => {
+    expect(html).toContain("Know who your agent is talking to.");
+    expect(html).toContain("Private by default.");
+    expect(html).toContain('href="/dashboard"');
+    expect(html).toContain('href="/agents"');
   });
 
-  it("only advertises API routes and surfaces that exist", () => {
-    expect(html).toContain("/v1");
-    expect(html).toContain("mcp.openglass.glass");
-    expect(html).toContain("npm install openglass-sdk");
-    expect(html).toContain("pip install openglass-sdk");
-    expect(html).toContain("/skill.md");
-    expect(html).not.toContain("/trace/");
+  it("covers all five R5 pillars", () => {
+    expect(html).toContain("Who&#x27;s on the other side");
+    expect(html).toContain("What your agent did");
+    expect(html).toContain("Stay in control");
+    expect(html).toContain("Your records, your rules");
+    expect(html).toContain("Proof when you need it");
+    // Realignment R4 item 3 (instruction tracing) was deliberately deferred — the homepage
+    // must not claim a capability that doesn't exist yet.
+    expect(html).not.toContain("instruction tracing");
+    expect(html).not.toContain("trace an action");
   });
 
-  it("covers the flow, what's built, under-the-hood, and straight-answers sections", () => {
-    expect(html).toContain("How it works");
-    expect(html).toContain("What&#x27;s built");
+  it("covers what's built, under-the-hood, and straight-answers sections", () => {
     expect(html).toContain("Under the hood");
     expect(html).toContain("Straight answers");
     // Realignment R2: the impersonation FAQ answer should point at domain verification —
     // the real (opt-in) mitigation — not claim the problem is unsolved.
     expect(html).toContain("domain verification");
     expect(html).toContain("operated by");
+  });
+
+  it("carries the new R5 FAQ, not the old one", () => {
+    expect(html).toContain("Can this be used against me?");
+    expect(html).toContain("Who can see my agent&#x27;s conversations?");
+    expect(html).toContain("How long is data kept?");
+    expect(html).toContain("Can someone impersonate my brand?");
+  });
+
+  it("drops the old neutral-witness/court framing", () => {
+    expect(html).not.toContain("Every agent conversation, on the record.");
+    expect(html).not.toContain("neutral witness");
+    expect(html).not.toContain("never looks away");
+    expect(html).not.toContain("court");
+    expect(html).not.toContain("legal team");
   });
 
   it("answers the concrete technical questions a reviewing agent would ask", () => {
@@ -40,7 +56,8 @@ describe("GET / (home)", () => {
     expect(html).toContain("Object Lock");
     expect(html).toContain("/docs/SPEC.md");
     expect(html).toContain("/docs/openapi.yaml");
-    expect(html).toContain("notary mode");
+    expect(html).toContain("Notary mode");
+    expect(html).not.toContain("/trace/");
   });
 
   it("links out to the real GitHub repo, npm, and PyPI packages", () => {
