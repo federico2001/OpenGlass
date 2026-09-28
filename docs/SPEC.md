@@ -1097,3 +1097,48 @@ No auth — the whole point is that a calling agent can check a counterparty it 
 Everything returned must already be independently verifiable from something the platform, the agent's own signatures, or a DNS record attests to (CLAUDE.md's "Positioning" rule) — never a rating, a review, or anything derived from session *content*, which stays private regardless of `visibility` (§13).
 
 Deciding *when* an action is worth attesting is a separate concern from the attestation mechanism itself: see [`docs/POLICY.md`](POLICY.md) and [`/spec/openglass-policy`](../spec/openglass-policy) for a vendor-neutral format for classifying an agent's action as `low`/`medium`/`high` risk, with reference evaluators in `core-js`/`core-py`.
+
+## 15. Owner dashboard oversight (realignment R4)
+
+R1–R2 gave an owner private-by-default records and a way to check a counterparty; this section covers the pieces that turn the dashboard from a passive record-keeper into something an owner actually uses to stay in control: a per-agent default for §13's `visibility`, finer-grained viewer access, an audit trail of who looked at what, and email alerts for the moments an owner most wants to know about. None of this introduces a new signed statement type or touches the hash chain — it's ordinary owner-authenticated CRUD layered on §3's existing `agents`/`viewer_grants` documents, plus one new collection.
+
+### 15.1 Per-agent default visibility
+
+`agents` gains `defaultVisibility: "private" | "sealed" | "shared" | null`, owner-set via `PATCH /v1/owner/agents/{id}/visibility-default` (`{ defaultVisibility }`, `null` clears it). It slots into §13's visibility resolution *between* the request's own explicit choice and the platform default — it fills an omission, it never overrides an explicit request:
+
+```
+effectiveVisibility(requested, agentDefault, platformDefault, contentEncryption):
+  chosen = requested ?? agentDefault ?? platformDefault
+  chosen === "private" && !contentEncryption ? "sealed" : chosen
+```
+
+Sessions apply the *initiating* agent's `defaultVisibility` (platform default `"sealed"`); attestations apply the attestor's (`"private"`) — same per-type platform defaults as §13, just with an owner-tunable middle tier.
+
+### 15.2 Viewer grant scopes and the access log
+
+A viewer grant (Prompt 6) now carries a `scope: "read" | "export" | "manage"` (`viewer_grants.scope`, optional/absent meaning `"read"` — every grant created before this field existed keeps behaving exactly as `"read"` does now, which is a strict *narrowing* from the old all-or-nothing behavior; see below). Set at invite time (`POST /v1/owner/agents/{id}/viewers`, new `scope` field) or changed after the fact (`PATCH /v1/owner/agents/{id}/viewers/{grantId}/scope`, `{ scope }`).
+
+- **`read`** — exactly the pre-R4 behavior for session/message/record *summaries*: list and view anything the grant's agent participates in.
+- **`export`** — everything `read` gives, plus `GET /v1/records/{id}/bundle` (the full signed evidence, not just the summary). A `read`-scope viewer gets `403 export_scope_required` on that route instead.
+- **`manage`** — reserved. Stored, selectable, and shown in the dashboard, but grants nothing beyond `export` as of this section; a future prompt may extend it to grant/revoke other viewers or change agent settings. Deliberately not silently pretended to be more than it is.
+
+When a viewer's grants span more than one participant agent on the same record with different scopes, the *more* permissive scope wins — a viewer trusted with `export` on one side isn't quietly downgraded because the record also happens to involve an agent they only have `read` on.
+
+A direct participant (the agent itself, or its own owner) is never scope-limited and never logged — scope and the access log both apply only to someone who can see a record *because of* a viewer grant, not because they're a party to it. Every `view_record_bundle` by a viewer-grant-only caller writes one `viewer_access_log` entry per participant agent the grant covers (`{ ownerId, agentId, viewerEmail, action, resourceId, at }`, insert-only, no hash chain — its integrity doesn't depend on one, unlike `messages`/`records`), readable by that agent's owner via `GET /v1/owner/agents/{id}/access-log`.
+
+### 15.3 Oversight alert emails
+
+`owners.settings.oversightAlerts: boolean` (optional, `?? true` — **opt-out**, the opposite default polarity from `publicFeedOptIn`; an oversight feature that shipped silent by default would undercut the point of it). Four kinds, one per triggering event, each best-effort (a mail failure never turns an otherwise-successful request into an error):
+
+| kind | fires when | checked from |
+|---|---|---|
+| `new_counterparty` | a session activates (direct accept or owner-approved) between two owners with no prior `active`/`closing`/`closed` session between them | each side's own perspective — an alert can fire for one owner and not the other |
+| `unverified_counterparty` | same activation, other agent's `domainVerification.status !== "verified"` | same as above |
+| `high_risk_action` | an attestation event's payload carries `{ verdict: { risk: "high" } }` (the shape `evaluateAndAttest` — §12, docs/POLICY.md — writes for relay-mode events) | the attestor's own owner only |
+| `dispute_raised` | `POST /v1/records/{id}/dispute` (§13.2) | every other participant owner, never the one who disputed |
+
+### 15.4 Attestations in the owner dashboard
+
+`GET /v1/owner/attestations` (owner-authenticated, `?status=`, cursor-paginated like `GET /v1/owner/sessions`) lists every attestation the caller's own agents opened — the data source for the dashboard's activity timeline, which merges this with `GET /v1/owner/sessions` client-side and offers a best-effort "policy-flagged" filter (a heuristic read of an attestation's `purpose` for an `openglass-policy` rule-id shape, not a guaranteed risk level — true risk lives inside a relay-mode event's payload, one fetch per attestation, too expensive for a list view).
+
+**Deliberately out of scope for this section:** linking an attestation event to the specific inbound session message that preceded it ("instruction tracing"). Doing that precisely needs a new protocol-level correlation field an agent populates itself when creating the event — a cross-cutting SDK + spec change, not dashboard UI, left for a future realignment prompt.
