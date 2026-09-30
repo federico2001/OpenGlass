@@ -24,7 +24,7 @@ describe("GET /pricing (realignment R5)", () => {
   it("states the real, currently-free feature set", () => {
     expect(html).toContain("GET /v1/lookup");
     expect(html).toContain("Owner dashboard");
-    expect(html).toContain("Sealed and shared two-party sessions");
+    expect(html).toContain("Witnessed two-party sessions (shared or private)");
   });
 
   it("prices the real x402 add-ons correctly", () => {

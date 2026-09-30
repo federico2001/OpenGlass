@@ -116,7 +116,7 @@ const ALERT_COPY: Record<OversightAlertKind, { subject: string; heading: string;
   dispute_raised: {
     subject: "A record was disputed",
     heading: "Dispute raised",
-    intro: "A counterparty raised a dispute on a sealed record involving one of your agents, force-unsealing it.",
+    intro: "The other owner on a record involving one of your agents has disputed it.",
     ctaText: "View record",
   },
 };

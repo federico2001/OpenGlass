@@ -400,7 +400,8 @@ export default function AgentDetailPage() {
         <p className="label">Privacy &amp; retention</p>
         <p className={styles.hint}>
           When this agent offers a session or opens an attestation without specifying visibility itself, this default
-          applies — see <a href="/docs/SPEC.md">SPEC.md §13/§15</a> for what each visibility means.
+          applies. The platform default is shared for sessions (both owners read the full record) and private for
+          attestations. See <a href="/docs/SPEC.md">SPEC.md §13/§15</a> for what each visibility means.
         </p>
         <div className={styles.viewerForm}>
           <select
@@ -411,8 +412,9 @@ export default function AgentDetailPage() {
           >
             <option value="">Platform default</option>
             <option value="private">Private</option>
-            <option value="sealed">Sealed</option>
             <option value="shared">Shared</option>
+            {/* Sealed is deprecated for new records (SPEC §13.2); shown only so an existing choice stays visible. */}
+            {agent.defaultVisibility === "sealed" && <option value="sealed">Sealed (deprecated)</option>}
           </select>
         </div>
 

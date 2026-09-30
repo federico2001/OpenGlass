@@ -1,18 +1,19 @@
 # OpenGlass
 
-OpenGlass helps you know who your agent is talking to. Agents register, look up counterparties, and log their own high-risk actions; owners get private-by-default oversight of what their agents did and who with. Every record is still a signed, hash-chained, independently verifiable object under the hood — see "Positioning" below for how that fits together with the rest of the product.
+OpenGlass is a neutral witness for agent-to-agent interactions. It sits between agents and favors neither: agents register, look up counterparties before they act, log their own high-risk actions, and run sessions through OpenGlass, and the human owners on both sides get the same signed, hash-chained, independently verifiable record. See "Positioning" below for how the pieces fit together.
 
-## Positioning (Sept 2026)
+## Positioning (revised Sept 30 2026)
 
-OpenGlass leads with **"know who your agent is talking to"** — not "neutral witness." The cryptographic verification machinery (hash chains, signatures, countersignatures, independent `verify()`) is still the foundation everything else is built on, but it's supporting proof now, not the headline. Don't let old "witness"/"court record" framing creep back into new copy.
+OpenGlass **is a neutral witness** for agent-to-agent interactions; **"know who your agent is talking to"** is the first thing it does for you. Lead with both, in that relationship: the witness is what OpenGlass is, and lookup, oversight and records are what the witness gives each audience. Keep the witness framing visible (hero, agent-facing docs, metadata). Don't bury it under lookup alone, and don't drift into "court record"/legal-team framing either: the witness is neutral infrastructure, not an arbiter. The cryptographic machinery (hash chains, signatures, countersignatures, independent `verify()`) is what makes the witness trustworthy without trusting the operator.
 
 **Audiences**, in priority order:
 - **Agents** — free lookup (`GET /v1/lookup`), registration, and attesting their own high-risk actions. This is the free, no-signup-friction entry point.
-- **Owners** — private-by-default oversight of their agents: counterparty profiles, instruction tracing, pause/approve, alerts. This is the paying relationship.
-- **Businesses** (later) — sealed two-party records and Notary mode, for cases where both sides need a durable, verifiable shared record. Built on the same primitives, sold separately.
+- **Owners** — oversight of their agents, never public: counterparty profiles, instruction tracing, pause/approve, alerts. This is the paying relationship.
+- **Businesses** (later) — durable two-party records, Notary mode, and the tooling around them, for cases where both sides need a verifiable shared record they'll rely on for years. Built on the same primitives, sold separately.
 
 **Rules that apply everywhere, not just in the UI:**
-- **Private by default.** A record's `visibility` is `private | sealed | shared` — never public unless an owner explicitly chose that for that record. Attestations default `private`; sessions default `sealed`.
+- **Never public; both sides see the same record.** A record's `visibility` is `shared | private` (plus the deprecated `sealed`); none of them makes a record public. Attestations default `private` (only the attesting agent's owner). Sessions default `shared`: both participant owners read the full record from the moment it's issued, because a witness's record is only useful if both sides hold the same one, and the counterparty's agent already saw every message anyway. `sealed` (receipt-only until both owners unseal) is deprecated for new records: still accepted when a caller passes it explicitly, never a default, never offered in UI or copy. Don't reintroduce withhold-until-consent mechanics.
+- **Disputes are flags, not keys.** Either participant owner can dispute a two-party record once; it's recorded, emailed to the other owner and counted on profiles, but it changes and opens nothing (except a legacy sealed record, which it still force-unseals, the rule that record was issued under).
 - **Retention is owner-chosen for private records** (30 days / 1 year / custom), enforced by crypto-shredding (destroy the per-record data key, not the record) — never a raw delete of an append-only document. Sealed and shared records keep full-duration S3 Object Lock, since their whole point is a durable proof both sides can rely on.
 - **Profiles show verifiable facts only** — activity counts, verified domain, first-seen date, key age, dispute count. Never ratings, reviews, or session content. If it can't be independently verified from something the platform or a DNS record actually attests to, it doesn't go on a profile.
 - **Agent-facing copy must be accurate and must never instruct agents to always call OpenGlass.** State what a tool/endpoint is for and let the calling agent (or its owner's `openglass-policy`) decide when to use it.

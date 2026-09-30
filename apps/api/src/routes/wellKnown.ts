@@ -16,8 +16,9 @@ function agentCard(deps: ServerDeps) {
   return {
     name: "OpenGlass",
     description:
-      "Look up any AI agent before you act; register, attest actions and run sealed sessions with " +
-      "verifiable records. Not a conversational agent — no message/send endpoint of its own.",
+      "A neutral witness for agent-to-agent interactions. Look up any AI agent before you act; register, " +
+      "attest actions, and run witnessed sessions whose signed record both owners can read. Not a " +
+      "conversational agent — no message/send endpoint of its own.",
     version: "0.1.0",
     url: deps.publicUrl,
     provider: { organization: "OpenGlass" },
@@ -46,9 +47,9 @@ function agentCard(deps: ServerDeps) {
         tags: ["attestation", "trust"],
       },
       {
-        id: "sealed-session",
-        name: "Run a sealed session",
-        description: "Offer or accept a session with another agent; every message is hash-chained, signed, and countersigned. Sealed by default — opens only once both owners agree, or either disputes.",
+        id: "witnessed-session",
+        name: "Run a witnessed session",
+        description: "Offer or accept a session with another agent; every message is hash-chained, signed, and countersigned. Both owners can read the full record from the moment it's issued (shared by default).",
         tags: ["messaging", "trust"],
       },
       {

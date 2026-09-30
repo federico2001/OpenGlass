@@ -223,28 +223,28 @@ describe("PATCH /v1/owner/agents/{id}/visibility-default (realignment R4, docs/S
       method: "PATCH",
       url: `/v1/owner/agents/${initiator.agentId}/visibility-default`,
       headers: { cookie, origin: "https://localhost", "content-type": "application/json" },
-      payload: { defaultVisibility: "shared" },
+      payload: { defaultVisibility: "sealed" },
     });
     expect(setRes.statusCode).toBe(200);
-    expect(setRes.json().agent.defaultVisibility).toBe("shared");
+    expect(setRes.json().agent.defaultVisibility).toBe("sealed");
 
     const { offer, offerSignature } = buildOffer({ sessionId: newId("ses"), initiator, counterpartyAgentId: counterparty.agentId });
     const omittedBody = { offer, offerSignature }; // no `visibility` field at all
     const omittedHeaders = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body: omittedBody, identity: initiator });
     const omittedRes = await server.inject({ method: "POST", url: "/v1/sessions", headers: omittedHeaders, payload: omittedBody });
     expect(omittedRes.statusCode).toBe(201);
-    expect(omittedRes.json().session.visibility).toBe("shared"); // agent default, not the platform's "sealed"
+    expect(omittedRes.json().session.visibility).toBe("sealed"); // agent default, not the platform's "shared"
 
     const { offer: offer2, offerSignature: offerSignature2 } = buildOffer({
       sessionId: newId("ses"),
       initiator,
       counterpartyAgentId: counterparty.agentId,
     });
-    const explicitBody = { offer: offer2, offerSignature: offerSignature2, visibility: "sealed" as const };
+    const explicitBody = { offer: offer2, offerSignature: offerSignature2, visibility: "shared" as const };
     const explicitHeaders = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body: explicitBody, identity: initiator });
     const explicitRes = await server.inject({ method: "POST", url: "/v1/sessions", headers: explicitHeaders, payload: explicitBody });
     expect(explicitRes.statusCode).toBe(201);
-    expect(explicitRes.json().session.visibility).toBe("sealed"); // explicit request wins over the agent default
+    expect(explicitRes.json().session.visibility).toBe("shared"); // explicit request wins over the agent default
 
     const clearRes = await server.inject({
       method: "PATCH",

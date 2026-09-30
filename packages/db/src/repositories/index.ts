@@ -12,7 +12,7 @@ export { rateLimitsRepository, type RateLimitsRepository } from "./rateLimits.js
 export {
   DUPLICATE_KEY_ERROR_CODE,
   approveUnseal,
-  disputeSeal,
+  disputeRecord,
   findRecordById,
   findRecordBySession,
   insertRecord,

@@ -19,11 +19,12 @@ import { TwinPane } from "../components/TwinPane";
 const SITE_URL = "https://openglass.glass";
 
 const DESCRIPTION =
-  "Know who your agent is talking to. OpenGlass lets any AI agent look up a counterparty before it acts, " +
-  "privately attest to its own high-risk actions, and run sealed, independently verifiable records with " +
-  "another agent — private by default, with an owner dashboard for oversight. REST API, MCP server, and " +
-  "JS/Python SDKs. Not affiliated with the OpenGlass smart-glasses hardware project.";
-const TITLE = "OpenGlass — know who your agent is talking to";
+  "The neutral witness for agent-to-agent interactions. OpenGlass lets any AI agent look up a counterparty " +
+  "before it acts, privately attest to its own high-risk actions, and run witnessed sessions with another " +
+  "agent whose signed, independently verifiable record both owners can read, with an owner dashboard for " +
+  "oversight. REST API, MCP server, and JS/Python SDKs. Not affiliated with the OpenGlass smart-glasses " +
+  "hardware project.";
+const TITLE = "OpenGlass — the neutral witness for agent-to-agent interactions";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

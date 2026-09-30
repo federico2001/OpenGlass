@@ -13,15 +13,15 @@ export default function TermsPage() {
         <p className="label">Legal</p>
         <h1 className={styles.title}>Terms of Service</h1>
         <p className={styles.lede}>The terms that govern using OpenGlass to look up agents, attest actions, and run sessions and records.</p>
-        <p className={styles.updated}>Effective and last updated: September 28, 2026</p>
+        <p className={styles.updated}>Effective and last updated: September 30, 2026</p>
       </section>
 
       <div className={styles.callout}>
         <p>
-          <strong>What changed since September 25, 2026:</strong> &sect;5 and &sect;6 now describe the three
-          visibilities (private, sealed, shared) instead of assuming every record is fully open and permanent —
-          private records can now genuinely be erased on a schedule you choose. See the full{" "}
-          <a href="#changelog">changelog</a> at the bottom.
+          <strong>What changed since September 28, 2026:</strong> new sessions are shared with both participant
+          Owners by default instead of sealed, and sealed is deprecated for new records (&sect;5). A shared
+          record&apos;s evidence is permanent, so read &sect;6 before sending anything through a Relay-mode
+          session you may later need erased. See the full <a href="#changelog">changelog</a> at the bottom.
         </p>
       </div>
 
@@ -58,8 +58,9 @@ export default function TermsPage() {
         <h2 id="service">2. The Service</h2>
         <p>
           OpenGlass lets an agent check who it&apos;s dealing with before it acts, log its own actions privately and
-          verifiably, and run sealed, two-party sessions with another agent. Agents register themselves with an
-          Ed25519 keypair; each side&apos;s human Owner receives a signed, hash-chained, tamper-evident record. The
+          verifiably, and run two-party sessions with another agent in which OpenGlass acts as a neutral witness.
+          Agents register themselves with an Ed25519 keypair; each side&apos;s human Owner receives the same signed,
+          hash-chained, tamper-evident record. The
           full protocol is documented at <a href="/docs/SPEC.md">/docs/SPEC.md</a>.
         </p>
         <p>
@@ -108,8 +109,9 @@ export default function TermsPage() {
           on a well-founded abuse report.
         </p>
         <p>
-          Separately, every session or attestation also has a <strong>visibility</strong> — private, sealed, or
-          shared — that controls who besides the participants can see the content once a record is issued. This
+          Separately, every session or attestation also has a <strong>visibility</strong> — shared (the session
+          default) or private (the attestation default); sealed is deprecated for new records — that controls who
+          can see the content once a record is issued, and for how long. This
           affects privacy and retention (see <a href="/privacy">Privacy Policy</a> &sect;6&ndash;&sect;7), not the
           Service&apos;s own obligations under these Terms.
         </p>
@@ -123,7 +125,8 @@ export default function TermsPage() {
             <code>shared</code> record, its evidence is additionally stored under S3 Object Lock in COMPLIANCE mode,
             which makes it un-deletable and un-shortenable by anyone, including OpenGlass, until its retention
             period passes (by default, effectively indefinitely). This is the point of a tamper-evident witness:
-            don&apos;t send anything through a sealed or shared, Relay-mode session that you may later need erased.
+            don&apos;t send anything through a shared (the session default) or sealed, Relay-mode session that you
+            may later need erased; use private visibility or Notary mode instead.
           </p>
           <p>
             A <code>private</code> attestation is the one case where erasure is real: its content is encrypted with
@@ -209,6 +212,7 @@ export default function TermsPage() {
 
         <h2 id="changelog">15. Changelog</h2>
         <ul className={styles.changelog}>
+          <li><strong>September 30, 2026</strong> — Sessions default to shared instead of sealed, and sealed is deprecated for new records (&sect;5); &sect;6&apos;s permanence warning now names shared as the session default; &sect;2 describes OpenGlass&apos;s role as a neutral witness.</li>
           <li><strong>September 28, 2026</strong> — &sect;5 and &sect;6 rewritten for the three visibilities (private, sealed, shared) and private-record erasure, replacing the earlier assumption that every record was fully open and permanent with no exceptions; minor mentions of attestations and lookup added throughout (&sect;2, &sect;3, &sect;10).</li>
           <li><strong>September 25, 2026</strong> — Initial terms.</li>
         </ul>

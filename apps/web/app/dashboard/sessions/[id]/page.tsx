@@ -141,7 +141,7 @@ export default function SessionDetailPage() {
       const r = await apiFetch<{ record: RecordSummary }>(`/v1/records/${session.recordId}`);
       setRecord(r.record);
     } catch (err) {
-      setSealingError(err instanceof Error ? err.message : "Could not update the seal state.");
+      setSealingError(err instanceof Error ? err.message : "Could not update this record.");
     } finally {
       setSealingAction(null);
     }
@@ -306,13 +306,37 @@ export default function SessionDetailPage() {
               </table>
             )}
 
+            {record && record.visibility !== "sealed" && isParticipantOwner && (
+              <div className={styles.hint} aria-label="Dispute status">
+                {record.dispute ? (
+                  <p>
+                    Disputed by {owner && record.dispute.disputedBy === owner.id ? "you" : "the other owner"} on{" "}
+                    {formatDate(record.dispute.disputedAt)}. The record itself is unchanged, and both owners keep full access.
+                  </p>
+                ) : (
+                  <>
+                    <p>
+                      Disagree with what this record shows? A dispute flags it for both owners and is counted on each
+                      agent&apos;s public profile. It doesn&apos;t change or hide the record.
+                    </p>
+                    <div className={styles.buttonRow}>
+                      <button className={styles.secondaryButton} onClick={() => runSealingAction("dispute")} disabled={sealingAction !== null}>
+                        {sealingAction === "dispute" ? "Working…" : "Dispute"}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {sealingError && <p className={styles.error}>{sealingError}</p>}
+              </div>
+            )}
+
             {record?.visibility === "sealed" && record.sealedState && (
               <div className={styles.hint} aria-label="Sealed record status">
                 {record.sealedState.status === "sealed" && (
                   <>
                     <p>
-                      Sealed — only a receipt (hashes, signatures, record id) is available until both owners consent to
-                      unseal, or either disputes.
+                      Sealed (a legacy setting) — only a receipt (hashes, signatures, record id) is available until both
+                      owners consent to unseal, or either disputes.
                     </p>
                     <div className={styles.buttonRow}>
                       <button className={styles.button} onClick={() => runSealingAction("unseal-request")} disabled={sealingAction !== null}>

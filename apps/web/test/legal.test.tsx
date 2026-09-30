@@ -32,6 +32,7 @@ describe("GET /terms", () => {
   });
 
   it("carries a changelog and an updated date", () => {
+    expect(html).toContain("September 30, 2026");
     expect(html).toContain("September 28, 2026");
     expect(html).toContain("Changelog");
   });
@@ -54,15 +55,19 @@ describe("GET /privacy", () => {
 
   it("says plainly who besides the owner can see a session or attestation's content", () => {
     expect(html).toContain("Who can see a session or attestation&#x27;s content");
+    expect(html).toContain("Sessions default to shared");
+    expect(html).toContain("No visibility makes a record public");
     expect(html).toContain("sealed");
     expect(html).toContain("shared");
     expect(html).toContain("read");
     expect(html).toContain("export");
   });
 
-  it("explains how a sealed record gets disputed open", () => {
+  it("explains that a dispute is a flag on any record, and only opens a legacy sealed one", () => {
     expect(html).toContain("Disputes");
     expect(html).toContain("/dispute");
+    expect(html).toContain("A dispute is a flag");
+    expect(html).not.toContain("Sealed</strong> (the session default)");
   });
 
   it("discloses the only cookie the site sets", () => {
@@ -82,6 +87,7 @@ describe("GET /privacy", () => {
   });
 
   it("carries a changelog and an updated date", () => {
+    expect(html).toContain("September 30, 2026");
     expect(html).toContain("September 28, 2026");
     expect(html).toContain("Changelog");
   });
@@ -120,6 +126,7 @@ describe("GET /security", () => {
   });
 
   it("carries a changelog and an updated date", () => {
+    expect(html).toContain("September 30, 2026");
     expect(html).toContain("September 28, 2026");
     expect(html).toContain("Changelog");
   });

@@ -129,16 +129,27 @@ export async function approveUnseal(db: Db, recordId: string, ownerId: string): 
 }
 
 /**
- * Force-unseals a `visibility: "sealed"` record for fairness (docs/SPEC.md §13.2): either
- * owner can raise a dispute without the other's consent, immediately granting full-content
- * access to both sides (see the bundle route's `sealedState.status !== "sealed" &&
- * sealedState.status !== "unseal_requested"` check). No-op (returns null) once the record is
- * already `unsealed` — nothing left to force open by that point.
+ * Records a participant owner's dispute of a record (docs/SPEC.md §13.2) — the one
+ * dispute flag per record, set by whichever owner disputes first; returns null if the
+ * record is already disputed. It's a flag, not a key: on `shared`/`private` records (both
+ * owners can already read them) it opens nothing. A legacy `visibility: "sealed"` record
+ * that isn't unsealed yet keeps the rule it was issued under: the dispute also
+ * force-unseals it (`sealedState.status: "disputed"`), granting both owners full access.
  */
-export function disputeSeal(db: Db, recordId: string, ownerId: string): Promise<RecordDoc | null> {
-  return db.collection<RecordDoc>(records.name).findOneAndUpdate(
-    { _id: recordId, visibility: "sealed", "sealedState.status": { $ne: "unsealed" } },
-    { $set: { "sealedState.status": "disputed", "sealedState.disputedBy": ownerId, "sealedState.disputedAt": new Date() } },
+export async function disputeRecord(db: Db, recordId: string, ownerId: string): Promise<RecordDoc | null> {
+  const col = db.collection<RecordDoc>(records.name);
+  const disputedAt = new Date();
+  const flagged = await col.findOneAndUpdate(
+    { _id: recordId, dispute: { $in: [null] } }, // matches both absent and null
+    { $set: { dispute: { disputedBy: ownerId, disputedAt } } },
     { returnDocument: "after" },
   );
+  if (!flagged) return null;
+  if (flagged.visibility !== "sealed" || !flagged.sealedState || flagged.sealedState.status === "unsealed") return flagged;
+  const forced = await col.findOneAndUpdate(
+    { _id: recordId, visibility: "sealed", "sealedState.status": { $ne: "unsealed" } },
+    { $set: { "sealedState.status": "disputed", "sealedState.disputedBy": ownerId, "sealedState.disputedAt": disputedAt } },
+    { returnDocument: "after" },
+  );
+  return forced ?? flagged;
 }

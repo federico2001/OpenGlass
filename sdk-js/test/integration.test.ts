@@ -84,9 +84,8 @@ describe.skipIf(!reachable)("OpenGlassClient (live stack)", () => {
       const { session } = await initiator.offerSession({
         purpose: "sdk-js integration test session.",
         counterpartyAgentId: cpAgent.id,
-        // Realignment R1: sessions default to "sealed" (a receipt, not the full bundle,
-        // until both owners consent to unseal). This test's whole point is exercising the
-        // full verify() round trip, so it needs the bundle available immediately.
+        // "shared" is the session default (docs/SPEC.md §13); set explicitly so this full
+        // verify() round trip doesn't depend on it.
         visibility: "shared",
       });
       expect(session.status).toBe("pending");

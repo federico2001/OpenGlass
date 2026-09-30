@@ -354,6 +354,18 @@ export const records = defineCollection({
       })
       .nullable()
       .optional(),
+    /** A participant owner's dispute of this record (docs/SPEC.md §13.2). A flag, set once
+     * by the first owner to dispute, on any visibility; it opens nothing by itself. Never
+     * part of `statement`/`evidence`, so setting it doesn't touch anything a signature or
+     * hash covers. Legacy `sealed` records also record the dispute in `sealedState`, which
+     * still force-unseals them (the rule they were issued under). */
+    dispute: z
+      .strictObject({
+        disputedBy: OwnerId,
+        disputedAt: z.date(),
+      })
+      .nullable()
+      .optional(),
     /** `private`-visibility only. Mirrors `statement.retention` (itself platform-signed at
      * issuance so a record's declared expiry is tamper-evident) as a native `Date` — unlike
      * the signed statement's ISO-string copy, this one is never hashed/signed, so it can use

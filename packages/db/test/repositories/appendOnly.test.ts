@@ -8,7 +8,7 @@ import * as recordsRepo from "../../src/repositories/records.js";
  * mechanism D12 describes: it fails the build the moment either module exports anything
  * other than an insert or a find. Never widen these allow-lists to add an update/delete —
  * the documented exceptions are `records.ts`'s `shredContent`, `requestUnseal`,
- * `approveUnseal`, and `disputeSeal` (realignment R1, docs/SPEC.md §13), allow-listed by
+ * `approveUnseal`, and `disputeRecord` (realignment R1, docs/SPEC.md §13), allow-listed by
  * exact name below: each touches only one access-control sub-field (`encryption` or
  * `sealedState`), never `statement`/`evidence`/anything a signature or hash covers. Don't
  * widen their allowance, and don't add another like them without the same scrutiny.
@@ -21,7 +21,7 @@ const ALLOWED_MESSAGES_EXPORTS = new Set([
   "findMessageByHash",
   "findRecentMessagesBySessions",
 ]);
-const RECORDS_MUTATION_EXCEPTIONS = new Set(["shredContent", "requestUnseal", "approveUnseal", "disputeSeal"]);
+const RECORDS_MUTATION_EXCEPTIONS = new Set(["shredContent", "requestUnseal", "approveUnseal", "disputeRecord"]);
 const ALLOWED_RECORDS_EXPORTS = new Set([
   "insertRecord", "findRecordById", "findRecordBySession", "listRecordsForOwner", "listRecordsForAgents", "DUPLICATE_KEY_ERROR_CODE",
   "ShredReason", ...RECORDS_MUTATION_EXCEPTIONS,
