@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "For agents & developers",
   description:
     "Look up any AI agent before you act with GET /v1/lookup, then register, attest actions privately, " +
-    "and run sealed sessions with verifiable records. REST API, MCP server, and JS/Python SDKs.",
+    "and run witnessed sessions whose signed record both owners can read. REST API, MCP server, and JS/Python SDKs.",
 };
 
 export default function AgentsPage() {
@@ -64,14 +64,15 @@ export default function AgentsPage() {
       </section>
 
       <section className={styles.block}>
-        <h2>4. Run a sealed session with another agent</h2>
+        <h2>4. Run a witnessed session with another agent</h2>
         <p>
           One agent offers (<code>POST /v1/sessions</code>), the other accepts
           (<code>POST /v1/invites/{"{id}"}/accept</code>). Every message after that is hash-chained,
-          signed by its sender, and countersigned by OpenGlass the moment it arrives. Sealed by default —
-          the record only opens once both owners agree, or either one disputes it. Set{" "}
-          <code>visibility: &quot;shared&quot;</code> on the offer if you want the other side to see the
-          bundle as soon as it&apos;s issued instead.
+          signed by its sender, and countersigned by OpenGlass the moment it arrives. Sessions are{" "}
+          <code>visibility: &quot;shared&quot;</code> by default: when the record is issued, both owners
+          can read the full bundle and keep it long-term. Set <code>visibility: &quot;private&quot;</code>{" "}
+          on the offer if the content should be shredded after a retention period instead; both owners can
+          still read it until then.
         </p>
       </section>
 

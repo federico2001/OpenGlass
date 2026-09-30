@@ -667,7 +667,7 @@ export interface paths {
         head?: never;
         /**
          * Set or clear the agent's default visibility (realignment R4)
-         * @description Used when a session/attestation-open request this agent makes omits `visibility` itself (docs/SPEC.md §13/§15) — checked ahead of the platform default (sealed for sessions, private for attestations). `null` clears the override.
+         * @description Used when a session/attestation-open request this agent makes omits `visibility` itself (docs/SPEC.md §13/§15) — checked ahead of the platform default (shared for sessions, private for attestations; "sealed" is deprecated). `null` clears the override.
          */
         patch: operations["setAgentVisibilityDefault"];
         trace?: never;
@@ -1015,10 +1015,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Force-unseal a sealed record, bypassing mutual consent (realignment R1)
-         * @description Owner-authenticated, participant-only. Either participant owner can dispute a sealed record without the other's consent, immediately granting full-content access to both sides — for fairness (docs/SPEC.md §13.2).
+         * Flag a two-party record as disputed (docs/SPEC.md §13.2)
+         * @description Owner-authenticated, participant-only. Either participant owner can dispute a two-party session record of any visibility, once. The dispute is a flag: it counts toward each participant agent's openDisputesCount and emails the other owner, but changes and opens nothing, except that it still force-unseals a legacy sealed record that isn't unsealed yet.
          */
-        post: operations["disputeSeal"];
+        post: operations["disputeRecord"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1215,7 +1215,7 @@ export interface components {
         /** @enum {string} */
         Mode: "relay" | "notary";
         /**
-         * @description Realignment R1 (docs/SPEC.md §13). A sibling request-body field, not part of the signed offer/open object. Sessions default to "sealed"; attestations default to "private". A "private" request gracefully degrades to "sealed" when the platform hasn't been configured with content encryption.
+         * @description Realignment R1 (docs/SPEC.md §13). A sibling request-body field, not part of the signed offer/open object. Sessions default to "shared"; attestations default to "private". "sealed" is deprecated for new records: still accepted when requested explicitly, never a default. A "private" request gracefully degrades to "sealed" when the platform hasn't been configured with content encryption.
          * @enum {string}
          */
         Visibility: "private" | "sealed" | "shared";
@@ -1493,7 +1493,13 @@ export interface components {
             };
             createdAt: components["schemas"]["Timestamp"];
             visibility: components["schemas"]["Visibility"] | null;
+            dispute: components["schemas"]["Dispute"];
             sealedState: components["schemas"]["SealedState"];
+        };
+        /** @description docs/SPEC.md §13.2. The one dispute flag per record, or null if nobody has disputed it. */
+        Dispute: null | {
+            disputedBy: components["schemas"]["OwnerId"];
+            disputedAt: components["schemas"]["Timestamp"];
         };
         ViewerGrant: {
             id: string;
@@ -1588,7 +1594,7 @@ export interface components {
             issuedAt: components["schemas"]["Timestamp"];
             sealedState: components["schemas"]["SealedState"];
         };
-        /** @description Realignment R1 (docs/SPEC.md §13.2). Present only for visibility:"sealed" records. */
+        /** @description docs/SPEC.md §13.2. Present only for (deprecated) visibility:"sealed" records. */
         SealedState: null | {
             /** @enum {string} */
             status: "sealed" | "unseal_requested" | "unsealed" | "disputed";
@@ -1598,9 +1604,10 @@ export interface components {
             disputedBy?: components["schemas"]["OwnerId"] | null;
             disputedAt?: components["schemas"]["Timestamp"] | null;
         };
-        /** @description Response shape for the three unseal/dispute actions (docs/SPEC.md §13.2). */
+        /** @description Response shape for the dispute and unseal actions (docs/SPEC.md §13.2). */
         SealedStateEnvelope: {
             visibility: components["schemas"]["Visibility"] | null;
+            dispute: components["schemas"]["Dispute"];
             sealedState: components["schemas"]["SealedState"];
         };
         VerifyResult: {
@@ -2398,7 +2405,7 @@ export interface operations {
                 "application/json": {
                     offer: components["schemas"]["Offer"];
                     offerSignature: components["schemas"]["Signature"];
-                    /** @description Realignment R1 (docs/SPEC.md §13). Defaults to "sealed" when omitted. */
+                    /** @description docs/SPEC.md §13. Defaults to "shared" when omitted (both participant owners read the full record). "sealed" is deprecated. */
                     visibility?: components["schemas"]["Visibility"];
                 };
             };
@@ -3782,7 +3789,7 @@ export interface operations {
             };
         };
     };
-    disputeSeal: {
+    disputeRecord: {
         parameters: {
             query?: never;
             header?: never;
@@ -3804,7 +3811,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            /** @description Not visibility:"sealed", or already fully unsealed */
+            /** @description already_disputed (the record already carries a dispute) or not_disputable (a one-party attestation record) */
             409: {
                 headers: {
                     [name: string]: unknown;

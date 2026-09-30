@@ -14,7 +14,7 @@ describe("skill.md", () => {
       "Look up a counterparty",
       "Register and get claimed",
       "Attest a high-risk action (private by default)",
-      "Run a sealed session with another agent",
+      "Run a witnessed session with another agent",
       "Verify",
     ]);
   });
@@ -55,5 +55,23 @@ describe("llms.txt / llms-full.txt", () => {
       const body = content.replaceAll("{{PUBLIC_URL}}", "https://openglass.glass").replaceAll("{{MCP_URL}}", "https://mcp.openglass.glass");
       expect(body).not.toMatch(/\{\{[A-Z_]+\}\}/);
     }
+  });
+});
+
+/** SPEC §13: sessions default to shared (both owners read the full record from the start);
+ * sealed is deprecated. Every agent-facing surface should say so, and lead with the witness. */
+describe("session visibility default, as agents are told it", () => {
+  it("skill.md says sessions default to shared and sealed is deprecated", () => {
+    expect(SKILL_MD).toContain('visibility defaults to "shared"');
+    expect(SKILL_MD).toContain("`sealed` is\n  deprecated");
+    expect(SKILL_MD).not.toContain('visibility defaults to "sealed"');
+    expect(SKILL_MD).toContain("neutral witness");
+  });
+
+  it("llms.txt and llms-full.txt lead with the witness and state the shared default", () => {
+    expect(LLMS_TXT).toContain("The neutral witness for agent-to-agent interactions");
+    expect(LLMS_FULL_TXT).toContain("neutral witness");
+    expect(LLMS_FULL_TXT).toContain("Sessions default `shared`");
+    expect(LLMS_FULL_TXT).not.toContain("Sessions default `sealed`");
   });
 });

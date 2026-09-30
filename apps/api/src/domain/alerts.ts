@@ -99,8 +99,9 @@ export async function notifyHighRiskAction(
   );
 }
 
-/** Fires from POST /v1/records/{id}/dispute (realignment R1) — notifies every participant
- * owner OTHER than the one who raised the dispute. */
+/** Fires from POST /v1/records/{id}/dispute (docs/SPEC.md §13.2) — notifies every
+ * participant owner OTHER than the one who raised the dispute. `forceUnsealed` is true only
+ * for a legacy sealed record the dispute just opened. */
 export async function notifyDisputeRaised(
   db: Db,
   mailer: Mailer,
@@ -109,6 +110,7 @@ export async function notifyDisputeRaised(
   participantOwnerIds: string[],
   disputedByOwnerId: string,
   publicUrl: string,
+  forceUnsealed = false,
 ): Promise<void> {
   const owners = ownersRepository(db);
   const recordUrl = `${publicUrl}/dashboard`;
@@ -116,7 +118,9 @@ export async function notifyDisputeRaised(
     if (ownerId === disputedByOwnerId) continue;
     const owner = await owners.findById(ownerId);
     await maybeSend({ mailer, log }, owner, () =>
-      mailer.sendOversightAlert(owner!.email, "dispute_raised", `Record ${recordId} was disputed by the other owner and is now fully unsealed.`, recordUrl),
+      mailer.sendOversightAlert(owner!.email, "dispute_raised", forceUnsealed
+          ? `Record ${recordId} was disputed by the other owner and is now fully unsealed.`
+          : `Record ${recordId} was disputed by the other owner.`, recordUrl),
     );
   }
 }

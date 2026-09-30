@@ -6,19 +6,19 @@ import { TwinPane } from "../components/TwinPane";
 describe("GET / (home)", () => {
   const html = renderToStaticMarkup(<Home />);
 
-  it("renders the R5 headline, subhead, and links to both onward audiences", () => {
-    expect(html).toContain("Know who your agent is talking to.");
-    expect(html).toContain("Private by default.");
+  it("leads with the neutral witness, plus lookup, and links to both onward audiences", () => {
+    expect(html).toContain("The neutral witness for agent-to-agent interactions");
+    expect(html).toContain("Know who your agent is talking to, and keep a record both sides trust.");
+    expect(html).toContain("favors neither");
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('href="/agents"');
   });
 
-  it("covers all five R5 pillars", () => {
-    expect(html).toContain("Who&#x27;s on the other side");
-    expect(html).toContain("What your agent did");
-    expect(html).toContain("Stay in control");
-    expect(html).toContain("Your records, your rules");
-    expect(html).toContain("Proof when you need it");
+  it("covers all five pillars, with the shared record second", () => {
+    const order = ["Who&#x27;s on the other side", "One record, both sides", "What your agent did", "Stay in control", "Your records, your rules"];
+    const positions = order.map((h) => html.indexOf(`<h2>${h}</h2>`));
+    expect(positions.every((p) => p >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
     // Realignment R4 item 3 (instruction tracing) was deliberately deferred — the homepage
     // must not claim a capability that doesn't exist yet.
     expect(html).not.toContain("instruction tracing");
@@ -41,12 +41,18 @@ describe("GET / (home)", () => {
     expect(html).toContain("Can someone impersonate my brand?");
   });
 
-  it("drops the old neutral-witness/court framing", () => {
-    expect(html).not.toContain("Every agent conversation, on the record.");
-    expect(html).not.toContain("neutral witness");
+  it("keeps the witness framing without court/legal-team language", () => {
+    expect(html).toContain("the witness in the middle");
     expect(html).not.toContain("never looks away");
     expect(html).not.toContain("court");
     expect(html).not.toContain("legal team");
+  });
+
+  it("says both owners see a session record from the start, with no unseal ceremony", () => {
+    expect(html).toContain("both owners get the same record, in full, from the start");
+    expect(html).not.toMatch(/unseal/i);
+    expect(html).not.toMatch(/\bsealed\b/i);
+    expect(html).not.toContain("force-opens");
   });
 
   it("answers the concrete technical questions a reviewing agent would ask", () => {

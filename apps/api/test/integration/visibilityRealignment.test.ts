@@ -1,4 +1,4 @@
-import { base64UrlEncode, canonicalizeToBytes, newId, sha256, signEd25519, sigInput, verifyBundle, type RecordBundle, type RecordDoc } from "@openglass/db";
+import { base64UrlEncode, canonicalizeToBytes, findRecordById, insertRecord, newId, sha256, signEd25519, sigInput, verifyBundle, type RecordBundle, type RecordDoc } from "@openglass/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { openTestDb } from "../../../../packages/db/test/testDb.js";
 import { openTestS3 } from "../../../../packages/db/test/testS3.js";
@@ -212,6 +212,18 @@ describe("visibility: sealed — receipt-only until mutual unseal or dispute", (
     expect(bundle.json().type).toBe("openglass.bundle");
   });
 
+  it("a second dispute is rejected", async () => {
+    const deps = testServerDeps(t, { client: s3.client, bucket: s3.bucket });
+    const app = buildServer({ ...deps, healthChecks: {} });
+    const { alice, bob, recordId } = await buildClosedSessionRecord({ app, signer: deps.signer, visibility: "sealed", contentEncryption: null });
+    const headers = (cookie: string) => ({ cookie, origin: "https://localhost", "content-type": "application/json" });
+    const first = await app.inject({ method: "POST", url: `/v1/records/${recordId}/dispute`, headers: headers(await createOwnerSessionCookie(t.db, bob.ownerId)) });
+    expect(first.statusCode).toBe(200);
+    const second = await app.inject({ method: "POST", url: `/v1/records/${recordId}/dispute`, headers: headers(await createOwnerSessionCookie(t.db, alice.ownerId)) });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error.code).toBe("already_disputed");
+  });
+
   it("rejects unseal actions from an owner who isn't a participant", async () => {
     const deps = testServerDeps(t, { client: s3.client, bucket: s3.bucket });
     const app = buildServer({ ...deps, healthChecks: {} });
@@ -225,6 +237,66 @@ describe("visibility: sealed — receipt-only until mutual unseal or dispute", (
       headers: { cookie: outsiderCookie, origin: "https://localhost", "content-type": "application/json" },
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("visibility: shared (the session default) — both owners read the full record from the start", () => {
+  it("defaults a session to shared and gives both owners the full bundle immediately", async () => {
+    const deps = testServerDeps(t, { client: s3.client, bucket: s3.bucket });
+    const app = buildServer({ ...deps, healthChecks: {} });
+    const { alice, bob, recordId } = await buildClosedSessionRecord({ app, signer: deps.signer, contentEncryption: null });
+    for (const ownerId of [alice.ownerId, bob.ownerId]) {
+      const bundle = await getBundle(app, recordId, await createOwnerSessionCookie(t.db, ownerId));
+      expect(bundle.statusCode).toBe(200);
+      expect(bundle.json().type).toBe("openglass.bundle");
+      expect(bundle.json().record.statement.visibility).toBe("shared");
+    }
+  });
+
+  it("a dispute flags the record, opens nothing, and counts on lookup", async () => {
+    const deps = testServerDeps(t, { client: s3.client, bucket: s3.bucket });
+    const app = buildServer({ ...deps, healthChecks: {} });
+    const { alice, bob, recordId } = await buildClosedSessionRecord({ app, signer: deps.signer, contentEncryption: null });
+    const bobCookie = await createOwnerSessionCookie(t.db, bob.ownerId);
+
+    const disputeRes = await app.inject({
+      method: "POST",
+      url: `/v1/records/${recordId}/dispute`,
+      headers: { cookie: bobCookie, origin: "https://localhost", "content-type": "application/json" },
+    });
+    expect(disputeRes.statusCode).toBe(200);
+    expect(disputeRes.json()).toMatchObject({ visibility: "shared", dispute: { disputedBy: bob.ownerId }, sealedState: null });
+
+    const record = await app.inject({ method: "GET", url: `/v1/records/${recordId}`, headers: { cookie: bobCookie } });
+    expect(record.json().record.dispute.disputedBy).toBe(bob.ownerId);
+
+    const lookup = await app.inject({ method: "GET", url: `/v1/lookup?agentId=${alice.identity.agentId}` });
+    expect(lookup.statusCode).toBe(200);
+    expect(lookup.json().openDisputesCount).toBe(1);
+  });
+});
+
+describe("disputes are between two sides", () => {
+  it("refuses to dispute a one-party (attestation-shaped) record", async () => {
+    const deps = testServerDeps(t, { client: s3.client, bucket: s3.bucket });
+    const app = buildServer({ ...deps, healthChecks: {} });
+    const { bob, recordId } = await buildClosedSessionRecord({ app, signer: deps.signer, contentEncryption: null });
+    const source = await findRecordById(t.db, recordId);
+    const onePartyId = newId("rec");
+    await insertRecord(t.db, {
+      ...source!,
+      _id: onePartyId,
+      sessionId: newId("ses"),
+      participantOwnerIds: [bob.ownerId],
+      participantAgentIds: [source!.participantAgentIds[1]!],
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/records/${onePartyId}/dispute`,
+      headers: { cookie: await createOwnerSessionCookie(t.db, bob.ownerId), origin: "https://localhost", "content-type": "application/json" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("not_disputable");
   });
 });
 

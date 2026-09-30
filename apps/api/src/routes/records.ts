@@ -7,7 +7,7 @@ import { sendError } from "../errors.js";
 import { verifyAgentOrOwner } from "../plugins/agentOrOwnerAuth.js";
 import type { ServerDeps } from "../server.js";
 
-/** `sealed`-visibility records give a receipt-only response until both owners consent to
+/** Legacy `sealed`-visibility records (deprecated for new records) give a receipt-only response until both owners consent to
  * unseal, or either disputes (docs/SPEC.md §13.2) — deliberately narrower than `recordView`/
  * the full bundle: no `purpose` (the one statement field most likely to carry real content)
  * and no `evidence` at all. `shared`/`private` records, and a `sealed` one that's since been
@@ -55,6 +55,7 @@ function recordView(doc: RecordDoc) {
     // Realignment R1/R4 (docs/SPEC.md §13.2, §15): lets a caller show sealing state (and
     // offer unseal/dispute actions) without needing the full bundle first.
     visibility: doc.visibility ?? null,
+    dispute: doc.dispute ? { disputedBy: doc.dispute.disputedBy, disputedAt: doc.dispute.disputedAt.toISOString() } : null,
     sealedState: doc.sealedState
       ? {
           status: doc.sealedState.status,

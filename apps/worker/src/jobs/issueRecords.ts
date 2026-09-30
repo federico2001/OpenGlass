@@ -137,12 +137,14 @@ export async function issueRecords(deps: IssueRecordsDeps): Promise<{ issued: nu
     const issuedAt = new Date().toISOString();
     // The initiator's own retention preference governs a private session record — they're
     // the one who opted into visibility: "private" in the first place (the default is
-    // "sealed"), so their agent's own override (or the platform default) applies rather
-    // than picking between two potentially-different owners' settings.
+    // "shared"), so their agent's own override (or the platform default) applies rather
+    // than picking between two potentially-different owners' settings. The API stores the
+    // resolved visibility on every session it creates, so this fallback only reaches
+    // sessions created before the field existed, which SPEC §13 treats as shared.
     const initiatorAgent = await agents.findById(session.initiator.agentId!);
     const resolved = await resolveRecordVisibility({
       requestedVisibility: session.visibility,
-      defaultVisibility: "sealed",
+      defaultVisibility: "shared",
       ownerRetentionDaysOverride: initiatorAgent?.privateRetentionDays,
       issuedAt,
       evidence,

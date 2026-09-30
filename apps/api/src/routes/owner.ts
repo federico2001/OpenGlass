@@ -62,7 +62,7 @@ const PatchAgentBody = z.strictObject({ publicDirectory: z.boolean() });
 const RetentionBody = z.strictObject({ privateRetentionDays: z.int().min(1).max(3650).nullable() });
 
 /** Realignment R4 (docs/SPEC.md §13/§15). `null` clears the override, falling back to the
- * platform default (sealed for sessions, private for attestations) — see
+ * platform default (shared for sessions, private for attestations) — see
  * apps/api/src/domain/visibility.ts's `effectiveVisibility`. Only affects a session/
  * attestation-open request that doesn't set `visibility` itself. */
 const VisibilityDefaultBody = z.strictObject({ defaultVisibility: Visibility.nullable() });

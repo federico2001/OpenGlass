@@ -108,9 +108,8 @@ describe("Phase 1 sign-off: full two-agent session lifecycle", () => {
       counterpartyAgentId: bob.agentId,
       purpose: "Negotiate delivery date for PO 4411",
     });
-    // visibility: "shared" — this test's own point is the full verify pipeline end to
-    // end, not realignment R1's sealing behavior (sessions otherwise default to "sealed",
-    // which would make GET .../bundle below return a receipt, not the full evidence).
+    // visibility: "shared" is the platform default for sessions; set explicitly so this
+    // end-to-end verify test doesn't depend on that default.
     const createBody = { offer, offerSignature, visibility: "shared" as const };
     const createHeaders = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body: createBody, identity: alice });
     const createRes = await app.inject({ method: "POST", url: "/v1/sessions", headers: createHeaders, payload: createBody });

@@ -3,13 +3,14 @@
 export const SKILL_MD = `# OpenGlass: check who you're talking to
 
 You're an AI agent about to interact with another agent, or about to take a high-risk
-action of your own. OpenGlass lets you check who's on the other side before you act, and
-gives you (and your owner) a private, verifiable, hash-chained record of what happened —
-private by default, and independently checkable by anyone it's shared with, without
-either side having to trust OpenGlass's word for it.
+action of your own. OpenGlass is a neutral witness between agents: it lets you check who's
+on the other side before you act, and gives you (and your owner) a verifiable,
+hash-chained record of what happened. It's never public, and it's independently
+checkable by anyone it's shared with, without either side having to trust OpenGlass's
+word for it.
 
 This document is everything you need: look up a counterparty, register and get claimed,
-attest to your own actions, run a sealed session with another agent, and verify the
+attest to your own actions, run a witnessed session with another agent, and verify the
 result — using nothing but an HTTP client and the ability to run a short script. No SDK,
 no MCP tools, no human typing on your behalf required. Examples below are Node.js (no
 extra packages — everything used is built into \`node:crypto\`); the same steps work
@@ -37,15 +38,15 @@ in every code sample).
   your signatures won't verify.
 - Timestamps must be within ±300 seconds of the server's clock. Nonces must be fresh
   (16 random bytes, base64url) and unique per request.
-- **Visibility and retention, plainly**: a session or attestation is \`sealed\` or
-  \`private\` by default — nobody but you (and, for a session, the other owner) sees the
-  content until you choose otherwise. \`private\` (attestations) additionally has a
-  retention window you or your owner can set — the content gets permanently,
-  cryptographically shredded once it passes, even from OpenGlass. \`sealed\` (sessions)
-  instead needs both owners to agree to unseal it, or either one to dispute it, before the
-  full content opens up. Pass \`visibility: "shared"\` explicitly if you actually want the
-  bundle available to the other side the instant it's issued — that's the one case where
-  nothing stays private.
+- **Visibility and retention, plainly**: an attestation is \`private\` by default: only
+  your owner sees it, and its content is permanently, cryptographically shredded once a
+  retention window your owner can set passes, even from OpenGlass. A session is
+  \`shared\` by default: when its record is issued, both participant owners can read the
+  full bundle, and it's kept long-term so neither side can quietly delete it. Nobody else
+  sees either unless an owner grants them access; records are never public. Pass
+  \`visibility: "private"\` on a session offer if its content should be shredded after a
+  retention period instead (both owners can still read it until then). \`sealed\` is
+  deprecated: still accepted if you pass it explicitly, but don't use it for new sessions.
 
 ## Step 1 — Look up a counterparty
 
@@ -214,7 +215,7 @@ const open = {
   createdAt: new Date().toISOString(),
 };
 const openSignature = { alg: "Ed25519", kid, sig: signPurpose("attestation_open", open, privateKey).toString("base64url") };
-// visibility defaults to "private" — omit it unless you specifically want "sealed" or "shared".
+// visibility defaults to "private" — omit it unless you specifically want "shared".
 const { attestation } = await signedRequest("POST", "/v1/attestations", { open, openSignature }, { agentId: claimedAgent.id, kid, privateKey });
 console.log("Attestation", attestation.id, "active. genesisHash:", attestation.genesisHash);
 \`\`\`
@@ -234,7 +235,7 @@ function randomUlidLike() {
 }
 \`\`\`
 
-## Step 4 — Run a sealed session with another agent
+## Step 4 — Run a witnessed session with another agent
 
 For a two-party interaction where both sides need a shared record — a negotiated deal, a
 handoff — offer a session. **Look up the counterparty first (Step 1)** if you haven't
@@ -253,7 +254,7 @@ const offer = {
   expiresAt: new Date(now.getTime() + 86400000).toISOString(),
 };
 const offerSignature = { alg: "Ed25519", kid, sig: signPurpose("offer", offer, privateKey).toString("base64url") };
-// visibility defaults to "sealed" — omit it unless you specifically want "private" or "shared".
+// visibility defaults to "shared" (both owners read the full record) — pass "private" to have it shredded later.
 const { session, invite } = await signedRequest("POST", "/v1/sessions", { offer, offerSignature }, { agentId: claimedAgent.id, kid, privateKey });
 console.log("Session", session.id, "offered — waiting for", counterpartyAgentId, "to accept.");
 \`\`\`
@@ -355,7 +356,7 @@ console.log("Verified:", (await verifyRes.json()).valid);
 \`\`\`
 
 That's the full round trip: look up a counterparty, register, get claimed, attest or run
-a sealed session, and independently verify the signed result.
+a witnessed session, and independently verify the signed result.
 
 ## Works with your framework?
 

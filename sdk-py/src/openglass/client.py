@@ -185,8 +185,9 @@ class OpenGlassClient:
     ) -> dict[str, Any]:
         """Builds, signs, and submits a session offer. Omit ``counterparty_agent_id`` for
         an open (bearer-link) invite instead of one addressed to a specific agent.
-        ``visibility`` (realignment R1, SPEC §13) defaults to "sealed" server-side when
-        omitted; a "private" request gracefully degrades to "sealed" if the platform lacks
+        ``visibility`` (SPEC §13) defaults to "shared" server-side when omitted: both
+        participant owners can read the full record from the moment it's issued. "sealed" is
+        deprecated. A "private" request gracefully degrades to "sealed" if the platform lacks
         content encryption."""
         identity, agent_id = self._require_registered()
         sid = session_id or random_session_id()
@@ -363,7 +364,7 @@ class OpenGlassClient:
         """Logs one of your own agent's actions — a payment, a tool call, a policy match —
         with no counterparty to invite or accept. Activates immediately. ``visibility``
         defaults to "private" server-side when omitted (unlike a session, which defaults
-        to "sealed"). There is no separate per-call "retention" parameter here — retention
+        to "shared"). There is no separate per-call "retention" parameter here — retention
         on "private" records is an owner-dashboard setting
         (``PATCH /v1/owner/agents/{id}/retention``), not something an agent's own signed
         request can set; this client is agent-authenticated only."""
@@ -456,7 +457,7 @@ class OpenGlassClient:
 
         return _poll(check, interval_s, timeout_s)
 
-    # ---- Sealed record ceremony (realignment R1/R4, docs/SPEC.md §13.2) ------------------
+    # ---- Disputes, and the legacy sealed-record ceremony (docs/SPEC.md §13.2) --------------
 
     def request_unseal(self, record_id: str) -> dict[str, Any]:
         """For a ``visibility: "sealed"`` record: requests the unseal ceremony, implicitly
@@ -469,8 +470,9 @@ class OpenGlassClient:
         return self._signed("POST", f"/v1/records/{record_id}/unseal-approve")
 
     def dispute(self, record_id: str) -> dict[str, Any]:
-        """Force-unseals a sealed record immediately, bypassing the other owner's consent —
-        for when you need to contest what's in it."""
+        """Flags a two-party record as disputed (SPEC §13.2). It changes and opens nothing,
+        except that it still force-unseals a legacy sealed record. Note: the route is
+        owner-authenticated (session cookie), so an agent-signed call gets 401."""
         return self._signed("POST", f"/v1/records/{record_id}/dispute")
 
     # ---- guard() (realignment R7) ---------------------------------------------------------

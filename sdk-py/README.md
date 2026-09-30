@@ -1,7 +1,7 @@
 # openglass-sdk
 
-Know who your agent is talking to — lookup, private attestations and sealed records for AI
-agents. Official Python client for [OpenGlass](https://github.com/federico2001/OpenGlass).
+The neutral witness for agent-to-agent interactions — lookup, private attestations, and
+witnessed sessions whose signed record both owners can read. Official Python client for [OpenGlass](https://github.com/federico2001/OpenGlass).
 
 `pip install openglass-sdk`, `import openglass` — the PyPI distribution name has the `-sdk`
 suffix (plain `openglass` was already taken), but the importable module stays `openglass`.
@@ -36,7 +36,7 @@ client.close_attestation(attestation["id"])
 record_id = client.wait_for_attestation_record(attestation["id"])
 ```
 
-Or run a full two-party, sealed session with another agent:
+Or run a full two-party, witnessed session with another agent:
 
 ```python
 session = client.offer_session(purpose="...", counterparty_agent_id="agt_...")["session"]
@@ -88,8 +88,8 @@ ergonomic wrapper around exactly that same flow.
 - **Attestations**: a one-party record of your own agent's action — private by default, no
   counterparty, no invite, activates immediately.
 - **Sessions**: two agents exchange a signed `offer`/`accept` (the "genesis" of a hash chain),
-  then zero or more signed, hash-chained messages, then a signed `close`. Sealed by default — the
-  record only opens once both owners agree, or either disputes it. OpenGlass countersigns every
+  then zero or more signed, hash-chained messages, then a signed `close`. Shared by default: both
+  owners can read the full record from the moment it's issued. OpenGlass countersigns every
   step, so the whole exchange is tamper-evident even to OpenGlass itself after the fact.
 - **Records & verification**: once closed, OpenGlass issues a signed `RecordBundle` — the full
   evidence trail plus its own countersignatures. `client.verify(bundle)` (or the standalone
@@ -135,7 +135,7 @@ development (e.g. a docker-compose stack) or a different deployment.
 
 | Method | Description |
 | --- | --- |
-| `offer_session(purpose, counterparty_agent_id=None, ..., visibility=None)` | Builds, signs, and submits a session offer. Omit `counterparty_agent_id` for an open (bearer-link) invite. Sealed by default. |
+| `offer_session(purpose, counterparty_agent_id=None, ..., visibility=None)` | Builds, signs, and submits a session offer. Omit `counterparty_agent_id` for an open (bearer-link) invite. Shared by default (`"sealed"` is deprecated). |
 | `get_session(session_id)` / `wait_for_active(session_id, ...)` | Fetch or poll-until-active a session. |
 | `list_invites()` | Direct invites addressed to you. |
 | `accept_invite(invite_id, token=None)` | Accepts an invite (pass `token` for an open/bearer-link invite). |
@@ -149,17 +149,20 @@ development (e.g. a docker-compose stack) or a different deployment.
 | `witness(send, client, session_id)` | Wraps an *existing* send function so every call is witnessed first, then delivered — see below. |
 | `close_session(session_id)` | Signs and submits a close statement. |
 | `wait_for_record(session_id, ...)` | Polls until the session is closed and a record has been issued; returns the `record_id`. |
-| `get_record_bundle(record_id)` | Fetches the full evidence bundle (a receipt instead, if still sealed and unresolved). |
+| `get_record_bundle(record_id)` | Fetches the full evidence bundle (a receipt instead, for a legacy sealed record not yet unsealed). |
 | `verify(bundle)` / `verify_bundle(bundle, trusted_keys)` | Offline, local verification (SPEC §7.6) — no trust in OpenGlass required. |
 | `verify_remote(bundle)` | Same check run server-side via `POST /v1/verify`, for when you'd rather not implement local verification. |
 
-### Sealed record ceremony
+### Disputes and legacy sealed records
+
+These routes are owner-authenticated (the dashboard's session cookie); the client signs them
+as an agent, so they currently return 401 from an agent identity.
 
 | Method | Description |
 | --- | --- |
-| `request_unseal(record_id)` | Requests the unseal ceremony for a `visibility: "sealed"` record; counts your own approval. |
+| `dispute(record_id)` | Flags a two-party record as disputed. Opens nothing, except that it force-unseals a legacy sealed record. |
+| `request_unseal(record_id)` | Requests the unseal ceremony for a legacy `visibility: "sealed"` record; counts your own approval. |
 | `approve_unseal(record_id)` | Adds your approval; fully unseals once every participant owner has called this. |
-| `dispute(record_id)` | Force-unseals immediately, bypassing the other owner's consent. |
 
 ### `guard()`: a pre-flight counterparty check for risky actions
 
@@ -207,8 +210,9 @@ error code/message, `err.method`/`err.path`). A `wait_*` call that exceeds its `
 ## Upgrading from 0.1.x
 
 0.2.0 is purely additive — every 0.1.x method keeps its existing signature and behavior
-unchanged. `offer_session`'s new `visibility` keyword is optional (still defaults to `"sealed"`,
-exactly as before).
+unchanged. `offer_session`'s new `visibility` keyword is optional. (At 0.2.0's release the
+server defaulted sessions to `"sealed"`; since Sept 30 2026 it defaults them to `"shared"`. See
+the changelog.)
 
 ## Contributing
 

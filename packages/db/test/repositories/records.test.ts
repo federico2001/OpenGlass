@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { migrate } from "../../src/migrate.js";
 import { records, type RecordDoc } from "../../src/models/collections.js";
-import { approveUnseal, disputeSeal, requestUnseal, shredContent } from "../../src/repositories/records.js";
+import { approveUnseal, disputeRecord, requestUnseal, shredContent } from "../../src/repositories/records.js";
 import { validDocs } from "../fixtures.js";
 import { openTestDb } from "../testDb.js";
 
@@ -111,16 +111,40 @@ describe("records repository: sealed unseal/dispute state machine (realignment R
     expect(updated!.sealedState!.approvals).toEqual([OWNER_A]);
   });
 
-  it("disputeSeal force-unseals from plain sealed, bypassing the mutual-consent ceremony", async () => {
+  it("disputeRecord on a legacy sealed record flags it and force-unseals it (the rule it was issued under)", async () => {
     const doc = sealedRecord();
     await insert(doc);
-    const updated = await disputeSeal(t.db, doc._id, OWNER_B);
+    const updated = await disputeRecord(t.db, doc._id, OWNER_B);
+    expect(updated!.dispute).toEqual({ disputedBy: OWNER_B, disputedAt: expect.any(Date) });
     expect(updated!.sealedState).toEqual({ status: "disputed", requestedBy: null, approvals: [], unsealedAt: null, disputedBy: OWNER_B, disputedAt: expect.any(Date) });
   });
 
-  it("disputeSeal refuses (returns null) a record that's already fully unsealed", async () => {
-    const doc = sealedRecord({ sealedState: { status: "unsealed", requestedBy: OWNER_A, approvals: [OWNER_A, OWNER_B], unsealedAt: new Date(), disputedBy: null, disputedAt: null } });
+  it("disputeRecord on an already-unsealed sealed record flags it without touching sealedState", async () => {
+    const sealedState = { status: "unsealed" as const, requestedBy: OWNER_A, approvals: [OWNER_A, OWNER_B], unsealedAt: new Date(), disputedBy: null, disputedAt: null };
+    const doc = sealedRecord({ sealedState });
     await insert(doc);
-    expect(await disputeSeal(t.db, doc._id, OWNER_A)).toBeNull();
+    const updated = await disputeRecord(t.db, doc._id, OWNER_A);
+    expect(updated!.dispute!.disputedBy).toBe(OWNER_A);
+    expect(updated!.sealedState!.status).toBe("unsealed");
+  });
+});
+
+describe("records repository: disputeRecord on shared/private records", () => {
+  it.each(["shared", "private"] as const)("flags a %s record and changes nothing else", async (visibility) => {
+    const doc = baseRecord({ visibility });
+    await insert(doc);
+    const updated = await disputeRecord(t.db, doc._id, OWNER_A);
+    expect(updated!.dispute).toEqual({ disputedBy: OWNER_A, disputedAt: expect.any(Date) });
+    const { dispute: _d, ...rest } = updated!;
+    expect(rest).toEqual(doc);
+  });
+
+  it("is set once: a second dispute returns null and keeps the first owner's", async () => {
+    const doc = baseRecord({ visibility: "shared" });
+    await insert(doc);
+    expect(await disputeRecord(t.db, doc._id, OWNER_A)).not.toBeNull();
+    expect(await disputeRecord(t.db, doc._id, OWNER_B)).toBeNull();
+    const stored = await t.db.collection<RecordDoc>(records.name).findOne({ _id: doc._id });
+    expect(stored!.dispute!.disputedBy).toBe(OWNER_A);
   });
 });

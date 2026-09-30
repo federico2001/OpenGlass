@@ -13,7 +13,7 @@ export default function SecurityPage() {
         <p className="label">Legal</p>
         <h1 className={styles.title}>Security</h1>
         <p className={styles.lede}>How the platform is built to be trusted, and how to tell us when it isn&apos;t.</p>
-        <p className={styles.updated}>Last updated: September 28, 2026</p>
+        <p className={styles.updated}>Last updated: September 30, 2026</p>
       </section>
 
       <div className={styles.callout}>
@@ -82,7 +82,7 @@ export default function SecurityPage() {
           <li>Non-secret configuration is stored in AWS SSM Parameter Store; secrets (the local signer key, database credentials, payment facilitator keys) are stored as SSM SecureStrings or in AWS KMS, never committed to source control or baked into a container image.</li>
           <li>The production host has no SSH access — operational access goes through AWS SSM Session Manager, which is authenticated and logged.</li>
           <li><code>sealed</code>- and <code>shared</code>-visibility evidence (and everything issued before September 2026, before visibility existed) is stored in object storage under S3 Object Lock in COMPLIANCE mode: once written, it can&apos;t be altered or deleted by anyone, including us, until its retention period passes. <code>private</code>-visibility evidence is encrypted per &sect;2 instead and is deletable by design, on a schedule its Owner chooses — see <a href="/privacy">Privacy Policy</a> &sect;7 for the full explanation of why these two cases are different.</li>
-          <li>Every collection has a MongoDB <code>$jsonSchema</code> validator in addition to application-level validation, and the <code>messages</code>/<code>attestations</code>/<code>records</code> collections expose only insert/read operations in code (plus, for <code>records</code>, the narrow set of state-machine updates the sealed-record unseal/dispute ceremony and private-record crypto-shredding need — never a general update or delete).</li>
+          <li>Every collection has a MongoDB <code>$jsonSchema</code> validator in addition to application-level validation, and the <code>messages</code>/<code>attestations</code>/<code>records</code> collections expose only insert/read operations in code (plus, for <code>records</code>, the narrow set of updates that disputes, the legacy sealed-record unseal ceremony, and private-record crypto-shredding need, none of which touches anything a signature or hash covers — never a general update or delete).</li>
         </ul>
 
         <h2 id="authn">5. Authentication</h2>
@@ -135,6 +135,7 @@ export default function SecurityPage() {
 
         <h2 id="changelog">9. Changelog</h2>
         <ul className={styles.changelog}>
+          <li><strong>September 30, 2026</strong> — &sect;4: the list of permitted record updates now includes the dispute flag, which may be set on any record and never touches signed content.</li>
           <li><strong>September 28, 2026</strong> — Added &sect;3 (domain verification), documenting a mechanism that existed but wasn&apos;t described on this page; extended &sect;2 with private-record envelope encryption; qualified &sect;4&apos;s Object Lock claim, which previously read as applying to all evidence without exception.</li>
           <li><strong>September 25, 2026</strong> — Initial page.</li>
         </ul>

@@ -89,7 +89,7 @@ export interface Session {
   lastActivityAt: string;
   expiresAt: string;
   /** Realignment R1 (docs/SPEC.md §13). Absent on a session issued before this field
-   * existed. Defaults to "sealed" when the caller didn't request one at creation. */
+   * existed. Defaults to "shared" when the caller didn't request one at creation. */
   visibility?: Visibility;
   /** Prompt 6: set while an agent has paused this session pending its owner's review. */
   pause: { requestedBy: string; reason: string; requestedAt: string } | null;
@@ -310,9 +310,10 @@ export class OpenGlassClient {
     sessionId?: string;
     idleTimeoutSec?: number;
     ttlMs?: number;
-    /** Realignment R1 (docs/SPEC.md §13). Defaults to "sealed" when omitted. A "private"
-     * request gracefully degrades to "sealed" server-side if content encryption isn't
-     * configured there. */
+    /** docs/SPEC.md §13. Defaults to "shared" when omitted: both participant owners can
+     * read the full record from the moment it's issued. "sealed" is deprecated. A
+     * "private" request gracefully degrades to "sealed" server-side if content encryption
+     * isn't configured there. */
     visibility?: Visibility;
   }): Promise<{ session: Session; invite: Invite & { token: string | null; url: string | null } }> {
     const identity = this.requireIdentity();
@@ -497,7 +498,7 @@ export class OpenGlassClient {
 
   /** Logs one of your own agent's actions — a payment, a tool call, a policy match — with
    * no counterparty to invite or accept. Activates immediately: no invite, no waiting on
-   * anyone. Private by default (unlike a session, which defaults to sealed). */
+   * anyone. Private by default (unlike a session, which defaults to shared). */
   async openAttestation(input: {
     purpose: string;
     mode?: Mode;
@@ -606,7 +607,7 @@ export class OpenGlassClient {
     }, opts);
   }
 
-  // ---- Sealed record ceremony (realignment R1/R4, docs/SPEC.md §13.2) ------------------
+  // ---- Disputes, and the legacy sealed-record ceremony (docs/SPEC.md §13.2) --------------
 
   /** For a `visibility: "sealed"` record: requests the unseal ceremony, implicitly counting
    * your own approval. Owner-authenticated in the REST API (a human decision on behalf of
@@ -622,8 +623,9 @@ export class OpenGlassClient {
     return signedRequest(this.baseUrl, "POST", `/v1/records/${recordId}/unseal-approve`, undefined, this.requireIdentity());
   }
 
-  /** Force-unseals a sealed record immediately, bypassing the other owner's consent — for
-   * when you need to contest what's in it. */
+  /** Flags a two-party record as disputed (docs/SPEC.md §13.2). It changes and opens
+   * nothing, except that it still force-unseals a legacy sealed record. Note: the route is
+   * owner-authenticated (session cookie), so an agent-signed call gets 401. */
   async dispute(recordId: string): Promise<{ record: { id: string; sealedState: SealedState } }> {
     return signedRequest(this.baseUrl, "POST", `/v1/records/${recordId}/dispute`, undefined, this.requireIdentity());
   }

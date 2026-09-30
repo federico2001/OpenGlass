@@ -16,8 +16,9 @@ import { ApiError, type ApiClient, type RequestAuth } from "./apiClient.js";
 
 /** Realignment R1 (docs/SPEC.md §13). A sibling field alongside offer/open, never part of
  * the signed object — mirrors apps/api/src/domain/visibility.ts's own Visibility schema.
- * Sessions default "sealed"; attestations default "private". A "private" request
- * gracefully degrades to "sealed" server-side if content encryption isn't configured. */
+ * Sessions default "shared"; attestations default "private". "sealed" is deprecated for
+ * new records. A "private" request gracefully degrades to "sealed" server-side if content
+ * encryption isn't configured. */
 const Visibility = z.enum(["private", "sealed", "shared"]);
 
 const RequestAuthSchema = z.object({
@@ -99,7 +100,7 @@ export function registerTools(server: McpServer, api: ApiClient): void {
         offer: Offer,
         offerSignature: Signature,
         visibility: Visibility.optional().describe(
-          'Realignment R1 (SPEC §13). Defaults to "sealed" when omitted. "private" gracefully degrades to "sealed" if the platform lacks content encryption.',
+          'SPEC §13. Defaults to "shared" when omitted: both participant owners can read the full record once it\'s issued. "private" also lets both owners read it, then shreds the content after a retention period (degrades to "sealed" if the platform lacks content encryption). "sealed" is deprecated.',
         ),
         auth: RequestAuthSchema,
       },
@@ -126,7 +127,7 @@ export function registerTools(server: McpServer, api: ApiClient): void {
         offer: Offer,
         offerSignature: Signature,
         visibility: Visibility.optional().describe(
-          'Realignment R1 (SPEC §13). Defaults to "sealed" when omitted. "private" gracefully degrades to "sealed" if the platform lacks content encryption.',
+          'SPEC §13. Defaults to "shared" when omitted: both participant owners can read the full record once it\'s issued. "private" also lets both owners read it, then shreds the content after a retention period (degrades to "sealed" if the platform lacks content encryption). "sealed" is deprecated.',
         ),
         auth: RequestAuthSchema,
       },

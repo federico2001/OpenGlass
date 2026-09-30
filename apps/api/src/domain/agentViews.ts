@@ -77,7 +77,7 @@ export function agentFullView(doc: AgentDoc) {
     privateRetentionDays: doc.privateRetentionDays ?? null,
     /** Realignment R4 (docs/SPEC.md §13/§15): owner override for the visibility a
      * session/attestation this agent opens gets when the open request itself omits it.
-     * `null` means "use the platform default" (sealed for sessions, private for
+     * `null` means "use the platform default" (shared for sessions, private for
      * attestations) — see apps/api/src/domain/visibility.ts's `effectiveVisibility`. */
     defaultVisibility: doc.defaultVisibility ?? null,
   };

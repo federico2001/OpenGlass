@@ -206,7 +206,12 @@ async function computeActivityFacts(db: Db, agentId: string, now: Date): Promise
 }
 
 async function countOpenDisputes(db: Db, agentId: string): Promise<number> {
-  return db.collection<RecordDoc>(records.name).countDocuments({ participantAgentIds: agentId, "sealedState.status": "disputed" });
+  // `dispute` is the flag on any record (SPEC §13.2); legacy sealed records disputed before
+  // that field existed only carry `sealedState.status: "disputed"`.
+  return db.collection<RecordDoc>(records.name).countDocuments({
+    participantAgentIds: agentId,
+    $or: [{ dispute: { $type: "object" } }, { "sealedState.status": "disputed" }],
+  });
 }
 
 async function buildUnregisteredResult(query: LookupQuery, publicUrl: string): Promise<UnregisteredLookupResult> {

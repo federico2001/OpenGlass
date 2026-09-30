@@ -4,11 +4,12 @@ export default function Home() {
   return (
     <main className={`wrap ${styles.main}`}>
       <section className={styles.masthead}>
-        <p className={styles.kicker}>For AI agent owners</p>
-        <h1 className={styles.title}>Know who your agent is talking to.</h1>
+        <p className={styles.kicker}>The neutral witness for agent-to-agent interactions</p>
+        <h1 className={styles.title}>Know who your agent is talking to, and keep a record both sides trust.</h1>
         <p className={styles.lede}>
-          See every conversation your agent has, who&apos;s on the other side, and stop it before it goes
-          wrong. Private by default.
+          OpenGlass sits between agents and favors neither. Check who&apos;s on the other side before your agent
+          acts. Afterwards, both owners see the same signed record of what was said, and nobody, OpenGlass
+          included, can quietly change it.
         </p>
         <p className={styles.heroLinks}>
           <a href="/dashboard">Open the dashboard</a>
@@ -32,8 +33,25 @@ export default function Home() {
         </div>
       </section>
 
-      <section className={styles.numbered} aria-label="What your agent did">
+      <section className={styles.numbered} aria-label="One record, both sides">
         <span className={styles.num}>2</span>
+        <div>
+          <h2>One record, both sides</h2>
+          <p>
+            When two agents run a session through OpenGlass, OpenGlass is the witness in the middle: it works
+            for neither side and takes no part in the conversation. Every message is hash-chained, signed by
+            the agent that sent it, and countersigned by OpenGlass the instant it arrives. When the session
+            closes, both owners get the same record, in full, from the start: no unlocking, no waiting on the
+            other side. Neither owner can alter it, and neither can we. Whoever ends up holding it (you, the
+            other side, an auditor) can check every signature and hash independently and offline. Run it in
+            Notary mode and OpenGlass never even sees the content: the agents exchange payloads directly, and
+            only hashes are chained and signed.
+          </p>
+        </div>
+      </section>
+
+      <section className={styles.numbered} aria-label="What your agent did">
+        <span className={styles.num}>3</span>
         <div>
           <h2>What your agent did</h2>
           <p>
@@ -48,7 +66,7 @@ export default function Home() {
       </section>
 
       <section className={styles.numbered} aria-label="Stay in control">
-        <span className={styles.num}>3</span>
+        <span className={styles.num}>4</span>
         <div>
           <h2>Stay in control</h2>
           <p>
@@ -61,32 +79,18 @@ export default function Home() {
       </section>
 
       <section className={styles.numbered} aria-label="Your records, your rules">
-        <span className={styles.num}>4</span>
+        <span className={styles.num}>5</span>
         <div>
           <h2>Your records, your rules</h2>
           <p>
-            Attestations default to private; sessions default to sealed. Nobody sees the content until you
-            choose to, or the other owner agrees to open it. Set how long a private record lasts — one day
-            up to ten years, ninety by default — and once that window closes, the content is
-            cryptographically shredded, permanently, even from us. A sealed two-party record only opens
-            when both owners agree to unseal it, or either one disputes it, which force-opens it for
-            fairness. Message content itself is opaque application data we don&apos;t inspect or redact —
-            treat it like any other logged channel.
-          </p>
-        </div>
-      </section>
-
-      <section className={styles.numbered} aria-label="Proof when you need it">
-        <span className={styles.num}>5</span>
-        <div>
-          <h2>Proof when you need it</h2>
-          <p>
-            When two agents do need a record they can both rely on — a negotiated deal, a handoff, a signed
-            agreement — every message is hash-chained, signed by its sender, and countersigned by OpenGlass
-            the instant it arrives. Run it in Notary mode and OpenGlass never even sees the content: agents
-            exchange payloads directly, only hashes are chained and signed. Whoever ends up holding the
-            record — you, the other side, an auditor — can verify every signature and hash independently
-            and offline, with no ongoing trust in OpenGlass required.
+            A session record is shared with both owners by default and kept for the long term, because a record
+            both sides can rely on has to outlast either side changing its mind. If a session shouldn&apos;t
+            last, run it as private: both owners can still read it, but once the retention window you set
+            closes (one day up to ten years, ninety by default), the content is cryptographically shredded,
+            permanently, even from us. Your agent&apos;s own attestations are private to you by default. Either
+            owner can dispute a record: the dispute is recorded and counted on the agent&apos;s public profile,
+            but it doesn&apos;t change or hide anything. Message content itself is opaque application data we
+            don&apos;t inspect or redact, so treat it like any other logged channel.
           </p>
         </div>
       </section>
@@ -112,7 +116,7 @@ export default function Home() {
           </div>
           <div className={styles.builtCard}>
             <h3>Storage</h3>
-            <p>Sealed and shared evidence is stored with AWS S3 Object Lock; once written, it can&apos;t be deleted or shortened by anyone — not an admin, not AWS support, not us — until its retention date passes. Private evidence is encrypted at rest and crypto-shredded on your schedule instead. Conventional infrastructure, not a blockchain — there&apos;s no external anchor yet, the honest limit of this guarantee today.</p>
+            <p>Shared evidence is stored with AWS S3 Object Lock; once written, it can&apos;t be deleted or shortened by anyone — not an admin, not AWS support, not us — until its retention date passes. Private evidence is encrypted at rest and crypto-shredded on your schedule instead. Conventional infrastructure, not a blockchain — there&apos;s no external anchor yet, the honest limit of this guarantee today.</p>
           </div>
           <div className={styles.builtCard}>
             <h3>Verification</h3>
@@ -135,30 +139,31 @@ export default function Home() {
           <div className={styles.faqItem}>
             <dt>Can this be used against me?</dt>
             <dd>
-              Attestations and sessions are private by default — nothing is shared unless you choose
-              shared visibility, or a sealed record&apos;s other owner agrees to unseal it. If either owner
-              disputes a sealed record, it force-opens for fairness rather than staying sealed forever on
-              one side&apos;s say-so. Private records are retention-limited and cryptographically shredded
-              once that window closes; after that, not even OpenGlass can read them.
+              Your agent&apos;s attestations are private to you. A session record is shared with exactly two
+              owners, yours and the counterparty&apos;s, plus anyone either of you grants access to. It&apos;s
+              never public, and there&apos;s no endpoint that lists or searches records. The other owner already
+              has everything their own agent received; the record means you both hold the same version, and
+              neither of you can alter it. If a session&apos;s content shouldn&apos;t outlive its purpose, run it
+              as private and it&apos;s shredded on your schedule.
             </dd>
           </div>
           <div className={styles.faqItem}>
             <dt>Who can see my agent&apos;s conversations?</dt>
             <dd>
-              You, as the owner. Anyone you explicitly grant viewer access to, at a scope you choose —
-              summaries only, or full export — with every export logged to an access log only you can see.
-              The counterparty&apos;s own owner, for a shared session. Both owners, once a sealed record is
-              unsealed. Nobody else — there&apos;s no admin panel that browses records, and no endpoint
-              that lists or searches them.
+              You, as the owner, in full, from the moment the record is issued. The counterparty&apos;s owner,
+              for a session your agent took part in: they see the same record you do. Anyone either of you
+              explicitly grants viewer access to, at a scope you choose (summaries only, or full export), with
+              every export logged to an access log only the granting owner can see. Nobody else: there&apos;s no
+              admin panel that browses records, and no endpoint that lists or searches them.
             </dd>
           </div>
           <div className={styles.faqItem}>
             <dt>How long is data kept?</dt>
             <dd>
-              Private records: your call, from one day to ten years — ninety days by default — then
-              permanently shredded. Sealed and shared records are kept under S3 Object Lock so neither side
-              can quietly delete evidence later; that durability is the entire point of a record two
-              parties are meant to be able to rely on.
+              Private records: your call, from one day to ten years (ninety days by default), then permanently
+              shredded. Shared session records are kept under S3 Object Lock so neither side can quietly delete
+              evidence later; that durability is the entire point of a record two parties are meant to be able
+              to rely on.
             </dd>
           </div>
           <div className={styles.faqItem}>

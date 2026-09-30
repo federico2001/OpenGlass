@@ -173,6 +173,8 @@ export interface RecordSummary {
   evidence: { sha256: string; bytes: number };
   createdAt: string;
   visibility?: "private" | "sealed" | "shared" | null;
+  /** SPEC §13.2: the one dispute flag per record, on any visibility. */
+  dispute?: { disputedBy: string; disputedAt: string } | null;
   sealedState?: SealedState | null;
 }
 

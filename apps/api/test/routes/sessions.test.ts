@@ -105,10 +105,20 @@ describe("POST /v1/sessions", () => {
 });
 
 describe("POST /v1/sessions visibility (realignment R1, docs/SPEC.md §13)", () => {
-  it("defaults to sealed when the caller doesn't specify a visibility", async () => {
+  it("defaults to shared (both owners read the record from the start) when the caller doesn't specify a visibility", async () => {
     const { identity: initiator } = await registerAndClaim("vis_default");
     const { offer, offerSignature } = buildOffer({ sessionId: sessionId(), initiator });
     const body = { offer, offerSignature };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body, identity: initiator });
+    const res = await app().inject({ method: "POST", url: "/v1/sessions", headers, payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().session.visibility).toBe("shared");
+  });
+
+  it("still accepts an explicit (deprecated) sealed request", async () => {
+    const { identity: initiator } = await registerAndClaim("vis_sealed");
+    const { offer, offerSignature } = buildOffer({ sessionId: sessionId(), initiator });
+    const body = { offer, offerSignature, visibility: "sealed" as const };
     const headers = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body, identity: initiator });
     const res = await app().inject({ method: "POST", url: "/v1/sessions", headers, payload: body });
     expect(res.statusCode).toBe(201);

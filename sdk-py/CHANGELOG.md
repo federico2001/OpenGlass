@@ -3,6 +3,18 @@
 All notable changes to `openglass-sdk` (Python) are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Changed (server-side, no client code change)
+
+- Sessions now default to `visibility: "shared"` on the server: both participant owners can
+  read the full record from the moment it's issued. `"sealed"` is deprecated for new records;
+  it's still accepted when passed explicitly, so existing callers keep working.
+- `POST /v1/records/{id}/dispute` now flags any two-party record as disputed instead of only
+  force-unsealing sealed ones. Record responses carry a new `dispute` field.
+- Docs: `dispute()`, `request_unseal()` and `approve_unseal()` call owner-authenticated routes,
+  so an agent-signed call returns 401. Documented, not yet fixed.
+
 ## 0.2.0
 
 Realignment R7 — "know who your agent is talking to."

@@ -529,7 +529,7 @@ paths:
                 offer: { $ref: '#/components/schemas/Offer' }
                 offerSignature: { $ref: '#/components/schemas/Signature' }
                 visibility:
-                  description: Realignment R1 (docs/SPEC.md §13). Defaults to "sealed" when omitted.
+                  description: docs/SPEC.md §13. Defaults to "shared" when omitted (both participant owners read the full record). "sealed" is deprecated.
                   $ref: '#/components/schemas/Visibility'
       responses:
         '201':
@@ -1212,8 +1212,8 @@ paths:
       summary: Set or clear the agent's default visibility (realignment R4)
       description: >-
         Used when a session/attestation-open request this agent makes omits `visibility`
-        itself (docs/SPEC.md §13/§15) — checked ahead of the platform default (sealed for
-        sessions, private for attestations). `null` clears the override.
+        itself (docs/SPEC.md §13/§15) — checked ahead of the platform default (shared for
+        sessions, private for attestations; "sealed" is deprecated). `null` clears the override.
       security: [ { ownerSession: [] } ]
       parameters:
         - $ref: '#/components/parameters/AgentId'
@@ -1719,12 +1719,14 @@ paths:
   /v1/records/{recordId}/dispute:
     post:
       tags: [records]
-      operationId: disputeSeal
-      summary: Force-unseal a sealed record, bypassing mutual consent (realignment R1)
+      operationId: disputeRecord
+      summary: Flag a two-party record as disputed (docs/SPEC.md §13.2)
       description: >-
-        Owner-authenticated, participant-only. Either participant owner can dispute a sealed
-        record without the other's consent, immediately granting full-content access to both
-        sides — for fairness (docs/SPEC.md §13.2).
+        Owner-authenticated, participant-only. Either participant owner can dispute a
+        two-party session record of any visibility, once. The dispute is a flag: it counts
+        toward each participant agent's openDisputesCount and emails the other owner, but
+        changes and opens nothing, except that it still force-unseals a legacy sealed
+        record that isn't unsealed yet.
       security: [ { ownerSession: [] } ]
       parameters:
         - $ref: '#/components/parameters/RecordId'
@@ -1737,7 +1739,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Not visibility:"sealed", or already fully unsealed
+          description: already_disputed (the record already carries a dispute) or not_disputable (a one-party attestation record)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -2195,9 +2197,10 @@ components:
       type: string
       description: >-
         Realignment R1 (docs/SPEC.md §13). A sibling request-body field, not part of the
-        signed offer/open object. Sessions default to "sealed"; attestations default to
-        "private". A "private" request gracefully degrades to "sealed" when the platform
-        hasn't been configured with content encryption.
+        signed offer/open object. Sessions default to "shared"; attestations default to
+        "private". "sealed" is deprecated for new records: still accepted when requested
+        explicitly, never a default. A "private" request gracefully degrades to "sealed" when
+        the platform hasn't been configured with content encryption.
       enum: [private, sealed, shared]
     Offer:
       type: object
@@ -2608,7 +2611,7 @@ components:
     # ------------------------------------------------------------ records
     Record:
       type: object
-      required: [id, sessionId, statement, statementHash, platformSignature, evidence, createdAt, visibility, sealedState]
+      required: [id, sessionId, statement, statementHash, platformSignature, evidence, createdAt, visibility, dispute, sealedState]
       properties:
         id: { type: string }
         sessionId: { $ref: '#/components/schemas/SessionId' }
@@ -2624,7 +2627,17 @@ components:
         createdAt: { $ref: '#/components/schemas/Timestamp' }
         visibility:
           oneOf: [{ $ref: '#/components/schemas/Visibility' }, { type: 'null' }]
+        dispute: { $ref: '#/components/schemas/Dispute' }
         sealedState: { $ref: '#/components/schemas/SealedState' }
+    Dispute:
+      description: docs/SPEC.md §13.2. The one dispute flag per record, or null if nobody has disputed it.
+      oneOf:
+        - type: 'null'
+        - type: object
+          required: [disputedBy, disputedAt]
+          properties:
+            disputedBy: { $ref: '#/components/schemas/OwnerId' }
+            disputedAt: { $ref: '#/components/schemas/Timestamp' }
     ViewerGrant:
       type: object
       required: [id, ownerId, agentId, viewerEmail, label, status, createdAt, revokedAt, scope]
@@ -2774,7 +2787,7 @@ components:
         sealedState: { $ref: '#/components/schemas/SealedState' }
     SealedState:
       type: object
-      description: Realignment R1 (docs/SPEC.md §13.2). Present only for visibility:"sealed" records.
+      description: docs/SPEC.md §13.2. Present only for (deprecated) visibility:"sealed" records.
       oneOf:
         - type: 'null'
         - type: object
@@ -2794,11 +2807,12 @@ components:
               oneOf: [{ $ref: '#/components/schemas/Timestamp' }, { type: 'null' }]
     SealedStateEnvelope:
       type: object
-      description: Response shape for the three unseal/dispute actions (docs/SPEC.md §13.2).
-      required: [visibility, sealedState]
+      description: Response shape for the dispute and unseal actions (docs/SPEC.md §13.2).
+      required: [visibility, dispute, sealedState]
       properties:
         visibility:
           oneOf: [{ $ref: '#/components/schemas/Visibility' }, { type: 'null' }]
+        dispute: { $ref: '#/components/schemas/Dispute' }
         sealedState: { $ref: '#/components/schemas/SealedState' }
     VerifyResult:
       type: object
