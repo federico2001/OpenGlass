@@ -48,7 +48,7 @@ export interface AttestOptions {
   /** Realignment R7 (docs/SPEC.md §13). Default `"private"` — explicit here rather than
    * left to the server's own default, so a reader of this option list doesn't have to go
    * check SPEC.md to know what happens when it's omitted. A `"private"` request
-   * gracefully degrades to `"sealed"` server-side if content encryption isn't configured. */
+   * falls back to `"shared"` (same readers, content kept) server-side if content encryption isn't configured. */
   visibility?: Visibility;
   /**
    * Realignment R7: optional counterparty lookup (`openglass-sdk`'s `guard()`) folded

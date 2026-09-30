@@ -91,6 +91,9 @@ export interface OwnerAttestation {
   closedAt: string | null;
   recordId: string | null;
   visibility?: "private" | "sealed" | "shared" | null;
+  /** Present on GET /v1/attestations/{id} (not in list responses). */
+  genesisHash?: string;
+  head?: { seq: number; hash: string | null };
 }
 
 export interface SealedState {
@@ -150,7 +153,8 @@ export interface MessageView {
   signature: { alg: string; kid: string; sig: string };
   receivedAt: string;
   platformSignature: { alg: string; kid: string; sig: string };
-  payload?: { text?: string; [key: string]: unknown };
+  /** Relay mode only; any JSON value the agent sent. Absent in Notary mode. */
+  payload?: unknown;
 }
 
 export interface RecordSummary {
@@ -178,9 +182,18 @@ export interface RecordSummary {
   sealedState?: SealedState | null;
 }
 
+/** `POST /v1/verify` response (SPEC §7.6, packages/db/src/crypto/verifyBundle.ts). */
+export interface VerifyIssue {
+  code: string;
+  seq?: number;
+  message: string;
+}
+
 export interface VerifyResult {
   valid: boolean;
-  errors: string[];
+  errors: VerifyIssue[];
+  /** Non-failing notes, e.g. content_encrypted for a private record. */
+  info?: VerifyIssue[];
 }
 
 export interface LiveFeedItem {
@@ -333,4 +346,25 @@ export function shortHash(hash: string | null): string {
 
 export function formatUsdCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** Outcome of checking a record from the dashboard: a verification result, or why only
+ * a receipt could be checked (a legacy sealed record that hasn't been opened yet). */
+export type RecordCheck = { kind: "verified"; result: VerifyResult } | { kind: "receipt-only" };
+
+/**
+ * Fetches a record's bundle and runs it through the public `POST /v1/verify` (SPEC §7.6),
+ * the same check anyone can run. A sealed record that hasn't been opened returns a receipt
+ * (no evidence), which can't be verified end to end, so that's reported instead of sent.
+ * A failed verify request (4xx/5xx) throws rather than being mistaken for a result.
+ */
+export async function checkRecord(recordId: string): Promise<RecordCheck> {
+  const bundle = await apiFetch<{ type?: string }>(`/v1/records/${recordId}/bundle`);
+  if (bundle.type === "openglass.receipt") return { kind: "receipt-only" };
+  const res = await fetch("/v1/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(bundle) });
+  const json = (await res.json().catch(() => null)) as (VerifyResult & { error?: { message?: string } }) | null;
+  if (!res.ok || !json || !Array.isArray(json.errors)) {
+    throw new Error(json?.error?.message ?? `Verification request failed (${res.status})`);
+  }
+  return { kind: "verified", result: json };
 }

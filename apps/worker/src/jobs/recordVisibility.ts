@@ -27,7 +27,7 @@ export interface ResolvedVisibility {
  *
  * Same graceful-degradation rule as the API's `effectiveVisibility`
  * (apps/api/src/domain/visibility.ts): a `private` request without a configured
- * `ContentEncryptionDeps` becomes `sealed`, never a crash — belt-and-suspenders in case the
+ * `ContentEncryptionDeps` becomes `shared` (same readers, content kept), never a crash — belt-and-suspenders in case the
  * API and worker's `CONTENT_ENCRYPTION` config ever drift apart between creation and close.
  */
 export async function resolveRecordVisibility(opts: {
@@ -39,7 +39,7 @@ export async function resolveRecordVisibility(opts: {
   contentEncryption: ContentEncryptionDeps | null;
 }): Promise<ResolvedVisibility> {
   const requested = opts.requestedVisibility ?? opts.defaultVisibility;
-  const visibility: Visibility = requested === "private" && !opts.contentEncryption ? "sealed" : requested;
+  const visibility: Visibility = requested === "private" && !opts.contentEncryption ? "shared" : requested;
 
   if (visibility === "sealed") {
     return {

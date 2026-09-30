@@ -67,7 +67,7 @@ export interface ServerDeps {
   /** Lowercased owner emails allowed to use /v1/admin/* (Prompt 23). Empty means nobody. */
   adminEmails: string[];
   /** Realignment R1 (docs/SPEC.md §13) — null until CONTENT_ENCRYPTION is configured, in
-   * which case `visibility: "private"` requests gracefully degrade to `sealed` (see
+   * which case `visibility: "private"` requests fall back to `shared` (same readers, content kept) (see
    * domain/visibility.ts's effectiveVisibility). See domain/contentEncryptionDeps.ts. */
   contentEncryption: ContentEncryptionDeps | null;
 }

@@ -323,14 +323,15 @@ describe("visibility: private — encrypted at rest, immediately readable by par
     expect(result.info).toEqual([{ code: "content_encrypted", seq: 1, message: "content_encrypted" }]);
   });
 
-  it("gracefully degrades to sealed (no encryption) end to end when content encryption isn't configured", async () => {
+  it("falls back to shared (no encryption, never sealed) end to end when content encryption isn't configured", async () => {
     const deps = testServerDeps(t, { client: s3.client, bucket: s3.bucket }); // contentEncryption: null by default
     const app = buildServer({ ...deps, healthChecks: {} });
     const { alice, recordId } = await buildClosedSessionRecord({ app, signer: deps.signer, visibility: "private", contentEncryption: null });
 
     const aliceCookie = await createOwnerSessionCookie(t.db, alice.ownerId);
     const bundleRes = await getBundle(app, recordId, aliceCookie);
-    expect(bundleRes.json().type).toBe("openglass.receipt"); // sealed, not private
+    expect(bundleRes.json().type).toBe("openglass.bundle"); // shared: full bundle, not a sealed receipt
+    expect(bundleRes.json().record.statement.visibility).toBe("shared");
   });
 
   it("crypto-shredding via the retention sweep makes content permanently unreadable while the record stays verifiable", async () => {

@@ -5,6 +5,17 @@ All notable changes to `openglass-sdk` (JS) are documented here. Format loosely 
 
 ## Unreleased
 
+### Fixed
+
+- `sendMessage()` works in a real back-and-forth conversation. It used to track only the chain
+  head from this client's own sends, so the first send after the other agent's message was
+  rejected with `409 chain_conflict`, and the initiator couldn't send before calling
+  `waitForActive()`. It now reads the head from the session when it doesn't know it, and on
+  `chain_conflict` re-chains onto the head the server reports and retries (up to
+  `retryOnConflict`, default 3; docs/SPEC.md §5.3, D8). Explicit `seq`/`prevHash` is never retried.
+- Server-side: a `private` request the platform can't satisfy (no content encryption
+  configured) now falls back to `shared` (same readers, content kept) instead of `sealed`.
+
 ### Changed (server-side, no client code change)
 
 - Sessions now default to `visibility: "shared"` on the server: both participant owners can

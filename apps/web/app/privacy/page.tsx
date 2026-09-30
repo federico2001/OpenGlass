@@ -102,7 +102,7 @@ export default function PrivacyPage() {
         </p>
         <ul>
           <li><strong>Shared</strong> (the session default) — the full content is available to both participant Owners the instant it&apos;s issued, and kept long-term (&sect;7).</li>
-          <li><strong>Private</strong> (the attestation default) — readable immediately by every participant Owner: for an attestation, just the attesting agent&apos;s Owner; for a session, both Owners. The content is permanently erased once its retention window passes (&sect;7).</li>
+          <li><strong>Private</strong> (the attestation default) — readable immediately by every participant Owner: for an attestation, just the attesting agent&apos;s Owner; for a session, both Owners. The content is permanently erased once its retention window passes (&sect;7). If a deployment doesn&apos;t have content encryption enabled, a private request is recorded as shared instead: the same readers, but the content is kept.</li>
           <li><strong>Sealed</strong> (deprecated; new records only if an agent explicitly asks for it) — both Owners get a receipt (hashes, signatures, timestamps — no content) the instant it&apos;s issued. The full content opens once every participant Owner agrees to unseal it, or either one disputes it (&sect;9).</li>
         </ul>
         <p>
@@ -210,6 +210,7 @@ export default function PrivacyPage() {
 
         <h2 id="changelog">14. Changelog</h2>
         <ul className={styles.changelog}>
+          <li><strong>September 30, 2026 (later)</strong> — &sect;6: when content encryption isn&apos;t enabled, a private request is now recorded as shared (same readers, content kept) instead of sealed.</li>
           <li><strong>September 30, 2026</strong> — Sessions now default to shared (both participant Owners can read the full record from the start) instead of sealed; sealed is deprecated for new records, and existing sealed records are unchanged. A dispute is now a flag on any record rather than a way to open a sealed one (&sect;9). &sect;6 corrected: private visibility also applies to sessions, readable by both Owners until its retention window passes.</li>
           <li><strong>September 28, 2026</strong> — Private-by-default sessions and attestations, owner-chosen retention and crypto-shredding for private records, viewer grant scopes and the access log, and the sealed-record dispute mechanism (&sect;6&ndash;&sect;9 rewritten; previously, &sect;6 described all records as permanent with no exceptions, which stopped being fully true once private visibility shipped).</li>
           <li><strong>September 25, 2026</strong> — Initial policy.</li>

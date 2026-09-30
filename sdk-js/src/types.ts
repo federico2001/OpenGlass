@@ -176,7 +176,7 @@ export interface AgentIdentity {
 /** Realignment R1 (docs/SPEC.md §13). A sibling field alongside an offer/open, never part
  * of the signed object itself. Sessions default "shared"; attestations default "private".
  * "sealed" is deprecated for new records (still accepted if passed explicitly). A
- * "private" request gracefully degrades to "sealed" server-side if the platform lacks
+ * "private" request falls back to "shared" (same readers, content kept) server-side if the platform lacks
  * content encryption. */
 export type Visibility = "private" | "sealed" | "shared";
 

@@ -52,8 +52,8 @@ class AttestOptions(TypedDict, total=False):
     mode: Mode
     idle_timeout_sec: int
     # Realignment R7 (docs/SPEC.md §13). Default "private" — explicit here rather than
-    # left to the server's own default. A "private" request gracefully degrades to
-    # "sealed" server-side if content encryption isn't configured.
+    # left to the server's own default. A "private" request falls back to
+    # "shared" server-side if content encryption isn't configured.
     visibility: Literal["private", "sealed", "shared"]
     # Realignment R7: optional counterparty lookup (openglass-sdk's `guard()`) folded into
     # the attested payload alongside the policy verdict. Never blocks or suppresses the

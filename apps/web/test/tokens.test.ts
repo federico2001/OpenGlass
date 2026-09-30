@@ -45,7 +45,7 @@ describe("design tokens", () => {
     ["light", light],
     ["dark", dark],
   ] as const)("meet WCAG AA (4.5:1) for text in the %s theme", (_name, t) => {
-    for (const fg of ["ink", "ink-soft", "accent-text"]) {
+    for (const fg of ["ink", "ink-soft", "accent-text", "danger"]) {
       for (const bg of ["bg", "bg-panel", "bg-subtle", "bg-inset"]) {
         expect(contrast(t[fg]!, t[bg]!), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
       }

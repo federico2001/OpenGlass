@@ -5,9 +5,9 @@ import type { Config } from "../config.js";
  * Realignment R1 (docs/SPEC.md §13) — the worker-side twin of
  * apps/api/src/domain/contentEncryptionDeps.ts. `null` until `CONTENT_ENCRYPTION` is
  * configured, in which case a `visibility: "private"` session/attestation that reaches
- * issuance gracefully degrades to `sealed` (see jobs/recordVisibility.ts's
+ * issuance falls back to `shared` (same readers, content kept) (see jobs/recordVisibility.ts's
  * resolveRecordVisibility) rather than the worker crashing on a request the API already
- * should have degraded at creation time — defense in depth against the two containers'
+ * should have resolved at creation time — defense in depth against the two containers'
  * config drifting apart.
  */
 export interface ContentEncryptionDeps {

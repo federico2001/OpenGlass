@@ -36,6 +36,7 @@
   --inverse-bg: #12181b; /* "for agents" surfaces */
   --inverse-ink: #cfefe1;
   --inverse-accent: #3fd9a4;
+  --danger: #b03a2e; /* errors, failed verification */
   color-scheme: light;
 }
 
@@ -51,6 +52,7 @@
     --rule-strong: #283330;
     --accent: #3fd9a4;
     --accent-text: #3fd9a4;
+    --danger: #ff8a7a;
     color-scheme: dark;
   }
 }
@@ -66,5 +68,6 @@
   --rule-strong: #283330;
   --accent: #3fd9a4;
   --accent-text: #3fd9a4;
+  --danger: #ff8a7a;
   color-scheme: dark;
 }

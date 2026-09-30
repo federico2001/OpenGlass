@@ -62,7 +62,7 @@ const Env = z
       .transform((v) => v.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)),
     /** Realignment R1 (docs/SPEC.md §13): envelope encryption for `visibility: "private"`
      * record content. Unset by default — until it's configured, `visibility: "private"`
-     * requests gracefully fall back to `sealed` (see apps/api/src/domain/
+     * requests fall back to `shared` (same readers, content kept) (see apps/api/src/domain/
      * contentEncryptionDeps.ts) rather than erroring, the same "ships disabled until
      * configured" pattern as X402_PAY_TO_ADDRESS/ADMIN_EMAILS above. */
     CONTENT_ENCRYPTION: z.enum(["local", "kms"]).optional(),

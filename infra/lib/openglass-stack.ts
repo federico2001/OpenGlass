@@ -47,7 +47,7 @@ export interface OpenGlassStackProps extends StackProps {
   /** Realignment R1 (docs/SPEC.md §13): provisions a symmetric KMS key for envelope-
    * encrypting `visibility: "private"` record content and points CONTENT_ENCRYPTION at it.
    * Off by default — no new KMS key, no added cost — and a `visibility: "private"` request
-   * gracefully degrades to `sealed` until this is turned on, the same "ships disabled until
+   * falls back to `shared` (same readers, content kept) until this is turned on, the same "ships disabled until
    * configured" behavior the app layer already applies to an absent CONTENT_ENCRYPTION
    * (apps/api/src/domain/visibility.ts's effectiveVisibility). This is a genuinely new AWS
    * resource — deploy it deliberately, not as a side effect of an unrelated stack change. */

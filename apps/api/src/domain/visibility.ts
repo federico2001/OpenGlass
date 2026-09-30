@@ -16,10 +16,12 @@ export type VisibilityValue = z.infer<typeof Visibility>;
  * `PATCH /v1/owner/agents/{id}/visibility-default`), (3) the platform default
  * (docs/SPEC.md §13: attestations default `private`, sessions default `shared` — both
  * participant owners see a session record in full from the moment it's issued) — then
- * gracefully degrades an unsatisfiable `private` result to `sealed` when no
- * `ContentEncryptionDeps` are configured yet, the platform hasn't been given a KMS
- * key/master key to actually encrypt anything with, so it ships the closest available
- * protection instead of erroring. Never silently *upgrades* a caller's explicit
+ * falls back from an unsatisfiable `private` result to `shared` when no
+ * `ContentEncryptionDeps` are configured yet (the platform hasn't been given a key to
+ * encrypt anything with). `shared` has the same readers as `private` (the participant
+ * owners, never the public); only the retention-and-erase part can't be honored, so the
+ * content is kept. It never falls back to `sealed`, which is deprecated and never a
+ * default (docs/SPEC.md §13). Never silently *upgrades* a caller's explicit
  * `sealed`/`shared` choice — an agent-level default only ever fills in an omission.
  */
 export function effectiveVisibility(
@@ -29,5 +31,5 @@ export function effectiveVisibility(
   contentEncryption: ContentEncryptionDeps | null,
 ): VisibilityValue {
   const chosen = requested ?? agentDefault ?? platformDefault;
-  return chosen === "private" && !contentEncryption ? "sealed" : chosen;
+  return chosen === "private" && !contentEncryption ? "shared" : chosen;
 }
