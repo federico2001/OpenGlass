@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { targetFrom } from "../src/rpc.js";
-import { domainOf, parseTarget } from "../src/target.js";
+import { counterpartyHint, domainOf, parseTarget } from "../src/target.js";
 
 describe("parseTarget", () => {
   it("reads a bare domain as both well-known paths on https", () => {
@@ -39,5 +39,15 @@ describe("targetFrom (A2A message parts)", () => {
     expect(targetFrom([{ data: { agentCardUrl: "https://v1.example/.well-known/agent-card.json" } }])?.host).toBe("v1.example");
     expect(targetFrom([{ text: "check v1text.example" }])?.host).toBe("v1text.example");
     expect(targetFrom([{ kind: "text", text: "hello" }])).toBeNull();
+  });
+});
+
+describe("counterpartyHint", () => {
+  it("names the checked agent by card URL, else by domain, else not at all", () => {
+    expect(counterpartyHint(parseTarget("https://example.com/.well-known/agent-card.json")!)).toEqual({
+      agentCardUrl: "https://example.com/.well-known/agent-card.json",
+    });
+    expect(counterpartyHint(parseTarget("example.com")!)).toEqual({ domain: "example.com" });
+    expect(counterpartyHint(parseTarget("http://127.0.0.1:8080")!)).toBeNull();
   });
 });

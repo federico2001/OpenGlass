@@ -175,6 +175,21 @@ class OpenGlassClient:
         )
         return self._public("GET", f"/v1/lookup?{query}")
 
+    def register_counterparty(
+        self, domain: str | None = None, agent_card_url: str | None = None, agent_card: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """``POST /v1/profiles/unclaimed`` (docs/SPEC.md §16): lists a counterparty that isn't
+        registered on OpenGlass as an unclaimed profile, so its operator can find and claim it
+        and your owner sees it among your counterparties. Pass exactly one of ``domain``,
+        ``agent_card_url``, or ``agent_card`` (the card itself, as you received it). OpenGlass
+        fetches the card itself and stores only its URL and hash. Idempotent per domain.
+        Raises ``OpenGlassApiError`` (409 ``already_registered``, ``details.agentId``) when an
+        agent on OpenGlass already claims that domain. Returns the profile."""
+        provided = {k: v for k, v in {"domain": domain, "agentCardUrl": agent_card_url, "agentCard": agent_card}.items() if v is not None}
+        if len(provided) != 1:
+            raise ValueError("Provide exactly one of domain, agent_card_url, agent_card.")
+        return self._signed("POST", "/v1/profiles/unclaimed", provided)["profile"]
+
     def request_domain_verification(self) -> dict[str, Any]:
         """Starts domain verification for your own ``meta.homepage``: generates a token and
         returns instructions for all three proof methods (a DNS TXT record, or one of two

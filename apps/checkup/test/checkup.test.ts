@@ -186,6 +186,9 @@ describe("a checkup over A2A", () => {
       "checkup.report_issued",
     ]);
     expect(bundle.evidence.messages[5].payload.reportId).toBe(reportId);
+    // docs/SPEC.md §12.4: the first entry names the checked agent by card URL or domain; a
+    // site root on an IP literal (this fake target) has neither, so it names none.
+    expect(bundle.evidence.messages[0].payload.counterparty).toBeUndefined();
   });
 
   it("speaks A2A 0.3 (message/send) and reports a legacy card and a JSON-RPC error", async () => {

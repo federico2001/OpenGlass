@@ -268,6 +268,15 @@ export interface UnclaimedProfile {
 
 export type LookupResult = RegisteredLookupResult | UnregisteredLookupResult;
 
+/** `GET /v1/owner/counterparty-profiles` (docs/SPEC.md §16): a counterparty one of the
+ * owner's agents listed because it isn't registered on OpenGlass. */
+export interface CounterpartyListing {
+  listedByAgentId: string;
+  firstListedAt: string;
+  lastListedAt: string;
+  profile: UnclaimedProfile;
+}
+
 export type IntegrationStatus = "requested" | "in_progress" | "available" | "native";
 
 export interface IntegrationEvidence {

@@ -1,45 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
+import { EvidenceDetails, RecordPanel } from "../../../../components/app/Evidence";
+import styles from "../../../../components/app/Evidence.module.css";
+import { nameOf, useAgentNames } from "../../../../components/app/Interactions";
+import ui from "../../../../components/app/ui.module.css";
 import { PayloadView } from "../../../../components/PayloadView";
 import { StatusBadge } from "../../../../components/StatusBadge";
-import { VerifyResultView } from "../../../../components/VerifyResultView";
-import {
-  ApiError,
-  apiFetch,
-  formatDate,
-  shortHash,
-  checkRecord,
-  type AgentPublic,
-  type MessageView,
-  type OwnerAttestation,
-  type RecordSummary,
-  type VerifyResult,
-} from "../../../../lib/dashboard";
-// Same layout as a session's page: an attestation is its one-party counterpart (SPEC §12).
-import styles from "../../sessions/[id]/page.module.css";
+import { apiFetch, formatDate, shortHash, type MessageView, type OwnerAttestation } from "../../../../lib/dashboard";
+import { attestationCounterparty, counterpartyHref, describeEvent, plainStatus, plural } from "../../../../lib/interactions";
+import { useOwner } from "../../../../lib/ownerContext";
 
-const VISIBILITY_LABEL: Record<string, string> = {
-  private: "Private: only you can read it; the content is erased after its retention period",
-  shared: "Shared",
-  sealed: "Sealed (legacy)",
+const VISIBILITY_PLAIN: Record<string, string> = {
+  private: "Private: only you can read it, and its content is erased after its retention period.",
+  shared: "Shared: you and anyone you give viewer access can read it.",
+  sealed: "Sealed (a legacy setting): only a receipt is available until you open it.",
 };
 
-export default function AttestationDetailPage() {
+export default function AttestationPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+  const { owner } = useOwner();
   const [loading, setLoading] = useState(true);
   const [attestation, setAttestation] = useState<OwnerAttestation | null>(null);
   const [events, setEvents] = useState<MessageView[]>([]);
-  const [agent, setAgent] = useState<AgentPublic | null>(null);
-  const [record, setRecord] = useState<RecordSummary | null>(null);
-
-  const [verifying, setVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [opening, setOpening] = useState(false);
-  const [openError, setOpenError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,71 +35,22 @@ export default function AttestationDetailPage() {
         if (cancelled) return;
         setAttestation(attestationRes.attestation);
         setEvents(eventsRes.items);
-        apiFetch<{ agent: AgentPublic }>(`/v1/agents/${attestationRes.attestation.attestor.agentId}`)
-          .then((r) => {
-            if (!cancelled) setAgent(r.agent);
-          })
-          .catch(() => {});
-        if (attestationRes.attestation.recordId) {
-          apiFetch<{ record: RecordSummary }>(`/v1/records/${attestationRes.attestation.recordId}`)
-            .then((r) => {
-              if (!cancelled) setRecord(r.record);
-            })
-            .catch(() => {});
-        }
       })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) router.replace(`/login?redirectTo=/dashboard/attestations/${id}`);
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function verifyRecord() {
-    if (!attestation?.recordId) return;
-    setVerifying(true);
-    setVerifyError(null);
-    setVerifyResult(null);
-    try {
-      const check = await checkRecord(attestation.recordId);
-      if (check.kind === "verified") setVerifyResult(check.result);
-      else setVerifyError("This record is sealed, so only its receipt is available. Open it above to verify the full record.");
-    } catch (err) {
-      setVerifyError(err instanceof Error ? err.message : "Could not run verification.");
-    } finally {
-      setVerifying(false);
-    }
-  }
-
-  /** A legacy sealed attestation (SPEC §13.2) has one participant owner: you. Opening it is
-   * the ordinary unseal ceremony, with no one else to wait for. */
-  async function openSealedRecord() {
-    if (!attestation?.recordId || !record) return;
-    setOpening(true);
-    setOpenError(null);
-    try {
-      if (record.sealedState?.status === "sealed") {
-        await apiFetch(`/v1/records/${attestation.recordId}/unseal-request`, { method: "POST" });
-      }
-      await apiFetch(`/v1/records/${attestation.recordId}/unseal-approve`, { method: "POST" });
-      const r = await apiFetch<{ record: RecordSummary }>(`/v1/records/${attestation.recordId}`);
-      setRecord(r.record);
-    } catch (err) {
-      setOpenError(err instanceof Error ? err.message : "Could not open this record.");
-    } finally {
-      setOpening(false);
-    }
-  }
+  const about = attestationCounterparty(events);
+  const names = useAgentNames([attestation?.attestor.agentId, about?.kind === "agent" ? about.agentId : null]);
 
   if (loading) {
     return (
-      <main className={`wrap ${styles.main}`}>
+      <main className={`${ui.page} ${ui.narrow}`}>
         <p className="label">Loading…</p>
       </main>
     );
@@ -123,114 +58,166 @@ export default function AttestationDetailPage() {
 
   if (!attestation) {
     return (
-      <main className={`wrap ${styles.main}`}>
+      <main className={`${ui.page} ${ui.narrow}`}>
         <p className="label">Not found</p>
-        <p className={styles.hint}>
-          Either this attestation doesn&apos;t exist or its agent doesn&apos;t belong to you. <a href="/dashboard/activity">Back to activity</a>.
+        <p className={ui.hint}>
+          This attestation doesn&apos;t exist, or its agent isn&apos;t yours. <a href="/dashboard/activity">Back to activity</a>.
         </p>
       </main>
     );
   }
 
-  const agentName = agent?.name ?? attestation.attestor.agentId;
+  const agentId = attestation.attestor.agentId;
+  const agentName = nameOf(names, agentId);
+  const aboutLabel = about ? (about.kind === "agent" ? about.agentId : about.domain) : null;
+  const isOwner = attestation.attestor.ownerId === owner.id;
+  const first = events[0];
+  const last = events[events.length - 1];
 
   return (
-    <main className={`wrap ${styles.main}`}>
-      <p className="label"><a href="/dashboard/activity">← Activity</a></p>
-
-      <section className={styles.masthead}>
-        <div className={styles.headingRow}>
-          <h1 className={styles.title}>{attestation.purpose || "Attestation"}</h1>
+    <main className={`${ui.page} ${ui.narrow}`}>
+      <p className={ui.crumbs}>
+        <a href="/dashboard/activity">Activity</a> / Attestation
+      </p>
+      <header className={ui.header}>
+        <p className="label">Attestation · an agent&apos;s own log</p>
+        <div className={ui.headingRow}>
+          <h1 className={ui.title}>{attestation.purpose || "Attestation"}</h1>
           <StatusBadge status={attestation.status} />
         </div>
-        <p className={styles.hint}>
-          An attestation is <a href={`/dashboard/agents/${attestation.attestor.agentId}`}>{agentName}</a> logging its own
-          actions, with no other agent involved. A conversation with another agent appears as a session instead.{" "}
-          {attestation.mode === "relay" ? "Relay mode: OpenGlass stores each event's content." : "Notary mode: OpenGlass stores only each event's hash."}
+        <p className={ui.lede}>
+          {plainStatus("attestation", attestation.status)}. This is {agentName} writing down what it did, step by step. No
+          other agent wrote to it: there is nothing here that {agentName} sent to or received from another agent. A
+          conversation with another agent shows up as a session instead.
         </p>
-      </section>
+      </header>
 
-      <section className={styles.card}>
-        <table className={styles.table}>
-          <tbody>
-            <tr><td>Agent</td><td>{agentName}</td></tr>
-            <tr><td>Visibility</td><td>{VISIBILITY_LABEL[attestation.visibility ?? "shared"] ?? attestation.visibility}</td></tr>
-            <tr><td>Opened</td><td>{formatDate(attestation.createdAt)}</td></tr>
-            <tr><td>Closed</td><td>{formatDate(attestation.closedAt)}</td></tr>
-            <tr><td>Genesis hash</td><td><code>{shortHash(attestation.genesisHash ?? null)}</code></td></tr>
-            <tr><td>Latest hash</td><td><code>{shortHash(attestation.head?.hash ?? null)}</code></td></tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section className={styles.section} aria-label="Attested events">
-        <p className="label">Hash-chained events ({events.length})</p>
-        {events.length === 0 ? (
-          <p className={styles.hint}>No events yet.</p>
-        ) : (
-          <ol className={styles.timeline}>
-            {events.map((event) => (
-              <li key={event.id} className={styles.messageItem}>
-                <span className={styles.seqBadge}>{event.seq}</span>
-                <div className={styles.messageBody}>
-                  <p className={styles.messageSender}>{event.envelope.contentType}</p>
-                  <PayloadView message={event} />
-                  <p className={styles.messageMeta}>
-                    hash {shortHash(event.hash)} · signed {event.signature.alg} · countersigned {formatDate(event.receivedAt)}
-                  </p>
-                </div>
+      <section className={ui.section} aria-label="In short">
+        <h2 className={ui.h2} style={{ marginBottom: 12 }}>
+          In short
+        </h2>
+        <div className={ui.card}>
+          <ul className={styles.facts} style={{ marginTop: 0 }}>
+            <li>
+              Written and signed by{" "}
+              <a href={isOwner ? `/dashboard/agents/${agentId}` : `/agents/${agentId}`}>
+                {agentName}
+              </a>
+              {isOwner ? ", your agent" : ""}.
+            </li>
+            <li>
+              {plural(events.length, "entry", "entries")}
+              {first && last ? `, from ${formatDate(first.receivedAt)} to ${formatDate(last.receivedAt)}` : ""}.
+            </li>
+            {about && (
+              <li>
+                It&apos;s about another agent: <a href={counterpartyHref(about)}>{about.kind === "agent" ? nameOf(names, about.agentId) : aboutLabel}</a>.{" "}
+                <span className={ui.hint}>{agentName} named it in its own entries; OpenGlass doesn&apos;t vouch for that agent.</span>
               </li>
-            ))}
+            )}
+            <li>
+              {attestation.mode === "relay"
+                ? "OpenGlass kept the content of every entry."
+                : "Notary mode: OpenGlass kept only a fingerprint of each entry. The content stayed with the agent."}
+            </li>
+            <li>{VISIBILITY_PLAIN[attestation.visibility ?? "private"] ?? attestation.visibility}</li>
+          </ul>
+        </div>
+      </section>
+
+      <section className={ui.section} aria-label="Entries">
+        <div className={ui.sectionHead}>
+          <h2 className={ui.h2}>What {agentName} logged</h2>
+        </div>
+        <p className={ui.hint} style={{ marginBottom: 14 }}>
+          In the order OpenGlass received them. Each one links to the one before it, so none can be changed, removed or
+          reordered without breaking every link after it. Open &ldquo;Full entry&rdquo; for the exact content and
+          &ldquo;Signed details&rdquo; for the proof.
+        </p>
+        {events.length === 0 ? (
+          <div className={ui.empty}>
+            <p>No entries yet.</p>
+          </div>
+        ) : (
+          <ol className={styles.thread}>
+            {events.map((event) => {
+              const d = describeEvent(event);
+              return (
+                <li key={event.id} className={styles.entry}>
+                  <span className={styles.entryNum}>{event.seq}</span>
+                  <div className={styles.entryBody}>
+                    <p className={styles.entryTitle}>{d.title}</p>
+                    {d.summary && <p className={styles.entrySummary}>{d.summary}</p>}
+                    <p className={styles.entryMeta}>
+                      Written by {agentName} · {formatDate(event.envelope.sentAt)}
+                    </p>
+                    {event.payload !== undefined && (
+                      <details className={styles.evidence}>
+                        <summary>Full entry</summary>
+                        <div className={styles.content}>
+                          <PayloadView message={event} />
+                        </div>
+                      </details>
+                    )}
+                    <EvidenceDetails message={event} writer={agentName} />
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         )}
       </section>
 
       {attestation.recordId && (
-        <section className={styles.section} aria-label="Record and verification">
-          <p className="label">Record</p>
-          <div className={styles.card}>
-            {record && (
-              <table className={styles.table}>
-                <tbody>
-                  <tr><td>Record ID</td><td><code>{record.id}</code></td></tr>
-                  <tr><td>Close reason</td><td>{record.statement.closeReason}</td></tr>
-                  <tr><td>Evidence size</td><td>{record.evidence.bytes.toLocaleString()} bytes</td></tr>
-                  <tr><td>Issued</td><td>{formatDate(record.statement.issuedAt)}</td></tr>
-                </tbody>
-              </table>
-            )}
-            {record?.visibility === "sealed" && (record.sealedState?.status === "sealed" || record.sealedState?.status === "unseal_requested") && (
-              <div className={styles.hint} aria-label="Sealed record">
-                <p>
-                  This record was issued as sealed (a legacy setting), so only a receipt is available: its hashes and
-                  signatures, not its content. You&apos;re its only owner, so you can open it.
-                </p>
-                <div className={styles.buttonRow}>
-                  <button className={styles.button} onClick={openSealedRecord} disabled={opening}>
-                    {opening ? "Opening…" : "Open full record"}
-                  </button>
-                </div>
-                {openError && <p className={styles.error}>{openError}</p>}
-              </div>
-            )}
-
-            <div className={styles.verifyRow}>
-              <button className={styles.button} onClick={verifyRecord} disabled={verifying}>
-                {verifying ? "Verifying…" : "Verify independently"}
-              </button>
-              <a className={styles.downloadLink} href={`/v1/records/${attestation.recordId}/bundle`}>
-                Download bundle
-              </a>
-            </div>
-            <p className={styles.hint}>
-              Runs the full cryptographic check (every hash, every signature, against OpenGlass&apos;s published keys) via
-              the public <code>POST /v1/verify</code> endpoint, the same check anyone can run without trusting OpenGlass.
-            </p>
-            {verifyError && <p className={styles.error}>{verifyError}</p>}
-            {verifyResult && <VerifyResultView result={verifyResult} />}
-          </div>
+        <section className={ui.section} aria-label="The record">
+          <h2 className={ui.h2} style={{ marginBottom: 12 }}>
+            The record
+          </h2>
+          <RecordPanel recordId={attestation.recordId} kind="attestation" viewer={{ ownerId: owner.id, participant: isOwner, soleOwner: isOwner }} />
         </section>
       )}
+
+      <details className={ui.details}>
+        <summary>Technical details</summary>
+        <div className={ui.detailsBody}>
+          <table className={ui.table}>
+            <tbody>
+              <tr>
+                <td>Attestation ID</td>
+                <td>
+                  <code>{attestation.id}</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Agent ID</td>
+                <td>
+                  <code>{agentId}</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Opened</td>
+                <td>{formatDate(attestation.createdAt)}</td>
+              </tr>
+              <tr>
+                <td>Closed</td>
+                <td>{formatDate(attestation.closedAt)}</td>
+              </tr>
+              <tr>
+                <td>First hash (genesis)</td>
+                <td>
+                  <code title={attestation.genesisHash}>{shortHash(attestation.genesisHash ?? null)}</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Latest hash</td>
+                <td>
+                  <code title={attestation.head?.hash ?? undefined}>{shortHash(attestation.head?.hash ?? null)}</code>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
     </main>
   );
 }

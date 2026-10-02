@@ -56,3 +56,12 @@ export function fromUrl(raw: string): Target | null {
 export function domainOf(target: Target): string | null {
   return DOMAIN.test(target.host) ? target.host : null;
 }
+
+/** docs/SPEC.md §12.4: how the checkup's attestation names the checked agent, so its owner's
+ * dashboard can link to that agent's profile. Its card URL when the caller gave one, else
+ * its domain; nothing for an IP literal or localhost. */
+export function counterpartyHint(target: Target): { agentCardUrl: string } | { domain: string } | null {
+  if (target.cardUrl) return { agentCardUrl: target.cardUrl };
+  const domain = domainOf(target);
+  return domain ? { domain } : null;
+}

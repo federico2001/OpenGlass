@@ -77,3 +77,14 @@ describe("session visibility default, as agents are told it", () => {
     expect(LLMS_FULL_TXT).not.toContain("Sessions default `sealed`");
   });
 });
+
+/** SPEC §16: agents can list an unregistered counterparty from its agent card alone. */
+describe("registering a counterparty, as agents are told it", () => {
+  it("every agent surface documents the call", () => {
+    expect(SKILL_MD).toContain("POST /v1/profiles/unclaimed");
+    expect(SKILL_MD).toContain("register_counterparty");
+    expect(LLMS_TXT).toContain("register_counterparty");
+    expect(LLMS_FULL_TXT).toContain("| POST | /v1/profiles/unclaimed |");
+    expect(LLMS_FULL_TXT).toContain("409 already_registered");
+  });
+});

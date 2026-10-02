@@ -107,6 +107,7 @@ describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
         "open_attestation",
         "pause_session",
         "register_agent",
+        "register_counterparty",
         "send_attestation_event",
         "send_message",
         "start_session",
@@ -141,6 +142,23 @@ describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
 
     const noArgs = await client.callTool({ name: "lookup_agent", arguments: {} });
     expect(noArgs.isError).toBe(true);
+  });
+
+  it("register_counterparty lists an unregistered domain for a claimed agent", async () => {
+    const gina = await registerAndClaim("gina");
+    const body = { domain: "unlisted-counterparty.invalid" };
+    const result = await client.callTool({
+      name: "register_counterparty",
+      arguments: { ...body, auth: auth(gina, { method: "POST", path: "/v1/profiles/unclaimed", body }) },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(toolJson(result).profile).toMatchObject({ domain: "unlisted-counterparty.invalid", claimed: false, listedBy: gina.agentId });
+
+    const both = await client.callTool({
+      name: "register_counterparty",
+      arguments: { domain: "a.invalid", agentCardUrl: "https://a.invalid/card.json", auth: auth(gina, { method: "POST", path: "/v1/profiles/unclaimed", body }) },
+    });
+    expect(both.isError).toBe(true);
   });
 
   it("full session lifecycle via MCP tools: offer -> accept -> message -> close", async () => {

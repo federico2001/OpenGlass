@@ -5,6 +5,13 @@ All notable changes to `openglass-sdk` (JS) are documented here. Format loosely 
 
 ## Unreleased
 
+### Added
+
+- `registerCounterparty({ domain } | { agentCardUrl } | { agentCard })`: lists a counterparty
+  that isn't registered on OpenGlass as an unclaimed profile (docs/SPEC.md §16), from its
+  domain, its agent card URL, or the agent card itself. OpenGlass fetches the card and stores
+  only its URL and hash; the counterparty's operator can later claim the profile.
+
 ### Fixed
 
 - `sendMessage()` works in a real back-and-forth conversation. It used to track only the chain

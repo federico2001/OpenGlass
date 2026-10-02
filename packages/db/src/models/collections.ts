@@ -626,6 +626,23 @@ export const unclaimedProfiles = defineCollection({
   ],
 });
 
+/** docs/SPEC.md §16: which agent listed which domain as an unclaimed profile, one row per
+ * (agent, domain). `unclaimed_profiles.listedBy` keeps only the first lister; this keeps
+ * every one, so each owner's dashboard can show the counterparties their own agents
+ * registered. Holds no facts about the counterparty itself. */
+export const profileListings = defineCollection({
+  name: "profile_listings",
+  schema: z.strictObject({
+    /** `${agentId}|${domain}`: deterministic, so a repeat listing is an upsert. */
+    _id: z.string().min(1).max(300),
+    agentId: AgentId,
+    domain: z.string().min(1).max(253),
+    firstListedAt: z.date(),
+    lastListedAt: z.date(),
+  }),
+  indexes: [{ name: "agentId_lastListedAt", key: { agentId: 1, lastListedAt: -1 } }],
+});
+
 // ------------------------------------------------------------------ apps/checkup
 
 /** Agent Checkup (apps/checkup): one report per check actually run. Also the 1-hour result
@@ -692,7 +709,7 @@ export const allCollections = [
   owners, agents, sessions, attestations, invites, messages, records, viewerGrants, viewerAccessLog,
   integrationStatusOverrides, integrationVotes, integrationRequests,
   loginTokens, webSessions, requestNonces, rateLimits, activitySnapshots,
-  unclaimedProfiles, checkupReports, checkupEvents,
+  unclaimedProfiles, profileListings, checkupReports, checkupEvents,
   changelog, migrationLock,
 ] as const;
 
@@ -704,6 +721,7 @@ export type InviteDoc = z.infer<typeof invites.schema>;
 export type MessageDoc = z.infer<typeof messages.schema>;
 export type RecordDoc = z.infer<typeof records.schema>;
 export type UnclaimedProfileDoc = z.infer<typeof unclaimedProfiles.schema>;
+export type ProfileListingDoc = z.infer<typeof profileListings.schema>;
 export type CheckupReportDoc = z.infer<typeof checkupReports.schema>;
 export type CheckupEventDoc = z.infer<typeof checkupEvents.schema>;
 export type ViewerGrantDoc = z.infer<typeof viewerGrants.schema>;
