@@ -1,7 +1,9 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { InteractionRow, useAgentNames } from "../../../../components/app/Interactions";
+import ui from "../../../../components/app/ui.module.css";
 import { StatusBadge } from "../../../../components/StatusBadge";
 import {
   ApiError,
@@ -9,11 +11,13 @@ import {
   formatDate,
   formatUsdCents,
   type AccessLogEntry,
-  type AgentPublic,
   type OwnerAgent,
+  type OwnerAttestation,
   type OwnerSession,
   type ViewerGrant,
 } from "../../../../lib/dashboard";
+import { buildTimeline } from "../../../../lib/interactions";
+import { useOwner } from "../../../../lib/ownerContext";
 import styles from "./page.module.css";
 
 export default function AgentDetailPage() {
@@ -21,8 +25,9 @@ export default function AgentDetailPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<OwnerAgent | null>(null);
+  const { owner } = useOwner();
   const [sessions, setSessions] = useState<OwnerSession[]>([]);
-  const [counterparties, setCounterparties] = useState<Record<string, AgentPublic>>({});
+  const [attestations, setAttestations] = useState<OwnerAttestation[]>([]);
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -45,18 +50,23 @@ export default function AgentDetailPage() {
   const [retentionError, setRetentionError] = useState<string | null>(null);
   const [settingVisibilityDefault, setSettingVisibilityDefault] = useState(false);
 
+  const timeline = useMemo(() => buildTimeline(sessions, attestations, { ownerId: owner.id, agentIds: [id] }), [sessions, attestations, owner.id, id]);
+  const names = useAgentNames(timeline.flatMap((i) => [i.myAgentId, i.otherAgentId]));
+
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       apiFetch<{ items: OwnerAgent[] }>("/v1/owner/agents?limit=200"),
       apiFetch<{ items: OwnerSession[] }>("/v1/owner/sessions?limit=200"),
+      apiFetch<{ items: OwnerAttestation[] }>("/v1/owner/attestations?limit=200").catch(() => ({ items: [] as OwnerAttestation[] })),
     ])
-      .then(([agentsRes, sessionsRes]) => {
+      .then(([agentsRes, sessionsRes, attestationsRes]) => {
         if (cancelled) return;
         const found = agentsRes.items.find((a) => a.id === id) ?? null;
         setAgent(found);
         const mine = sessionsRes.items.filter((s) => s.initiator.agentId === id || s.counterparty.agentId === id);
         setSessions(mine);
+        setAttestations(attestationsRes.items.filter((a) => a.attestor.agentId === id));
 
         if (found) {
           apiFetch<{ items: ViewerGrant[] }>(`/v1/owner/agents/${id}/viewers?limit=200`)
@@ -72,24 +82,6 @@ export default function AgentDetailPage() {
             .catch(() => {});
         }
 
-        const myAgentIds = new Set(agentsRes.items.map((a) => a.id));
-        const idsToResolve = new Set<string>();
-        for (const s of mine) {
-          const other = s.initiator.agentId === id ? s.counterparty.agentId : s.initiator.agentId;
-          if (other && !myAgentIds.has(other)) idsToResolve.add(other);
-        }
-        Promise.all(
-          [...idsToResolve].map((otherId) =>
-            apiFetch<{ agent: AgentPublic }>(`/v1/agents/${otherId}`)
-              .then((r) => [otherId, r.agent] as const)
-              .catch(() => null),
-          ),
-        ).then((pairs) => {
-          if (cancelled) return;
-          const map: Record<string, AgentPublic> = {};
-          for (const pair of pairs) if (pair) map[pair[0]] = pair[1];
-          setCounterparties(map);
-        });
       })
       .catch((err) => {
         if (cancelled) return;
@@ -273,27 +265,9 @@ export default function AgentDetailPage() {
     }
   }
 
-  async function toggleDirectory(next: boolean) {
-    if (!agent) return;
-    setActing(true);
-    setActionError(null);
-    try {
-      const res = await apiFetch<{ agent: OwnerAgent }>(`/v1/owner/agents/${agent.id}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ publicDirectory: next }),
-      });
-      setAgent(res.agent);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Could not update this agent.");
-    } finally {
-      setActing(false);
-    }
-  }
-
   if (loading) {
     return (
-      <main className={`wrap ${styles.main}`}>
+      <main className={`${ui.page} ${ui.narrow}`}>
         <p className="label">Loading…</p>
       </main>
     );
@@ -301,7 +275,7 @@ export default function AgentDetailPage() {
 
   if (!agent) {
     return (
-      <main className={`wrap ${styles.main}`}>
+      <main className={`${ui.page} ${ui.narrow}`}>
         <p className="label">Not found</p>
         <p className={styles.hint}>
           Either this agent doesn&apos;t exist or you&apos;re not its owner. <a href="/dashboard">Back to dashboard</a>.
@@ -311,8 +285,10 @@ export default function AgentDetailPage() {
   }
 
   return (
-    <main className={`wrap ${styles.main}`}>
-      <p className="label"><a href="/dashboard">← Dashboard</a></p>
+    <main className={`${ui.page} ${ui.narrow}`}>
+      <p className={ui.crumbs}>
+        <a href="/dashboard">Overview</a> / Agent
+      </p>
 
       <section className={styles.masthead}>
         <div className={styles.headingRow}>
@@ -383,17 +359,28 @@ export default function AgentDetailPage() {
             : "Suspending closes any active sessions and cancels pending offers immediately."}
         </p>
 
-        <label className={styles.checkboxRow}>
-          <input
-            type="checkbox"
-            checked={agent.publicDirectory}
-            disabled={acting}
-            onChange={(e) => toggleDirectory(e.target.checked)}
-          />
-          <span>
-            List in the public <a href="/directory">agent directory</a>
-          </span>
-        </label>
+      </section>
+
+      <section className={styles.section} aria-label="This agent's activity">
+        <div className={ui.sectionHead}>
+          <h2 className={ui.h2}>Activity ({timeline.length})</h2>
+          {timeline.length > 0 && (
+            <a className={ui.sectionLink} href={`/dashboard/activity?agent=${agent.id}`}>
+              Filter in Activity →
+            </a>
+          )}
+        </div>
+        {timeline.length === 0 ? (
+          <div className={ui.empty}>
+            <p>No sessions or attestations yet.</p>
+          </div>
+        ) : (
+          <ul className={ui.rows}>
+            {timeline.slice(0, 10).map((item) => (
+              <InteractionRow key={`${item.kind}-${item.id}`} item={item} names={names} />
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className={styles.section} aria-label="Visibility and retention defaults">
@@ -577,30 +564,6 @@ export default function AgentDetailPage() {
         {spendLimitError && <p className={styles.error}>{spendLimitError}</p>}
       </section>
 
-      <section className={styles.section} aria-label="Sessions involving this agent">
-        <p className="label">Sessions ({sessions.length})</p>
-        {sessions.length === 0 ? (
-          <p className={styles.hint}>No sessions yet.</p>
-        ) : (
-          <ul className={styles.sessionList}>
-            {sessions.map((session) => {
-              const other = session.initiator.agentId === agent.id ? session.counterparty.agentId : session.initiator.agentId;
-              const otherName = other ? (counterparties[other]?.name ?? other) : "—";
-              return (
-                <li key={session.id}>
-                  <a href={`/dashboard/sessions/${session.id}`} className={styles.sessionRow}>
-                    <div>
-                      <p className={styles.sessionPurpose}>{session.purpose}</p>
-                      <p className={styles.hint}>with {otherName} · {formatDate(session.createdAt)}</p>
-                    </div>
-                    <StatusBadge status={session.status} />
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
     </main>
   );
 }

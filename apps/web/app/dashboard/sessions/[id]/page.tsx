@@ -1,109 +1,68 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
+import { EvidenceDetails, RecordPanel } from "../../../../components/app/Evidence";
+import styles from "../../../../components/app/Evidence.module.css";
+import { nameOf, useAgentNames } from "../../../../components/app/Interactions";
+import ui from "../../../../components/app/ui.module.css";
 import { PayloadView } from "../../../../components/PayloadView";
 import { StatusBadge } from "../../../../components/StatusBadge";
-import { VerifyResultView } from "../../../../components/VerifyResultView";
-import {
-  ApiError,
-  apiFetch,
-  formatDate,
-  shortHash,
-  checkRecord,
-  type AgentPublic,
-  type LookupResult,
-  type MessageView,
-  type Owner,
-  type OwnerSession,
-  type RecordSummary,
-  type VerifyResult,
-} from "../../../../lib/dashboard";
-import styles from "./page.module.css";
+import { apiFetch, formatDate, shortHash, type LookupResult, type MessageView, type OwnerAgent, type OwnerSession } from "../../../../lib/dashboard";
+import { countDirections, counterpartyHref, messageDirection, plainStatus, plural, sessionPerspective } from "../../../../lib/interactions";
+import { useOwner } from "../../../../lib/ownerContext";
 
-export default function SessionDetailPage() {
+export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
+  const { owner } = useOwner();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<OwnerSession | null>(null);
   const [messages, setMessages] = useState<MessageView[]>([]);
-  const [participants, setParticipants] = useState<Record<string, AgentPublic>>({});
-  const [record, setRecord] = useState<RecordSummary | null>(null);
-  const [owner, setOwner] = useState<Owner | null>(null);
-
-  const [verifying, setVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
-
+  const [myAgentIds, setMyAgentIds] = useState<string[]>([]);
+  const [lookup, setLookup] = useState<LookupResult | null>(null);
   const [resolvingPause, setResolvingPause] = useState(false);
   const [pauseError, setPauseError] = useState<string | null>(null);
-
-  const [counterpartyLookup, setCounterpartyLookup] = useState<LookupResult | null>(null);
-  const [sealingAction, setSealingAction] = useState<"unseal-request" | "unseal-approve" | "dispute" | null>(null);
-  const [sealingError, setSealingError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       apiFetch<{ session: OwnerSession }>(`/v1/sessions/${id}`),
       apiFetch<{ items: MessageView[] }>(`/v1/sessions/${id}/messages?limit=200`),
-      apiFetch<{ owner: Owner }>("/v1/owner/me").catch(() => null),
+      apiFetch<{ items: OwnerAgent[] }>("/v1/owner/agents?limit=200").catch(() => ({ items: [] as OwnerAgent[] })),
     ])
-      .then(async ([sessionRes, messagesRes, ownerRes]) => {
+      .then(([sessionRes, messagesRes, agentsRes]) => {
         if (cancelled) return;
         setSession(sessionRes.session);
         setMessages(messagesRes.items);
-        if (ownerRes) setOwner(ownerRes.owner);
-
-        const ids = [sessionRes.session.initiator.agentId, sessionRes.session.counterparty.agentId].filter((v): v is string => !!v);
-        const pairs = await Promise.all(
-          ids.map((agentId) =>
-            apiFetch<{ agent: AgentPublic }>(`/v1/agents/${agentId}`)
-              .then((r) => [agentId, r.agent] as const)
-              .catch(() => null),
-          ),
-        );
-        if (cancelled) return;
-        const map: Record<string, AgentPublic> = {};
-        for (const pair of pairs) if (pair) map[pair[0]] = pair[1];
-        setParticipants(map);
-
-        // Realignment R4 (docs/SPEC.md §15): counterparty panel — the side that isn't the
-        // viewing owner's own agent, looked up via realignment R2's public GET /v1/lookup
-        // so this shows the same independently-verifiable facts anyone could check.
-        const mine = ownerRes ? new Set([sessionRes.session.initiator.ownerId, sessionRes.session.counterparty.ownerId].filter((o) => o === ownerRes.owner.id)) : new Set<string>();
-        const otherAgentId =
-          mine.has(sessionRes.session.initiator.ownerId ?? "")
-            ? sessionRes.session.counterparty.agentId
-            : sessionRes.session.initiator.agentId;
-        if (otherAgentId) {
-          apiFetch<LookupResult>(`/v1/lookup?agentId=${otherAgentId}`)
-            .then((r) => {
-              if (!cancelled) setCounterpartyLookup(r);
-            })
-            .catch(() => {});
-        }
-
-        if (sessionRes.session.recordId) {
-          apiFetch<{ record: RecordSummary }>(`/v1/records/${sessionRes.session.recordId}`)
-            .then((r) => {
-              if (!cancelled) setRecord(r.record);
-            })
-            .catch(() => {});
-        }
+        setMyAgentIds(agentsRes.items.map((a) => a.id));
       })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) router.replace(`/login?redirectTo=/dashboard/sessions/${id}`);
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const perspective = session ? sessionPerspective(session, { ownerId: owner.id, agentIds: myAgentIds }) : null;
+  const names = useAgentNames(session ? [session.initiator.agentId, session.counterparty.agentId] : []);
+
+  useEffect(() => {
+    // The other side's public profile facts (GET /v1/lookup): the same verifiable facts
+    // anyone could check, never ratings or content.
+    const other = perspective?.mine ? perspective.otherAgentId : null;
+    if (!other || perspective?.bothMine) return;
+    let cancelled = false;
+    apiFetch<LookupResult>(`/v1/lookup?agentId=${encodeURIComponent(other)}`)
+      .then((r) => {
+        if (!cancelled) setLookup(r);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [perspective?.mine, perspective?.otherAgentId, perspective?.bothMine]);
 
   async function resolvePause(decision: "resume" | "decline-resume") {
     setResolvingPause(true);
@@ -118,171 +77,210 @@ export default function SessionDetailPage() {
     }
   }
 
-  async function verifyRecord() {
-    if (!session?.recordId) return;
-    setVerifying(true);
-    setVerifyError(null);
-    setVerifyResult(null);
-    try {
-      const check = await checkRecord(session.recordId);
-      if (check.kind === "verified") setVerifyResult(check.result);
-      else setVerifyError("This record is sealed, so only its receipt is available. Once it's unsealed, the full record can be verified.");
-    } catch (err) {
-      setVerifyError(err instanceof Error ? err.message : "Could not run verification.");
-    } finally {
-      setVerifying(false);
-    }
-  }
-
-  async function runSealingAction(action: "unseal-request" | "unseal-approve" | "dispute") {
-    if (!session?.recordId) return;
-    setSealingAction(action);
-    setSealingError(null);
-    try {
-      await apiFetch(`/v1/records/${session.recordId}/${action}`, { method: "POST" });
-      const r = await apiFetch<{ record: RecordSummary }>(`/v1/records/${session.recordId}`);
-      setRecord(r.record);
-    } catch (err) {
-      setSealingError(err instanceof Error ? err.message : "Could not update this record.");
-    } finally {
-      setSealingAction(null);
-    }
-  }
-
   if (loading) {
     return (
-      <main className={`wrap ${styles.main}`}>
+      <main className={`${ui.page} ${ui.narrow}`}>
         <p className="label">Loading…</p>
       </main>
     );
   }
 
-  if (!session) {
+  if (!session || !perspective) {
     return (
-      <main className={`wrap ${styles.main}`}>
+      <main className={`${ui.page} ${ui.narrow}`}>
         <p className="label">Not found</p>
-        <p className={styles.hint}>
-          Either this session doesn&apos;t exist or neither of its agents belongs to you. <a href="/dashboard">Back to dashboard</a>.
+        <p className={ui.hint}>
+          This session doesn&apos;t exist, or neither of its agents is yours. <a href="/dashboard/activity">Back to activity</a>.
         </p>
       </main>
     );
   }
 
-  const initiatorName = session.initiator.agentId ? (participants[session.initiator.agentId]?.name ?? session.initiator.agentId) : "—";
-  const counterpartyName = session.counterparty.agentId ? (participants[session.counterparty.agentId]?.name ?? session.counterparty.agentId) : "pending";
-  const isParticipantOwner = !!owner && (owner.id === session.initiator.ownerId || owner.id === session.counterparty.ownerId);
-  const pauseRequestedByName = session.pause ? (participants[session.pause.requestedBy]?.name ?? session.pause.requestedBy) : null;
+  const isParticipant = perspective.mine !== null;
+  // From the viewer's side: "mine" is their agent; for read-only viewers, the initiator.
+  const leftId = isParticipant ? perspective.myAgentId : session.initiator.agentId;
+  const rightId = isParticipant ? perspective.otherAgentId : session.counterparty.agentId;
+  const leftName = nameOf(names, leftId);
+  const rightName = nameOf(names, rightId, "an agent that hasn't joined yet");
+  const initiatorName = nameOf(names, session.initiator.agentId);
+  const { sent, received } = countDirections(messages, perspective);
+  const pausedBy = session.pause ? nameOf(names, session.pause.requestedBy) : null;
+
+  function sideNote(agentId: string | null): string {
+    const started = agentId === session!.initiator.agentId ? "Started the session" : "Was invited";
+    if (!isParticipant) return started;
+    if (perspective!.bothMine) return `Your agent · ${started.toLowerCase()}`;
+    return agentId === perspective!.myAgentId ? `Your agent · ${started.toLowerCase()}` : `The other side · ${started.toLowerCase()}`;
+  }
 
   return (
-    <main className={`wrap ${styles.main}`}>
-      <p className="label"><a href="/dashboard">← Dashboard</a></p>
-
-      <section className={styles.masthead}>
-        <div className={styles.headingRow}>
-          <h1 className={styles.title}>{session.purpose}</h1>
+    <main className={`${ui.page} ${ui.narrow}`}>
+      <p className={ui.crumbs}>
+        <a href="/dashboard/activity">Activity</a> / Session
+      </p>
+      <header className={ui.header}>
+        <p className="label">Session · a conversation between two agents</p>
+        <div className={ui.headingRow}>
+          <h1 className={ui.title}>{session.purpose || "Session"}</h1>
           <StatusBadge status={session.status} />
         </div>
-        <p className={styles.hint}>
-          {session.mode === "relay" ? "Relay mode — OpenGlass stores message content" : "Notary mode — OpenGlass stores only message hashes"}
+        <p className={ui.lede}>
+          {plainStatus("session", session.status)}. OpenGlass sat between the two agents as a neutral witness: it
+          favors neither, and both owners see the same record.
         </p>
-      </section>
+      </header>
 
       {session.status === "paused" && session.pause && (
-        <section className={styles.card} aria-label="Paused for human review">
-          <p className="label">Paused for review</p>
-          <p className={styles.hint}>
-            {pauseRequestedByName} paused this session and is waiting for an owner to review before it continues: “{session.pause.reason}”
-            {" — "}
-            {formatDate(session.pause.requestedAt)}.
+        <section className={`${ui.card} ${ui.attention} ${ui.section}`} aria-label="Paused for review">
+          <h2 className={ui.h2}>Paused for an owner&apos;s review</h2>
+          <p className={ui.body} style={{ marginTop: 8 }}>
+            {pausedBy} paused this session on {formatDate(session.pause.requestedAt)} and is waiting for an owner before it
+            continues: &ldquo;{session.pause.reason}&rdquo;
           </p>
-          {isParticipantOwner ? (
-            <div className={styles.buttonRow}>
-              <button className={styles.button} onClick={() => resolvePause("resume")} disabled={resolvingPause}>
-                {resolvingPause ? "Working…" : "Resume session"}
+          {isParticipant ? (
+            <div className={ui.buttonRow}>
+              <button className={ui.button} onClick={() => resolvePause("resume")} disabled={resolvingPause}>
+                {resolvingPause ? "Working…" : "Resume the session"}
               </button>
-              <button className={styles.secondaryButton} onClick={() => resolvePause("decline-resume")} disabled={resolvingPause}>
-                Decline &amp; close
+              <button className={ui.buttonGhost} onClick={() => resolvePause("decline-resume")} disabled={resolvingPause}>
+                Decline and close it
               </button>
             </div>
           ) : (
-            <p className={styles.hint}>Only an owner of one of the two participating agents can resume or close this session.</p>
+            <p className={ui.hint}>Only the owner of one of the two agents can resume or close it.</p>
           )}
-          {pauseError && <p className={styles.error}>{pauseError}</p>}
+          {pauseError && <p className={ui.error}>{pauseError}</p>}
         </section>
       )}
 
-      <section className={styles.participants}>
-        <div className={styles.participantCard}>
-          <p className="label">Initiator</p>
-          <p className={styles.participantName}>{initiatorName}</p>
-        </div>
-        <span className={styles.arrow} aria-hidden="true">→</span>
-        <div className={styles.participantCard}>
-          <p className="label">Counterparty</p>
-          <p className={styles.participantName}>{counterpartyName}</p>
-        </div>
-      </section>
-
-      {counterpartyLookup && (
-        <section className={styles.card} aria-label="Counterparty facts">
-          <p className="label">Who&apos;s on the other side</p>
-          {counterpartyLookup.registered ? (
-            <>
-              <p className={styles.hint}>
-                {counterpartyLookup.verifiedOwner
-                  ? `Operated by ${counterpartyLookup.verifiedOwner.domain} (verified)`
-                  : "No verified domain on file for this agent."}
-                {" · "}first seen {formatDate(counterpartyLookup.firstSeen)}
+      <section className={ui.section} aria-label="In short">
+        <h2 className={ui.h2} style={{ marginBottom: 12 }}>
+          In short
+        </h2>
+        <div className={ui.card}>
+          <div className={styles.parties}>
+            <div className={`${styles.party} ${isParticipant ? styles.partyMine : ""}`}>
+              <p className="label">{isParticipant ? "Your agent" : "Agent"}</p>
+              <p className={styles.partyName}>
+                {leftId && isParticipant ? <a href={`/dashboard/agents/${leftId}`}>{leftName}</a> : leftName}
               </p>
-              {(counterpartyLookup.flags.newAgent || counterpartyLookup.flags.unverifiedDomain || counterpartyLookup.flags.recentlyRotatedKey) && (
-                <p className={styles.error}>
-                  {[
-                    counterpartyLookup.flags.newAgent && "This agent registered less than 7 days ago.",
-                    counterpartyLookup.flags.unverifiedDomain && "It claims a domain it hasn't verified.",
-                    counterpartyLookup.flags.recentlyRotatedKey && "Its signing key was recently rotated.",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                </p>
+              <p className={styles.partyNote}>{sideNote(leftId)}</p>
+            </div>
+            <span className={styles.between} aria-hidden="true">
+              ⇄
+            </span>
+            <div className={styles.party}>
+              <p className="label">{isParticipant ? (perspective.bothMine ? "Also your agent" : "Other agent") : "Agent"}</p>
+              <p className={styles.partyName}>{rightName}</p>
+              <p className={styles.partyNote}>{rightId ? sideNote(rightId) : "Hasn't accepted yet"}</p>
+              {rightId && (
+                <a className={styles.partyLink} href={counterpartyHref({ kind: "agent", agentId: rightId })}>
+                  View profile →
+                </a>
               )}
-              <a className={styles.downloadLink} href={`/agents/${counterpartyLookup.agentId}`}>
-                View full profile →
-              </a>
-            </>
-          ) : (
-            <p className={styles.error}>This counterparty isn&apos;t registered on OpenGlass — nothing about it could be verified.</p>
-          )}
-        </section>
-      )}
+            </div>
+          </div>
+          <ul className={styles.facts}>
+            <li>
+              {initiatorName} started it on {formatDate(session.createdAt)}
+              {session.activatedAt ? `; it began on ${formatDate(session.activatedAt)}` : ""}
+              {session.closedAt ? ` and ended on ${formatDate(session.closedAt)}` : ""}.
+            </li>
+            <li>
+              {plural(messages.length, "message")}
+              {isParticipant && messages.length > 0 && (
+                <>
+                  : {sent} sent by {leftName}, {received} received from {rightName}
+                </>
+              )}
+              .
+            </li>
+            <li>
+              {session.mode === "relay"
+                ? "OpenGlass kept the content of every message."
+                : "Notary mode: OpenGlass kept only a fingerprint of each message. The content stayed with the agents."}
+            </li>
+            <li>{session.recordId ? "A signed record was issued when it ended (below)." : "A signed record is issued when it ends."}</li>
+          </ul>
+        </div>
 
-      <section className={styles.card}>
-        <table className={styles.table}>
-          <tbody>
-            <tr><td>Created</td><td>{formatDate(session.createdAt)}</td></tr>
-            <tr><td>Activated</td><td>{formatDate(session.activatedAt)}</td></tr>
-            <tr><td>Closed</td><td>{formatDate(session.closedAt)}</td></tr>
-            <tr><td>Latest hash</td><td><code>{shortHash(session.head.hash ? session.head.hash : null)}</code></td></tr>
-          </tbody>
-        </table>
+        {lookup && (
+          <div className={ui.card} aria-label="About the other agent">
+            <p className="label">About {rightName}</p>
+            {lookup.registered ? (
+              <>
+                <p className={ui.body} style={{ marginTop: 6 }}>
+                  {lookup.verifiedOwner
+                    ? `Its operator proved control of ${lookup.verifiedOwner.domain}.`
+                    : lookup.claimed
+                      ? "Claimed by an owner, who hasn't verified a domain."
+                      : "Not claimed by any owner yet."}{" "}
+                  On OpenGlass since {formatDate(lookup.firstSeen)}
+                  {lookup.openDisputesCount > 0 ? `, with ${plural(lookup.openDisputesCount, "disputed record")}` : ""}.
+                </p>
+                {(lookup.flags.newAgent || lookup.flags.unverifiedDomain || lookup.flags.recentlyRotatedKey) && (
+                  <p className={`${ui.hint} ${styles.warn}`}>
+                    {[
+                      lookup.flags.newAgent && "It registered less than 7 days ago.",
+                      lookup.flags.unverifiedDomain && "It names a domain it hasn't verified.",
+                      lookup.flags.recentlyRotatedKey && "Its signing key changed recently.",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className={ui.body}>This agent isn&apos;t registered on OpenGlass anymore.</p>
+            )}
+          </div>
+        )}
       </section>
 
-      <section className={styles.section} aria-label="Message timeline">
-        <p className="label">Hash-chained messages ({messages.length})</p>
+      <section className={ui.section} aria-label="The conversation">
+        <div className={ui.sectionHead}>
+          <h2 className={ui.h2}>The conversation</h2>
+        </div>
+        <p className={ui.hint} style={{ marginBottom: 14 }}>
+          {isParticipant
+            ? `Messages ${leftName} sent are on the right; messages it received from ${rightName} are on the left. `
+            : ""}
+          Each one was signed by the agent that wrote it and countersigned by OpenGlass when it arrived. Open &ldquo;Signed
+          details&rdquo; on any message to see the proof.
+        </p>
         {messages.length === 0 ? (
-          <p className={styles.hint}>No messages yet.</p>
+          <div className={ui.empty}>
+            <p>No messages yet.</p>
+          </div>
         ) : (
-          <ol className={styles.timeline}>
+          <ol className={styles.thread}>
             {messages.map((message) => {
-              const senderName = participants[message.envelope.sender.agentId]?.name ?? message.envelope.sender.agentId;
+              const senderId = message.envelope.sender.agentId;
+              const senderName = nameOf(names, senderId);
+              const direction = messageDirection(senderId, perspective);
+              const recipientName = senderId === leftId ? rightName : leftName;
+              const label =
+                direction === "sent"
+                  ? `Sent by ${senderName} to ${recipientName}`
+                  : direction === "received"
+                    ? `Received from ${senderName}`
+                    : `${senderName} to ${recipientName}`;
               return (
-                <li key={message.id} className={styles.messageItem}>
-                  <span className={styles.seqBadge}>{message.seq}</span>
-                  <div className={styles.messageBody}>
-                    <p className={styles.messageSender}>{senderName}</p>
+                <li key={message.id} className={`${styles.bubbleRow} ${direction === "sent" ? styles.sent : ""}`}>
+                  <div className={styles.bubble}>
+                    <div className={styles.bubbleHead}>
+                      <p className={styles.direction}>
+                        <span className={styles.directionArrow} aria-hidden="true">
+                          {direction === "received" ? "←" : "→"}
+                        </span>
+                        {label}
+                      </p>
+                      <span className={styles.when}>
+                        #{message.seq} · {formatDate(message.envelope.sentAt)}
+                      </span>
+                    </div>
                     <PayloadView message={message} />
-                    <p className={styles.messageMeta}>
-                      hash {shortHash(message.hash)} · signed {message.signature.alg} · countersigned {formatDate(message.receivedAt)}
-                    </p>
+                    <EvidenceDetails message={message} writer={senderName} />
                   </div>
                 </li>
               );
@@ -292,105 +290,51 @@ export default function SessionDetailPage() {
       </section>
 
       {session.recordId && (
-        <section className={styles.section} aria-label="Record and verification">
-          <p className="label">Record</p>
-          <div className={styles.card}>
-            {record && (
-              <table className={styles.table}>
-                <tbody>
-                  <tr><td>Record ID</td><td><code>{record.id}</code></td></tr>
-                  <tr><td>Visibility</td><td>{record.visibility ?? "shared"}</td></tr>
-                  <tr><td>Close reason</td><td>{record.statement.closeReason}</td></tr>
-                  <tr><td>Evidence size</td><td>{record.evidence.bytes.toLocaleString()} bytes</td></tr>
-                  <tr><td>Issued</td><td>{formatDate(record.statement.issuedAt)}</td></tr>
-                </tbody>
-              </table>
-            )}
-
-            {record && record.visibility !== "sealed" && isParticipantOwner && (
-              <div className={styles.hint} aria-label="Dispute status">
-                {record.dispute ? (
-                  <p>
-                    Disputed by {owner && record.dispute.disputedBy === owner.id ? "you" : "the other owner"} on{" "}
-                    {formatDate(record.dispute.disputedAt)}. The record itself is unchanged, and both owners keep full access.
-                  </p>
-                ) : (
-                  <>
-                    <p>
-                      Disagree with what this record shows? A dispute flags it for both owners and is counted on each
-                      agent&apos;s public profile. It doesn&apos;t change or hide the record.
-                    </p>
-                    <div className={styles.buttonRow}>
-                      <button className={styles.secondaryButton} onClick={() => runSealingAction("dispute")} disabled={sealingAction !== null}>
-                        {sealingAction === "dispute" ? "Working…" : "Dispute"}
-                      </button>
-                    </div>
-                  </>
-                )}
-                {sealingError && <p className={styles.error}>{sealingError}</p>}
-              </div>
-            )}
-
-            {record?.visibility === "sealed" && record.sealedState && (
-              <div className={styles.hint} aria-label="Sealed record status">
-                {record.sealedState.status === "sealed" && (
-                  <>
-                    <p>
-                      Sealed (a legacy setting) — only a receipt (hashes, signatures, record id) is available until both
-                      owners consent to unseal, or either disputes.
-                    </p>
-                    <div className={styles.buttonRow}>
-                      <button className={styles.button} onClick={() => runSealingAction("unseal-request")} disabled={sealingAction !== null}>
-                        {sealingAction === "unseal-request" ? "Working…" : "Request unseal"}
-                      </button>
-                      <button className={styles.secondaryButton} onClick={() => runSealingAction("dispute")} disabled={sealingAction !== null}>
-                        {sealingAction === "dispute" ? "Working…" : "Dispute"}
-                      </button>
-                    </div>
-                  </>
-                )}
-                {record.sealedState.status === "unseal_requested" && (
-                  <>
-                    <p>
-                      {isParticipantOwner && owner && record.sealedState.approvals.includes(owner.id)
-                        ? "You've requested/approved unsealing — waiting on the other owner."
-                        : "The other owner has requested to unseal this record."}
-                    </p>
-                    <div className={styles.buttonRow}>
-                      {!(owner && record.sealedState.approvals.includes(owner.id)) && (
-                        <button className={styles.button} onClick={() => runSealingAction("unseal-approve")} disabled={sealingAction !== null}>
-                          {sealingAction === "unseal-approve" ? "Working…" : "Approve unseal"}
-                        </button>
-                      )}
-                      <button className={styles.secondaryButton} onClick={() => runSealingAction("dispute")} disabled={sealingAction !== null}>
-                        {sealingAction === "dispute" ? "Working…" : "Dispute instead"}
-                      </button>
-                    </div>
-                  </>
-                )}
-                {record.sealedState.status === "unsealed" && <p>Unsealed — both owners consented. The full bundle is available below.</p>}
-                {record.sealedState.status === "disputed" && <p>Disputed — force-unsealed for fairness. The full bundle is available below.</p>}
-                {sealingError && <p className={styles.error}>{sealingError}</p>}
-              </div>
-            )}
-
-            <div className={styles.verifyRow}>
-              <button className={styles.button} onClick={verifyRecord} disabled={verifying}>
-                {verifying ? "Verifying…" : "Verify independently"}
-              </button>
-              <a className={styles.downloadLink} href={`/v1/records/${session.recordId}/bundle`}>
-                Download bundle
-              </a>
-            </div>
-            <p className={styles.hint}>
-              Runs the full cryptographic check (every hash, every signature, against OpenGlass&apos;s published keys) via
-              the public <code>POST /v1/verify</code> endpoint — the same check anyone can run without trusting OpenGlass&apos;s word.
-            </p>
-            {verifyError && <p className={styles.error}>{verifyError}</p>}
-            {verifyResult && <VerifyResultView result={verifyResult} />}
-          </div>
+        <section className={ui.section} aria-label="The record">
+          <h2 className={ui.h2} style={{ marginBottom: 12 }}>
+            The record
+          </h2>
+          <RecordPanel recordId={session.recordId} kind="session" viewer={{ ownerId: owner.id, participant: isParticipant, soleOwner: false }} />
         </section>
       )}
+
+      <details className={ui.details}>
+        <summary>Technical details</summary>
+        <div className={ui.detailsBody}>
+          <table className={ui.table}>
+            <tbody>
+              <tr>
+                <td>Session ID</td>
+                <td>
+                  <code>{session.id}</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Mode</td>
+                <td>{session.mode === "relay" ? "Relay (content kept)" : "Notary (fingerprints only)"}</td>
+              </tr>
+              <tr>
+                <td>Started by</td>
+                <td>
+                  <code>{session.initiator.agentId}</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Invited</td>
+                <td>
+                  <code>{session.counterparty.agentId ?? "—"}</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Latest hash</td>
+                <td>
+                  <code title={session.head.hash ?? undefined}>{shortHash(session.head.hash)}</code> (#{session.head.seq})
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
     </main>
   );
 }

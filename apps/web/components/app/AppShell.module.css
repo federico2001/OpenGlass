@@ -1,0 +1,232 @@
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--rule);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.topbarInner,
+.navInner,
+.footerInner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding-inline: 20px;
+}
+
+.topbarInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  min-width: 0;
+}
+
+.area {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding-left: 10px;
+  border-left: 1px solid var(--rule-strong);
+  white-space: nowrap;
+}
+
+.account {
+  position: relative;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.accountButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.accountButton:hover {
+  border-color: var(--accent);
+}
+
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-inset);
+  color: var(--accent-text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 220px;
+  background: var(--bg-panel);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 6px 24px rgb(18 24 27 / 0.12);
+}
+
+.menuEmail {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.menu a,
+.menu button {
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.menu a:hover,
+.menu button:hover {
+  background: var(--bg-subtle);
+}
+
+.nav {
+  border-top: 1px solid var(--rule);
+}
+
+.navInner {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.navInner::-webkit-scrollbar {
+  display: none;
+}
+
+.navInner a {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  color: var(--ink-soft);
+  padding: 12px 12px 10px;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.navInner a:hover {
+  color: var(--ink);
+}
+
+.navInner a.navActive {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.loading {
+  padding-block: 48px;
+  flex: 1;
+}
+
+.footer {
+  margin-top: auto;
+  border-top: 1px solid var(--rule);
+}
+
+.footerInner {
+  padding-block: 20px 32px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 24px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.footerInner p {
+  margin: 0;
+  max-width: 60ch;
+  line-height: 1.6;
+}
+
+.footerInner nav {
+  display: flex;
+  gap: 16px;
+}
+
+.footerInner a {
+  font-family: var(--font-ui);
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+
+.footerInner a:hover {
+  color: var(--accent-text);
+}
+
+@media (max-width: 560px) {
+  .area {
+    display: none;
+  }
+
+  .email {
+    display: none;
+  }
+
+  .accountButton {
+    padding: 4px;
+  }
+}

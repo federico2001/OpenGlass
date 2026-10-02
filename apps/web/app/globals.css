@@ -161,3 +161,16 @@ samp {
 .footer-nav a:hover {
   color: var(--accent-text);
 }
+
+/* Owners sign in to a separate app area (/dashboard); the public header only links to it. */
+.site-nav a.site-nav-signin {
+  padding: 6px 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+}
+
+.site-nav a.site-nav-signin:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}

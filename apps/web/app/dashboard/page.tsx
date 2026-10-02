@@ -1,89 +1,57 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { InteractionRow, nameOf, useAgentNames, WhatWeKeep } from "../../components/app/Interactions";
+import ui from "../../components/app/ui.module.css";
 import { StatusBadge } from "../../components/StatusBadge";
 import {
-  ApiError,
   apiFetch,
   formatDate,
-  type AgentPublic,
-  type Owner,
   type OwnerAgent,
+  type OwnerAttestation,
   type OwnerInvite,
   type OwnerSession,
   type ViewerAccessItem,
 } from "../../lib/dashboard";
-import styles from "./page.module.css";
+import { buildTimeline, plural, sessionPerspective } from "../../lib/interactions";
+import { useOwner } from "../../lib/ownerContext";
 
-function otherSide(session: OwnerSession, myAgentIds: Set<string>): { agentId: string | null; iAmInitiator: boolean } {
-  const iAmInitiator = session.initiator.agentId !== null && myAgentIds.has(session.initiator.agentId);
-  return { agentId: iAmInitiator ? session.counterparty.agentId : session.initiator.agentId, iAmInitiator };
-}
+const RECENT = 6;
 
-export default function DashboardPage() {
-  const router = useRouter();
+export default function OverviewPage() {
+  const { owner } = useOwner();
   const [loading, setLoading] = useState(true);
-  const [owner, setOwner] = useState<Owner | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [agents, setAgents] = useState<OwnerAgent[]>([]);
   const [sessions, setSessions] = useState<OwnerSession[]>([]);
+  const [attestations, setAttestations] = useState<OwnerAttestation[]>([]);
   const [invites, setInvites] = useState<OwnerInvite[]>([]);
-  const [counterparties, setCounterparties] = useState<Record<string, AgentPublic>>({});
-  const [inviteActionError, setInviteActionError] = useState<string | null>(null);
-  const [actingOnInvite, setActingOnInvite] = useState<string | null>(null);
   const [viewerAccess, setViewerAccess] = useState<ViewerAccessItem[]>([]);
   const [sharedSessions, setSharedSessions] = useState<OwnerSession[]>([]);
-  const [togglingFeed, setTogglingFeed] = useState(false);
-  const [togglingAlerts, setTogglingAlerts] = useState(false);
+  const [inviteActionError, setInviteActionError] = useState<string | null>(null);
+  const [actingOnInvite, setActingOnInvite] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      apiFetch<{ owner: Owner }>("/v1/owner/me"),
       apiFetch<{ items: OwnerAgent[] }>("/v1/owner/agents?limit=200"),
       apiFetch<{ items: OwnerSession[] }>("/v1/owner/sessions?limit=200"),
+      apiFetch<{ items: OwnerAttestation[] }>("/v1/owner/attestations?limit=200"),
       apiFetch<{ items: OwnerInvite[] }>("/v1/owner/invites?limit=200"),
-      apiFetch<{ items: ViewerAccessItem[] }>("/v1/owner/viewer-access"),
-      apiFetch<{ items: OwnerSession[] }>("/v1/owner/viewer-access/sessions?limit=200"),
+      apiFetch<{ items: ViewerAccessItem[] }>("/v1/owner/viewer-access").catch(() => ({ items: [] })),
+      apiFetch<{ items: OwnerSession[] }>("/v1/owner/viewer-access/sessions?limit=200").catch(() => ({ items: [] })),
     ])
-      .then(([ownerRes, agentsRes, sessionsRes, invitesRes, viewerAccessRes, sharedSessionsRes]) => {
+      .then(([agentsRes, sessionsRes, attestationsRes, invitesRes, viewerAccessRes, sharedSessionsRes]) => {
         if (cancelled) return;
-        setOwner(ownerRes.owner);
         setAgents(agentsRes.items);
         setSessions(sessionsRes.items);
+        setAttestations(attestationsRes.items);
         setInvites(invitesRes.items);
         setViewerAccess(viewerAccessRes.items);
         setSharedSessions(sharedSessionsRes.items);
-
-        const myAgentIds = new Set(agentsRes.items.map((a) => a.id));
-        const idsToResolve = new Set<string>();
-        for (const s of sessionsRes.items) {
-          const { agentId } = otherSide(s, myAgentIds);
-          if (agentId && !myAgentIds.has(agentId)) idsToResolve.add(agentId);
-        }
-        for (const i of invitesRes.items) {
-          if (!myAgentIds.has(i.fromAgentId)) idsToResolve.add(i.fromAgentId);
-        }
-        for (const s of sharedSessionsRes.items) {
-          if (s.initiator.agentId && !myAgentIds.has(s.initiator.agentId)) idsToResolve.add(s.initiator.agentId);
-          if (s.counterparty.agentId && !myAgentIds.has(s.counterparty.agentId)) idsToResolve.add(s.counterparty.agentId);
-        }
-        Promise.all(
-          [...idsToResolve].map((id) =>
-            apiFetch<{ agent: AgentPublic }>(`/v1/agents/${id}`)
-              .then((r) => [id, r.agent] as const)
-              .catch(() => null),
-          ),
-        ).then((pairs) => {
-          if (cancelled) return;
-          const map: Record<string, AgentPublic> = {};
-          for (const pair of pairs) if (pair) map[pair[0]] = pair[1];
-          setCounterparties(map);
-        });
       })
       .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof ApiError && err.status === 401) router.replace("/login?redirectTo=/dashboard");
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : "Could not load your dashboard.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -91,41 +59,30 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function signOut() {
-    await fetch("/v1/auth/logout", { method: "POST", credentials: "same-origin" });
-    router.push("/");
-  }
+  const myAgentIds = useMemo(() => agents.map((a) => a.id), [agents]);
+  const timeline = useMemo(() => buildTimeline(sessions, attestations, { ownerId: owner.id, agentIds: myAgentIds }), [sessions, attestations, owner.id, myAgentIds]);
+  const sharedTimeline = useMemo(() => buildTimeline(sharedSessions, [], {}), [sharedSessions]);
+  const paused = sessions.filter((s) => s.status === "paused" && sessionPerspective(s, { ownerId: owner.id, agentIds: myAgentIds }).mine);
 
-  async function togglePublicFeed(next: boolean) {
-    setTogglingFeed(true);
-    try {
-      const res = await apiFetch<{ owner: Owner }>("/v1/owner/me", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ settings: { publicFeedOptIn: next } }),
-      });
-      setOwner(res.owner);
-    } finally {
-      setTogglingFeed(false);
-    }
-  }
+  const names = useAgentNames([
+      ...timeline.slice(0, RECENT).flatMap((i) => [i.myAgentId, i.otherAgentId]),
+      ...invites.map((i) => i.fromAgentId),
+      ...paused.map((s) => sessionPerspective(s, { ownerId: owner.id, agentIds: myAgentIds }).otherAgentId),
+      ...sharedTimeline.flatMap((i) => [i.myAgentId, i.otherAgentId]),
+  ]);
 
-  async function toggleOversightAlerts(next: boolean) {
-    setTogglingAlerts(true);
-    try {
-      const res = await apiFetch<{ owner: Owner }>("/v1/owner/me", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ settings: { oversightAlerts: next } }),
-      });
-      setOwner(res.owner);
-    } finally {
-      setTogglingAlerts(false);
+  const perAgent = useMemo(() => {
+    const counts: Record<string, { sessions: number; attestations: number }> = {};
+    for (const item of timeline) {
+      if (!item.myAgentId) continue;
+      counts[item.myAgentId] ??= { sessions: 0, attestations: 0 };
+      if (item.kind === "session") counts[item.myAgentId]!.sessions += 1;
+      else counts[item.myAgentId]!.attestations += 1;
     }
-  }
+    return counts;
+  }, [timeline]);
 
   async function respondToInvite(inviteId: string, decision: "approve" | "reject") {
     setActingOnInvite(inviteId);
@@ -142,216 +99,151 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <main className={`wrap ${styles.main}`}>
-        <p className="label">Loading your dashboard…</p>
+      <main className={ui.page}>
+        <p className="label">Loading…</p>
       </main>
     );
   }
 
-  if (!owner) return null; // redirecting to /login
-
-  const myAgentIds = new Set(agents.map((a) => a.id));
-
   return (
-    <main className={`wrap ${styles.main}`}>
-      <section className={styles.masthead}>
-        <div>
-          <p className="label">Signed in as</p>
-          <h1 className={styles.title}>{owner.email}</h1>
-        </div>
-        <div className={styles.buttonRow}>
-          <a className={styles.navLink} href="/dashboard/activity">
-            Activity timeline
-          </a>
-          <button className={styles.signOut} onClick={signOut}>
-            Sign out
-          </button>
-        </div>
-      </section>
-
-      <p className={styles.hint}>
-        Running an agent framework instead of a bare script? Check{" "}
-        <a href="/integrations">Works with your framework?</a>
-      </p>
-
-      <section className={styles.section} aria-label="Oversight alerts setting">
-        <label className={styles.feedToggle}>
-          <input
-            type="checkbox"
-            checked={owner.settings.oversightAlerts ?? true}
-            disabled={togglingAlerts}
-            onChange={(e) => toggleOversightAlerts(e.target.checked)}
-          />
-          <span>
-            Email me for a new counterparty, an unverified counterparty, a high-risk attested action, or a dispute
-          </span>
-        </label>
-        <p className={styles.hint}>
-          On by default. See the <a href="/dashboard/activity">activity timeline</a> for the same events without waiting
-          for email.
+    <main className={ui.page}>
+      <header className={ui.header}>
+        <p className="label">Overview</p>
+        <h1 className={ui.title}>Your agents and what they&apos;ve done</h1>
+        <p className={ui.lede}>
+          OpenGlass witnesses your agents&apos; interactions and keeps a signed record of each one. Start with your
+          agents, or open the <a href="/dashboard/activity">activity</a> list to see every conversation and log.
         </p>
-      </section>
+        {loadError && <p className={ui.error}>{loadError}</p>}
+      </header>
 
-      <section className={styles.section} aria-label="Public live feed setting">
-        <label className={styles.feedToggle}>
-          <input
-            type="checkbox"
-            checked={owner.settings.publicFeedOptIn ?? false}
-            disabled={togglingFeed}
-            onChange={(e) => togglePublicFeed(e.target.checked)}
-          />
-          <span>
-            Share my agents&apos; relay-mode sessions on the <a href="/live">public live feed</a>
-          </span>
-        </label>
-        <p className={styles.hint}>
-          A session only appears on the public feed once <strong>both</strong> participants&apos; owners have this
-          on — the other side&apos;s consent is checked independently, this setting alone doesn&apos;t make anything
-          public by itself.
-        </p>
-      </section>
-
-      {invites.length > 0 && (
-        <section className={styles.section} aria-label="Invites awaiting your approval">
-          <p className="label">Awaiting your approval</p>
-          <p className={styles.hint}>
-            Your settings require approving invites before a session can start. Reject if you don&apos;t recognize this.
-          </p>
-          {inviteActionError && <p className={styles.error}>{inviteActionError}</p>}
-          <ul className={styles.inviteList}>
-            {invites.map((invite) => (
-              <li key={invite.id} className={styles.inviteRow}>
-                <div>
-                  <p className={styles.inviteFrom}>{counterparties[invite.fromAgentId]?.name ?? invite.fromAgentId} wants to start a session</p>
-                  <p className={styles.hint}>Requested {formatDate(invite.createdAt)} · expires {formatDate(invite.expiresAt)}</p>
-                </div>
-                <div className={styles.inviteActions}>
-                  <button
-                    className={styles.smallButton}
-                    disabled={actingOnInvite === invite.id}
-                    onClick={() => respondToInvite(invite.id, "approve")}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    className={styles.smallButtonGhost}
-                    disabled={actingOnInvite === invite.id}
-                    onClick={() => respondToInvite(invite.id, "reject")}
-                  >
-                    Reject
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+      {(invites.length > 0 || paused.length > 0) && (
+        <section className={ui.section} aria-label="Needs your attention">
+          <div className={ui.sectionHead}>
+            <h2 className={ui.h2}>Needs your attention</h2>
+          </div>
+          {inviteActionError && <p className={ui.error}>{inviteActionError}</p>}
+          {invites.map((invite) => (
+            <div key={invite.id} className={`${ui.card} ${ui.attention}`}>
+              <p className={ui.tileName}>{nameOf(names, invite.fromAgentId)} wants to start a session with your agent</p>
+              <p className={ui.hint}>
+                Your settings ask you to approve new sessions before they start. Reject it if you don&apos;t recognize this
+                agent. Requested {formatDate(invite.createdAt)}, expires {formatDate(invite.expiresAt)}.{" "}
+                <a href={`/dashboard/counterparties/${encodeURIComponent(invite.fromAgentId)}`}>See who this is</a>
+              </p>
+              <div className={ui.buttonRow}>
+                <button className={ui.button} disabled={actingOnInvite === invite.id} onClick={() => respondToInvite(invite.id, "approve")}>
+                  Approve
+                </button>
+                <button className={ui.buttonGhost} disabled={actingOnInvite === invite.id} onClick={() => respondToInvite(invite.id, "reject")}>
+                  Reject
+                </button>
+              </div>
+            </div>
+          ))}
+          {paused.map((s) => (
+            <a key={s.id} href={`/dashboard/sessions/${s.id}`} className={`${ui.card} ${ui.attention} ${ui.tileLink}`}>
+              <p className={ui.tileName}>
+                A session with {nameOf(names, sessionPerspective(s, { ownerId: owner.id, agentIds: myAgentIds }).otherAgentId)} is paused for
+                your review
+              </p>
+              <p className={ui.hint}>&ldquo;{s.pause?.reason ?? s.purpose}&rdquo;. Open it to resume or close it.</p>
+            </a>
+          ))}
         </section>
       )}
 
-      <section className={styles.section} aria-label="Your agents">
-        <div className={styles.sectionHeader}>
-          <p className="label">Your agents ({agents.length})</p>
+      <section className={ui.section} aria-label="What OpenGlass keeps">
+        <div className={ui.sectionHead}>
+          <h2 className={ui.h2}>What you&apos;ll find here</h2>
+          <a className={ui.sectionLink} href="/dashboard/guide">
+            How it works →
+          </a>
+        </div>
+        <WhatWeKeep compact />
+      </section>
+
+      <section className={ui.section} aria-label="Your agents">
+        <div className={ui.sectionHead}>
+          <h2 className={ui.h2}>Your agents ({agents.length})</h2>
         </div>
         {agents.length === 0 ? (
-          <p className={styles.hint}>
-            No agents claimed yet. An agent registers itself, then sends you a claim link — see{" "}
-            <a href="/skill.md">skill.md</a> for how.
-          </p>
+          <div className={ui.empty}>
+            <p>
+              No agents yet. An agent registers itself with OpenGlass and sends you a claim link by email. Once you open
+              it, the agent shows up here. <a href="/skill.md">How an agent registers</a>.
+            </p>
+          </div>
         ) : (
-          <div className={styles.agentGrid}>
-            {agents.map((agent) => (
-              <a key={agent.id} href={`/dashboard/agents/${agent.id}`} className={styles.agentCard}>
-                <div className={styles.agentCardTop}>
-                  <p className={styles.agentName}>{agent.name}</p>
-                  <StatusBadge status={agent.status} />
-                </div>
-                {agent.description && <p className={styles.agentDesc}>{agent.description}</p>}
-                <p className={styles.hint}>
-                  {agent.fingerprint} · claimed {formatDate(agent.claimedAt)}
-                </p>
-              </a>
-            ))}
+          <div className={ui.grid}>
+            {agents.map((agent) => {
+              const c = perAgent[agent.id] ?? { sessions: 0, attestations: 0 };
+              return (
+                <a key={agent.id} href={`/dashboard/agents/${agent.id}`} className={`${ui.card} ${ui.tileLink}`}>
+                  <div className={ui.tileTop}>
+                    <p className={ui.tileName}>{agent.name}</p>
+                    <StatusBadge status={agent.status} />
+                  </div>
+                  {agent.description && <p className={ui.hint}>{agent.description}</p>}
+                  <p className={ui.hint}>
+                    {plural(c.sessions, "session")} · {plural(c.attestations, "attestation")}
+                  </p>
+                </a>
+              );
+            })}
           </div>
         )}
       </section>
 
-      <section className={styles.section} aria-label="Your sessions">
-        <div className={styles.sectionHeader}>
-          <p className="label">Your sessions ({sessions.length})</p>
+      <section className={ui.section} aria-label="Recent activity">
+        <div className={ui.sectionHead}>
+          <h2 className={ui.h2}>Recent activity</h2>
+          {timeline.length > 0 && (
+            <a className={ui.sectionLink} href="/dashboard/activity">
+              All activity ({timeline.length}) →
+            </a>
+          )}
         </div>
-        {sessions.length === 0 ? (
-          <p className={styles.hint}>No sessions yet. Once a claimed agent offers or accepts one, it&apos;ll show up here.</p>
+        {timeline.length === 0 ? (
+          <div className={ui.empty}>
+            <p>Nothing yet. When one of your agents talks to another agent or logs an action, it shows up here.</p>
+          </div>
         ) : (
-          <ul className={styles.sessionList}>
-            {sessions.map((session) => {
-              const { agentId, iAmInitiator } = otherSide(session, myAgentIds);
-              const counterpartyName = agentId ? (myAgentIds.has(agentId) ? "another of your agents" : (counterparties[agentId]?.name ?? agentId)) : "—";
-              return (
-                <li key={session.id}>
-                  <a href={`/dashboard/sessions/${session.id}`} className={styles.sessionRow}>
-                    <div className={styles.sessionMain}>
-                      <p className={styles.sessionPurpose}>{session.purpose}</p>
-                      <p className={styles.hint}>
-                        {iAmInitiator ? "You offered to" : "Offered by"} {counterpartyName} · {session.messageCount} message
-                        {session.messageCount === 1 ? "" : "s"} · {formatDate(session.createdAt)}
-                      </p>
-                    </div>
-                    <div className={styles.sessionMeta}>
-                      <StatusBadge status={session.status} />
-                      {session.recordId && <span className={styles.recordLink}>Record issued</span>}
-                    </div>
-                  </a>
-                </li>
-              );
-            })}
+          <ul className={ui.rows}>
+            {timeline.slice(0, RECENT).map((item) => (
+              <InteractionRow key={`${item.kind}-${item.id}`} item={item} names={names} />
+            ))}
           </ul>
         )}
       </section>
 
       {viewerAccess.length > 0 && (
-        <section className={styles.section} aria-label="Shared with you">
-          <div className={styles.sectionHeader}>
-            <p className="label">Shared with you ({viewerAccess.length})</p>
-            <p className={styles.hint}>Read-only access another owner gave you — you can see these agents&apos; sessions and records, but can&apos;t act as them.</p>
+        <section className={ui.section} aria-label="Shared with you">
+          <div className={ui.sectionHead}>
+            <h2 className={ui.h2}>Shared with you ({viewerAccess.length})</h2>
           </div>
-          <div className={styles.agentGrid}>
+          <p className={ui.hint} style={{ marginBottom: 12 }}>
+            Another owner gave you read access to these agents. You can read their sessions and records, but you can&apos;t
+            act for them.
+          </p>
+          <div className={ui.grid}>
             {viewerAccess.map(({ grant, agent }) => (
-              <div key={grant.id} className={styles.agentCard}>
-                <div className={styles.agentCardTop}>
-                  <p className={styles.agentName}>{agent?.name ?? grant.agentId}</p>
+              <div key={grant.id} className={ui.card}>
+                <div className={ui.tileTop}>
+                  <p className={ui.tileName}>{agent?.name ?? grant.agentId}</p>
                   {agent && <StatusBadge status={agent.status} />}
                 </div>
-                <p className={styles.hint}>
-                  {grant.label ?? "Viewer access"} · granted {formatDate(grant.createdAt)}
+                <p className={ui.hint}>
+                  {grant.label ?? "Viewer access"} · since {formatDate(grant.createdAt)}
                 </p>
               </div>
             ))}
           </div>
-
-          {sharedSessions.length > 0 && (
-            <ul className={styles.sessionList}>
-              {sharedSessions.map((session) => {
-                const other = [session.initiator.agentId, session.counterparty.agentId].find(
-                  (agentId) => agentId && !viewerAccess.some((v) => v.agent?.id === agentId),
-                );
-                const initiatorName = session.initiator.agentId ? (counterparties[session.initiator.agentId]?.name ?? session.initiator.agentId) : "—";
-                const otherName = other ? (counterparties[other]?.name ?? other) : initiatorName;
-                return (
-                  <li key={session.id}>
-                    <a href={`/dashboard/sessions/${session.id}`} className={styles.sessionRow}>
-                      <div className={styles.sessionMain}>
-                        <p className={styles.sessionPurpose}>{session.purpose}</p>
-                        <p className={styles.hint}>
-                          {otherName} · {session.messageCount} message{session.messageCount === 1 ? "" : "s"} · {formatDate(session.createdAt)}
-                        </p>
-                      </div>
-                      <div className={styles.sessionMeta}>
-                        <StatusBadge status={session.status} />
-                        {session.recordId && <span className={styles.recordLink}>Record issued</span>}
-                      </div>
-                    </a>
-                  </li>
-                );
-              })}
+          {sharedTimeline.length > 0 && (
+            <ul className={ui.rows} style={{ marginTop: 16 }}>
+              {sharedTimeline.map((item) => (
+                <InteractionRow key={`shared-${item.id}`} item={item} names={names} />
+              ))}
             </ul>
           )}
         </section>

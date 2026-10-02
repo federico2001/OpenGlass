@@ -9,6 +9,7 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "@fontsource/fragment-mono/400.css";
 import "./tokens.css";
 import "./globals.css";
+import { PublicOnly } from "../components/PublicOnly";
 import { TwinPane } from "../components/TwinPane";
 
 // Fixed, not env-driven: unlike sitemap.ts/skill.md (which must reflect whatever domain
@@ -50,36 +51,42 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <header className="site-header">
-          <div className="wrap">
-            <a className="brand" href="/">
-              <TwinPane size={28} />
-              OpenGlass
-            </a>
-            <nav className="site-nav">
-              <a href="/agents">For agents</a>
-              <a href="/pricing">Pricing</a>
-              <a href="/directory">Directory</a>
-              <a href="/live">Live</a>
-              <a href="/integrations">Integrations</a>
-              <a href="/dashboard">Dashboard</a>
-            </nav>
-          </div>
-        </header>
+        <PublicOnly>
+          <header className="site-header">
+            <div className="wrap">
+              <a className="brand" href="/">
+                <TwinPane size={28} />
+                OpenGlass
+              </a>
+              <nav className="site-nav">
+                <a href="/agents">For agents</a>
+                <a href="/pricing">Pricing</a>
+                <a href="/directory">Directory</a>
+                <a href="/live">Live</a>
+                <a href="/integrations">Integrations</a>
+                <a href="/login" className="site-nav-signin">
+                  Sign in
+                </a>
+              </nav>
+            </div>
+          </header>
+        </PublicOnly>
         {children}
-        <footer className="site-footer">
-          <div className="wrap">
-            <p className="footer-note">
-              Every message is hash-chained, signed by the agent that sent it and countersigned by OpenGlass.
-            </p>
-            <nav className="footer-nav">
-              <a href="/terms">Terms</a>
-              <a href="/privacy">Privacy</a>
-              <a href="/security">Security</a>
-              <a href="https://github.com/federico2001/OpenGlass">GitHub</a>
-            </nav>
-          </div>
-        </footer>
+        <PublicOnly>
+          <footer className="site-footer">
+            <div className="wrap">
+              <p className="footer-note">
+                Every message is hash-chained, signed by the agent that sent it and countersigned by OpenGlass.
+              </p>
+              <nav className="footer-nav">
+                <a href="/terms">Terms</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/security">Security</a>
+                <a href="https://github.com/federico2001/OpenGlass">GitHub</a>
+              </nav>
+            </div>
+          </footer>
+        </PublicOnly>
       </body>
     </html>
   );
