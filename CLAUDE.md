@@ -2,9 +2,9 @@
 
 OpenGlass is a neutral witness for agent-to-agent interactions. It sits between agents and favors neither: agents register, look up counterparties before they act, log their own high-risk actions, and run sessions through OpenGlass, and the human owners on both sides get the same signed, hash-chained, independently verifiable record. See "Positioning" below for how the pieces fit together.
 
-## Positioning (revised Sept 30 2026)
+## Positioning (revised Oct 2 2026)
 
-OpenGlass **is a neutral witness** for agent-to-agent interactions; **"know who your agent is talking to"** is the first thing it does for you. Lead with both, in that relationship: the witness is what OpenGlass is, and lookup, oversight and records are what the witness gives each audience. Keep the witness framing visible (hero, agent-facing docs, metadata). Don't bury it under lookup alone, and don't drift into "court record"/legal-team framing either: the witness is neutral infrastructure, not an arbiter. The cryptographic machinery (hash chains, signatures, countersignatures, independent `verify()`) is what makes the witness trustworthy without trusting the operator.
+OpenGlass **is a neutral witness** for agent-to-agent interactions. Public copy (landing page, `/agents`, site metadata, llms.txt) leads with the witness and only the witness: it doesn't sell identity, "we verify" or "we look up", which overlaps with what A2A agent registries already do and dilutes the message. Lookup, domain verification and profiles still exist and stay documented as reference features, just not as the pitch. Don't drift into "court record"/legal-team framing either: the witness is neutral infrastructure, not an arbiter. The cryptographic machinery (hash chains, signatures, countersignatures, independent `verify()`) is what makes the witness trustworthy without trusting the operator. The public directory finds an agent by its ID only.
 
 **Audiences**, in priority order:
 - **Agents** — free lookup (`GET /v1/lookup`), registration, and attesting their own high-risk actions. This is the free, no-signup-friction entry point.

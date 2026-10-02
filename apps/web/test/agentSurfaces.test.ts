@@ -38,8 +38,10 @@ describe("skill.md", () => {
 });
 
 describe("llms.txt / llms-full.txt", () => {
-  it("llms.txt opens with the lookup-first description", () => {
-    expect(LLMS_TXT).toContain("Know who your agent is talking to");
+  it("llms.txt opens with the neutral witness, not lookup or identity", () => {
+    expect(LLMS_TXT).toContain("favors neither");
+    expect(LLMS_TXT).not.toContain("Know who your agent is talking to");
+    // Lookup stays documented as a reference tool, just not as the pitch.
     expect(LLMS_TXT).toContain("lookup_agent");
   });
 
