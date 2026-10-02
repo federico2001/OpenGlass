@@ -70,3 +70,4 @@ The reply is a short plain-language report with a 0–100 score per section and 
   ```sh
   node apps/checkup/scripts/register-a2a-registry.mjs https://checkup.openglass.glass
   ```
+  The registry can take a while to answer the registration, since it fetches the card and may probe `message/send` first. The script allows 120 seconds (`REGISTER_TIMEOUT_SECONDS`). If that runs out it keeps going and polls for the listing anyway, and it retries any polling call that times out.
