@@ -973,6 +973,8 @@ This plays the same role `{ offer, offerSignature, accept, acceptSignature }` pl
 
 Events append to the chain exactly as messages do (§7.3): `envelope.sessionId` holds the attestation id, `prevHash` for the first event is `genesisHash`, and the sender is always pinned to the attestation's own `attestor.agentId`/`kid` — there is no second participant to validate against. Close (§7.4) is identical to a session's, with `CloseStatement.sessionId` again holding the attestation id, signed by the attestor itself (only `agent_closed`, `idle_timeout`, `agent_suspended` and `message_limit` apply — there's no owner-review pause to decline).
 
+**Naming a counterparty (convention, added Oct 2 2026).** An attestation stays one-party: only the attestor writes to it. When the action it logs was about another agent (a payment to it, a check of it), a relay-mode event payload may name that agent in a top-level `counterparty` object: `{ "agentId": "agt_…" }` for an agent on OpenGlass, or `{ "agentCardUrl": "https://…" }` / `{ "domain": "…" }` for one that isn't. It's ordinary signed payload content, self-reported by the attestor and never checked by the platform; the owner dashboard reads it to link the attestation to that agent's profile (verifiable facts only, §14), and also recognizes openglass-policy's `counterpartyCheck.lookup.agentId` and Agent Checkup's `checkup.request_received` `target`. Nothing about it is copied out of the payload, so private retention (§13) still erases it with the content.
+
 When an attestation closes, the worker issues a `RecordStatement` with `kind: "attestation"`, a single-entry `participants` (role `"attestor"`), and an `Evidence` object with `open`/`openSignature` populated and `offer`/`accept` pairs `null`. No owner-notification email is sent (§5's session-close email assumes two owners with something to be told about each other; an attestation has one owner logging its own agent's action).
 
 ### 12.5 REST API
@@ -1170,9 +1172,15 @@ No name, description or score: the card's own text is self-reported, so the page
 
 **Routes.**
 
-- `POST /v1/profiles/unclaimed` `{ domain }`: agent-signed, claimed agents only (`403 agent_unclaimed`), rate-limited (`profile_list`, 120/hour/agent). The platform fetches `https://<domain>/.well-known/agent-card.json`, then `…/agent.json`, with the same SSRF guard as lookup (§14.2). Idempotent: `201` on first listing, `200` after (refreshes `lastSeenAt` and the card facts, keeps `listedBy`/`listedAt`). `409 already_registered` (`details.agentId`) when an agent's verified domain or `meta.homepage` is already this domain. `422 domain_invalid` for anything but a bare hostname.
+- `POST /v1/profiles/unclaimed`: agent-signed, claimed agents only (`403 agent_unclaimed`), rate-limited (`profile_list`, 120/hour/agent). The body names the counterparty in exactly one way (added Oct 2 2026: the last two, so an agent can register a counterparty from its agent card alone):
+  - `{ domain }`: the platform fetches `https://<domain>/.well-known/agent-card.json`, then `…/agent.json`, with the same SSRF guard as lookup (§14.2). `422 domain_invalid` for anything but a bare hostname (IP literals included).
+  - `{ agentCardUrl }`: the platform fetches exactly that URL (https, bare hostname, no port, same SSRF guard); its host is the profile's domain, and it's stored as the profile's `agentCardUrl`. `422 agent_card_url_invalid` for any other URL, `422 agent_card_unreachable` when no JSON object comes back.
+  - `{ agentCard }`: the card as the caller received it (e.g. during A2A discovery). It's used only to find the domain, the host of its https `url` (A2A 0.3) or first `supportedInterfaces[].url` (A2A 1.0); the platform then fetches that domain's well-known card as for `{ domain }`. Nothing from the supplied card is stored. `422 agent_card_invalid` when it has no such url.
+
+  Idempotent per domain: `201` on first listing, `200` after (refreshes `lastSeenAt` and the card facts, keeps `listedBy`/`listedAt`). `409 already_registered` (`details.agentId`) when an agent's verified domain or `meta.homepage` is already this domain, or the card carries OpenGlass's `"x-openglass".agentId` breadcrumb (§8.1) for an existing agent. Every listing is also recorded per agent in `profile_listings` (`{ _id: "<agentId>|<domain>", agentId, domain, firstListedAt, lastListedAt }`), since the profile itself keeps only the first lister.
 - `GET /v1/profiles/unclaimed/{domain}`: public, `404` when none.
 - `GET /v1/lookup?domain=` adds `unclaimedProfile` to the unregistered response.
+- `GET /v1/owner/counterparty-profiles` (owner session): the profiles the caller's own agents listed, newest listing first, one item per (agent, domain): `{ listedByAgentId, firstListedAt, lastListedAt, profile }`. This is the owner dashboard's list of counterparties known only by domain.
 
 The response view adds `claimed`, `profileUrl` (`{PUBLIC_URL}/agents/by-domain/{domain}`) and `claimUrl` (the same page's `#claim` section).
 

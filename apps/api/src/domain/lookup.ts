@@ -108,6 +108,7 @@ export function unclaimedProfileView(doc: UnclaimedProfileDoc, publicUrl: string
 
 /** A bare DNS hostname (no scheme, port, path or IP literal), lowercase. */
 export function isBareHostname(domain: string): boolean {
+  if (/^[\d.]+$/.test(domain)) return false; // IPv4 literal
   return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain);
 }
 
@@ -306,10 +307,13 @@ async function buildUnregisteredResult(db: Db, query: LookupQuery, publicUrl: st
 
 /** Tries each A2A well-known card path on `https://{domain}` in order; the first one that
  * returns JSON wins. */
-export async function fetchAgentCardForDomain(domain: string): Promise<{ url: string; json: unknown; sha256: string } | null> {
+export async function fetchAgentCardForDomain(
+  domain: string,
+  fetchCard: AgentCardFetcher = fetchJsonWithHash,
+): Promise<{ url: string; json: unknown; sha256: string } | null> {
   for (const path of AGENT_CARD_PATHS) {
     const url = `https://${domain}${path}`;
-    const fetched = await fetchJsonWithHash(url);
+    const fetched = await fetchCard(url);
     if (fetched) return { url, ...fetched };
   }
   return null;
@@ -323,7 +327,10 @@ async function fetchJsonCapped(url: string): Promise<unknown | null> {
   return (await fetchJsonWithHash(url))?.json ?? null;
 }
 
-async function fetchJsonWithHash(url: string): Promise<{ json: unknown; sha256: string } | null> {
+/** Fetches a JSON document and the sha256 of its bytes, or null. */
+export type AgentCardFetcher = (url: string) => Promise<{ json: unknown; sha256: string } | null>;
+
+export async function fetchJsonWithHash(url: string): Promise<{ json: unknown; sha256: string } | null> {
   let hostname: string;
   try {
     hostname = new URL(url).hostname;

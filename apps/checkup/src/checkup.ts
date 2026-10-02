@@ -7,7 +7,7 @@ import { checkX402 } from "./checks/x402.js";
 import { contentHash, type OpenGlassLink } from "./openglass.js";
 import { DATA_NOTE, overallScore, verifyHow, topFixes, type OpenGlassProfile, type Report, type Sections } from "./report.js";
 import type { Source, Store } from "./store.js";
-import { domainOf, type Target } from "./target.js";
+import { counterpartyHint, domainOf, type Target } from "./target.js";
 
 export interface CheckupContext {
   deps: CheckDeps;
@@ -53,6 +53,7 @@ export async function runCheckup(target: Target, caller: { key: string; source: 
     type: "checkup.request_received",
     reportId,
     target: { key: target.key, origin: target.origin, cardUrl: target.cardUrl },
+    ...(counterpartyHint(target) ? { counterparty: counterpartyHint(target) } : {}),
     via: caller.via,
     receivedAt: new Date().toISOString(),
   });

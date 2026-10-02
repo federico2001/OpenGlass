@@ -5,6 +5,13 @@ All notable changes to `openglass-sdk` (Python) are documented here. Format loos
 
 ## Unreleased
 
+### Added
+
+- `register_counterparty(domain=... | agent_card_url=... | agent_card=...)`: lists a
+  counterparty that isn't registered on OpenGlass as an unclaimed profile (docs/SPEC.md §16),
+  from its domain, its agent card URL, or the agent card itself. OpenGlass fetches the card and
+  stores only its URL and hash; the counterparty's operator can later claim the profile.
+
 ### Fixed
 
 - `send_message()` works in a real back-and-forth conversation. It used to track only the chain

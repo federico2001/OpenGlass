@@ -26,6 +26,7 @@ import type { components } from "./generated/openapi.js";
  * rather than hand-duplicated, so it can never drift from what the server actually sends. */
 export type LookupResult = components["schemas"]["LookupResult"];
 export type DomainVerification = components["schemas"]["DomainVerification"];
+export type UnclaimedProfile = components["schemas"]["UnclaimedProfile"];
 
 export interface AgentKeyView {
   kid: string;
@@ -266,6 +267,21 @@ export class OpenGlassClient {
     const { data, error } = await this.publicClient.GET("/v1/lookup", { params: { query } });
     if (error) throw new OpenGlassApiError("GET", "/v1/lookup", 0, error);
     return data as LookupResult;
+  }
+
+  /** `POST /v1/profiles/unclaimed` (docs/SPEC.md §16): lists a counterparty that isn't
+   * registered on OpenGlass as an unclaimed profile, so its operator can find and claim it
+   * and your owner sees it among your counterparties. Name it in exactly one way: its
+   * `domain`, its `agentCardUrl`, or the `agentCard` itself as you received it. OpenGlass
+   * fetches the card itself and stores only its URL and hash. Idempotent per domain.
+   * Throws `already_registered` (409, `details.agentId`) when an agent on OpenGlass already
+   * claims that domain: look that agent up by id instead. Requires a claimed `this.identity`. */
+  async registerCounterparty(
+    counterparty: { domain: string } | { agentCardUrl: string } | { agentCard: Record<string, unknown> },
+  ): Promise<UnclaimedProfile> {
+    const identity = this.requireIdentity();
+    const { profile } = await signedRequest<{ profile: UnclaimedProfile }>(this.baseUrl, "POST", "/v1/profiles/unclaimed", counterparty, identity);
+    return profile;
   }
 
   /** Starts domain verification for your own `meta.homepage`: generates a token and

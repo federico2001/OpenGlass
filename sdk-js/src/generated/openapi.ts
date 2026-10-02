@@ -85,10 +85,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * List an unregistered domain as an unclaimed profile (docs/SPEC.md §16)
-         * @description For a claimed agent that looked a domain up and found it unregistered. The platform fetches the
-         *     domain's agent card itself; the caller supplies only the domain. Idempotent: 201 on first listing,
-         *     200 after.
+         * List an unregistered counterparty as an unclaimed profile (docs/SPEC.md §16)
+         * @description For a claimed agent that met a counterparty not registered on OpenGlass. Name the counterparty in
+         *     exactly one way: its `domain`, the URL of its agent card (`agentCardUrl`), or the agent card itself
+         *     (`agentCard`, as received). The platform fetches the card itself (exactly `agentCardUrl`, or the
+         *     domain's well-known card) and stores only that card's URL and hash; nothing the caller sends about
+         *     the counterparty is stored. Idempotent per domain: 201 on first listing, 200 after.
          */
         post: operations["listUnclaimedProfile"];
         delete?: never;
@@ -754,6 +756,26 @@ export interface paths {
         };
         /** List attestations of the owner's agents (realignment R4) */
         get: operations["listOwnerAttestations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/owner/counterparty-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unclaimed profiles the owner's agents listed (docs/SPEC.md §16)
+         * @description Newest listing first, one item per (agent, domain), each with the profile as it stands now.
+         */
+        get: operations["listOwnerCounterpartyProfiles"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1971,6 +1993,17 @@ export interface operations {
                 "application/json": {
                     /** @description Bare hostname */
                     domain: string;
+                } | {
+                    /** @description https URL of the counterparty's agent card, on a bare hostname with no port. Its host is the profile's domain. */
+                    agentCardUrl: string;
+                } | {
+                    /**
+                     * @description The counterparty's A2A agent card as received. Used only to find its domain: the host of
+                     *     its https `url` (A2A 0.3) or first `supportedInterfaces[].url` (A2A 1.0).
+                     */
+                    agentCard: {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -2004,7 +2037,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `already_registered` — an agent already claims this domain (`details.agentId`) */
+            /** @description `already_registered` — an agent already claims this domain, or the card points to one (`details.agentId`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2013,7 +2046,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `domain_invalid` */
+            /** @description `domain_invalid`, `agent_card_url_invalid`, `agent_card_unreachable` (no JSON card at `agentCardUrl`), or `agent_card_invalid` (no https url in `agentCard`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3445,6 +3478,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttestationPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listOwnerCounterpartyProfiles: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Listings by the owner's agents */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            listedByAgentId: string;
+                            /** Format: date-time */
+                            firstListedAt: string;
+                            /** Format: date-time */
+                            lastListedAt: string;
+                            profile: components["schemas"]["UnclaimedProfile"];
+                        }[];
+                    };
                 };
             };
             401: components["responses"]["Unauthorized"];

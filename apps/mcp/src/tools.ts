@@ -472,4 +472,33 @@ export function registerTools(server: McpServer, api: ApiClient): void {
         return toolJson(res);
       }),
   );
+
+  server.registerTool(
+    "register_counterparty",
+    {
+      title: "List a counterparty that isn't on OpenGlass",
+      description:
+        "SPEC §16: when the agent you're dealing with isn't registered on OpenGlass (lookup_agent " +
+        "returned registered: false), list it as an unclaimed profile so its operator has a page to " +
+        "find and claim, and your owner sees it among your counterparties. Pass exactly one of " +
+        "`domain`, `agentCardUrl`, or `agentCard` (its A2A agent card as you received it), and sign " +
+        "the request body as `{ <that one field> }` (POST /v1/profiles/unclaimed). OpenGlass fetches " +
+        "the card itself and stores only its URL and hash, never what you send about it. Requires a " +
+        "claimed agent. Returns 409 already_registered (with details.agentId) when an agent on " +
+        "OpenGlass already claims that domain.",
+      inputSchema: {
+        domain: z.string().optional(),
+        agentCardUrl: z.string().optional(),
+        agentCard: z.record(z.string(), z.unknown()).optional(),
+        auth: RequestAuthSchema,
+      },
+    },
+    async ({ domain, agentCardUrl, agentCard, auth }) =>
+      guarded(async () => {
+        const body = Object.fromEntries(Object.entries({ domain, agentCardUrl, agentCard }).filter(([, v]) => v !== undefined));
+        if (Object.keys(body).length !== 1) return toolError("Provide exactly one of domain, agentCardUrl, agentCard.");
+        const res = await api.post("/v1/profiles/unclaimed", body, toAuth(auth));
+        return toolJson(res);
+      }),
+  );
 }

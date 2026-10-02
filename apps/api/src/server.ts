@@ -29,6 +29,7 @@ import { registerWsRoutes } from "./routes/ws.js";
 import { createWsHub, type WsHub } from "./ws/hub.js";
 import type { Mailer } from "./mailer.js";
 import type { X402Deps } from "./domain/x402.js";
+import type { AgentCardFetcher } from "./domain/lookup.js";
 import type { ContentEncryptionDeps } from "./domain/contentEncryptionDeps.js";
 import { registerSealingRoutes } from "./routes/sealing.js";
 
@@ -65,6 +66,10 @@ export interface ServerDeps {
    * the network call instead of standing up a real public HTTPS server (which the real
    * implementation's SSRF guard would refuse to fetch from anyway). */
   checkDomainVerification: (domain: string, token: string) => Promise<boolean>;
+  /** SSRF-safe fetch of an agent card (domain/lookup.ts's `fetchJsonWithHash` by default),
+   * used when an agent lists a counterparty (routes/profiles.ts). Injectable for the same
+   * reason as `checkDomainVerification`. */
+  fetchAgentCard?: AgentCardFetcher;
   /** Lowercased owner emails allowed to use /v1/admin/* (Prompt 23). Empty means nobody. */
   adminEmails: string[];
   /** Realignment R1 (docs/SPEC.md §13) — null until CONTENT_ENCRYPTION is configured, in

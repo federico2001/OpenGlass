@@ -115,6 +115,7 @@ export const validDocs: Record<string, Record<string, unknown>> = {
     _id: "acme.example", agentCardUrl: "https://acme.example/.well-known/agent-card.json", cardSha256: hash, cardFetchedAt: now,
     listedBy: `agt_${U}`, listedAt: now, lastSeenAt: now, claimedAgentId: null, claimedAt: null,
   },
+  profile_listings: { _id: `agt_${U}|acme.example`, agentId: `agt_${U}`, domain: "acme.example", firstListedAt: now, lastListedAt: now },
   checkup_reports: {
     _id: `chk_${U}`, targetKey: "acme.example", report: { v: 1, sections: {} },
     attestationId: `att_${U}`, recordId: null, createdAt: now, expiresAt: now,
@@ -149,6 +150,7 @@ export const invalidDocs: [collection: string, why: string, doc: Record<string, 
   ["integration_requests", "bad status", { ...validDocs.integration_requests, status: "resolved" }],
   ["rate_limits", "fractional count", { ...validDocs.rate_limits, count: 1.5 }],
   ["unclaimed_profiles", "bad listedBy", { ...validDocs.unclaimed_profiles, listedBy: "acme" }],
+  ["profile_listings", "bad agentId", { ...validDocs.profile_listings, agentId: "acme" }],
   ["checkup_reports", "bad id prefix", { ...validDocs.checkup_reports, _id: `rec_${U}` }],
   ["checkup_events", "unknown kind", { ...validDocs.checkup_events, kind: "page_view" }],
 ];
