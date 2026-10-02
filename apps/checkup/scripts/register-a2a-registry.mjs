@@ -5,16 +5,18 @@
 //   node apps/checkup/scripts/register-a2a-registry.mjs [https://checkup.openglass.glass]
 //
 // Env: A2A_REGISTRY_URL (default https://a2aregistry.org), WAIT_MINUTES (default 40; the
-// registry re-checks agents every 30 minutes).
+// registry re-checks agents every 30 minutes), REGISTER_TIMEOUT_SECONDS (default 120; the
+// registry fetches the card and may probe message/send before it answers the registration).
 
 const checkupUrl = (process.argv[2] ?? "https://checkup.openglass.glass").replace(/\/+$/, "");
 const registry = (process.env.A2A_REGISTRY_URL ?? "https://a2aregistry.org").replace(/\/+$/, "");
 const waitMinutes = Number(process.env.WAIT_MINUTES ?? 40);
+const registerTimeoutMs = Number(process.env.REGISTER_TIMEOUT_SECONDS ?? 120) * 1000;
 const wellKnownURI = `${checkupUrl}/.well-known/agent-card.json`;
 const host = new URL(checkupUrl).hostname;
 
-async function json(url, init) {
-  const res = await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
+async function json(url, init, timeoutMs = 30_000) {
+  const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
   const text = await res.text();
   let body;
   try {
@@ -33,18 +35,41 @@ if (card.status !== 200) {
 }
 console.log(`card ok: ${card.body.name}`);
 
-// 1. Register (idempotent from our side: a duplicate is reported and we move on).
-const reg = await json(`${registry}/api/agents/register`, {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ wellKnownURI }),
-});
-console.log(`register: HTTP ${reg.status}`, JSON.stringify(reg.body));
-if (reg.status >= 400 && reg.status !== 409) process.exit(1);
+const isTimeout = (err) => err?.name === "TimeoutError";
+
+// 1. Register (idempotent from our side: a duplicate is reported and we move on). A timeout
+// doesn't mean it failed: the registry may still finish on its side, so we go on to polling.
+try {
+  const reg = await json(
+    `${registry}/api/agents/register`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wellKnownURI }) },
+    registerTimeoutMs,
+  );
+  console.log(`register: HTTP ${reg.status}`, JSON.stringify(reg.body));
+  if (reg.status >= 400 && reg.status !== 409) process.exit(1);
+} catch (err) {
+  if (!isTimeout(err)) throw err;
+  console.log(`register: no response within ${registerTimeoutMs / 1000}s; checking whether it landed`);
+}
 
 // 2. Wait for reachable + task-verified.
 const deadline = Date.now() + waitMinutes * 60_000;
 for (;;) {
+  try {
+    if (await checkListing()) process.exit(0);
+  } catch (err) {
+    if (!isTimeout(err)) throw err;
+    console.log("registry timed out; retrying in a minute");
+  }
+  if (Date.now() > deadline) {
+    console.error(`gave up after ${waitMinutes} minutes`);
+    process.exit(2);
+  }
+  await new Promise((r) => setTimeout(r, 60_000));
+}
+
+/** True once the registry lists the checkup as reachable and task-verified. */
+async function checkListing() {
   const list = await json(`${registry}/api/agents?search=${encodeURIComponent(host)}&limit=50`);
   const items = Array.isArray(list.body) ? list.body : (list.body?.agents ?? list.body?.items ?? list.body?.data ?? []);
   const agent = items.find((a) => [a.wellKnownURI, a.well_known_uri, a.url].some((u) => typeof u === "string" && u.includes(host)));
@@ -59,14 +84,10 @@ for (;;) {
     );
     if (reachable && taskVerified) {
       console.log(`listed: ${registry}/agents/${id}/ (reachable, task-verified)`);
-      process.exit(0);
+      return true;
     }
   } else {
     console.log("not listed yet");
   }
-  if (Date.now() > deadline) {
-    console.error(`gave up after ${waitMinutes} minutes`);
-    process.exit(2);
-  }
-  await new Promise((r) => setTimeout(r, 60_000));
+  return false;
 }
