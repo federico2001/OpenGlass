@@ -1,4 +1,14 @@
-import { agentsRepository, attestationsRepository, records, sessions, type AgentDoc, type RecordDoc } from "@openglass/db";
+import { createHash } from "node:crypto";
+import {
+  agentsRepository,
+  attestationsRepository,
+  records,
+  sessions,
+  unclaimedProfilesRepository,
+  type AgentDoc,
+  type RecordDoc,
+  type UnclaimedProfileDoc,
+} from "@openglass/db";
 import type { Db } from "mongodb";
 import { resolvesToPublicAddress } from "./domainVerification.js";
 
@@ -58,7 +68,52 @@ export interface UnregisteredLookupResult {
   mcpRegistryEntry: unknown | null;
   domainRegisteredAt: string | null;
   inviteUrl: string;
+  /** docs/SPEC.md §16: set when an agent has already listed this domain as an unclaimed
+   * profile; `null` otherwise (including for `agentId`/`publicKey` queries). */
+  unclaimedProfile: UnclaimedProfileView | null;
 }
+
+export interface UnclaimedProfileView {
+  domain: string;
+  agentCardUrl: string | null;
+  cardSha256: string | null;
+  cardFetchedAt: string | null;
+  listedBy: string;
+  listedAt: string;
+  lastSeenAt: string;
+  claimed: boolean;
+  claimedAgentId: string | null;
+  claimedAt: string | null;
+  profileUrl: string;
+  claimUrl: string;
+}
+
+export function unclaimedProfileView(doc: UnclaimedProfileDoc, publicUrl: string): UnclaimedProfileView {
+  const profileUrl = `${publicUrl}/agents/by-domain/${doc._id}`;
+  return {
+    domain: doc._id,
+    agentCardUrl: doc.agentCardUrl,
+    cardSha256: doc.cardSha256,
+    cardFetchedAt: doc.cardFetchedAt?.toISOString() ?? null,
+    listedBy: doc.listedBy,
+    listedAt: doc.listedAt.toISOString(),
+    lastSeenAt: doc.lastSeenAt.toISOString(),
+    claimed: doc.claimedAgentId !== null,
+    claimedAgentId: doc.claimedAgentId,
+    claimedAt: doc.claimedAt?.toISOString() ?? null,
+    profileUrl,
+    claimUrl: `${profileUrl}#claim`,
+  };
+}
+
+/** A bare DNS hostname (no scheme, port, path or IP literal), lowercase. */
+export function isBareHostname(domain: string): boolean {
+  return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain);
+}
+
+/** The A2A well-known card paths, current first: `agent-card.json` since A2A 0.3,
+ * `agent.json` before that. */
+export const AGENT_CARD_PATHS = ["/.well-known/agent-card.json", "/.well-known/agent.json"] as const;
 
 export type LookupResult = RegisteredLookupResult | UnregisteredLookupResult;
 
@@ -92,10 +147,19 @@ export function createLookupService(db: Db) {
   async function lookupAgent(query: LookupQuery, publicUrl: string): Promise<LookupResult> {
     const cacheKey = JSON.stringify(query);
     const cached = cache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return cached.result;
+    if (cached && cached.expiresAt > Date.now()) {
+      // The outbound fetches are what's worth caching; the unclaimed profile is one indexed
+      // read and changes when an agent lists the domain, so it's always read fresh.
+      if (cached.result.registered || !query.domain) return cached.result;
+      const profile = await unclaimedProfilesRepository(db).findByDomain(query.domain.toLowerCase());
+      return { ...cached.result, unclaimedProfile: profile ? unclaimedProfileView(profile, publicUrl) : null };
+    }
 
     const result = await resolveLookup(db, query, publicUrl);
-    cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, result });
+    // A "not registered" answer by agentId/publicKey costs one indexed read and goes stale
+    // the moment that agent registers, so only domain/card-URL misses (which make outbound
+    // requests) are worth caching.
+    if (result.registered || query.domain || query.agentCardUrl) cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, result });
     return result;
   }
 
@@ -105,7 +169,7 @@ export function createLookupService(db: Db) {
 async function resolveLookup(db: Db, query: LookupQuery, publicUrl: string): Promise<LookupResult> {
   const agent = await resolveAgentByQuery(db, query);
   if (agent) return buildRegisteredResult(db, agent);
-  return buildUnregisteredResult(query, publicUrl);
+  return buildUnregisteredResult(db, query, publicUrl);
 }
 
 async function resolveAgentByQuery(db: Db, query: LookupQuery): Promise<AgentDoc | null> {
@@ -214,25 +278,41 @@ async function countOpenDisputes(db: Db, agentId: string): Promise<number> {
   });
 }
 
-async function buildUnregisteredResult(query: LookupQuery, publicUrl: string): Promise<UnregisteredLookupResult> {
+async function buildUnregisteredResult(db: Db, query: LookupQuery, publicUrl: string): Promise<UnregisteredLookupResult> {
   const domain = query.domain?.toLowerCase();
-  const cardUrl = query.agentCardUrl ?? (domain ? `https://${domain}/.well-known/agent.json` : null);
 
-  const [agentCard, mcpRegistryEntry, domainRegisteredAt] = await Promise.all([
-    cardUrl ? fetchJsonCapped(cardUrl) : Promise.resolve(null),
+  const [card, mcpRegistryEntry, domainRegisteredAt, profile] = await Promise.all([
+    query.agentCardUrl
+      ? fetchJsonCapped(query.agentCardUrl)
+      : domain
+        ? fetchAgentCardForDomain(domain).then((c) => c?.json ?? null)
+        : Promise.resolve(null),
     domain ? fetchMcpRegistryEntry(domain) : Promise.resolve(null),
     domain ? fetchDomainRegistrationDate(domain) : Promise.resolve(null),
+    domain ? unclaimedProfilesRepository(db).findByDomain(domain) : Promise.resolve(null),
   ]);
 
   return {
     registered: false,
-    agentCard,
+    agentCard: card,
     mcpRegistryEntry,
     domainRegisteredAt,
     // R5 (not yet shipped as of R2) will add a dedicated /agents onboarding page this
     // should point at instead — skill.md is today's real, already-live entry point.
     inviteUrl: `${publicUrl}/skill.md`,
+    unclaimedProfile: profile ? unclaimedProfileView(profile, publicUrl) : null,
   };
+}
+
+/** Tries each A2A well-known card path on `https://{domain}` in order; the first one that
+ * returns JSON wins. */
+export async function fetchAgentCardForDomain(domain: string): Promise<{ url: string; json: unknown; sha256: string } | null> {
+  for (const path of AGENT_CARD_PATHS) {
+    const url = `https://${domain}${path}`;
+    const fetched = await fetchJsonWithHash(url);
+    if (fetched) return { url, ...fetched };
+  }
+  return null;
 }
 
 /** SSRF-safe fetch for an agent-supplied URL (agentCardUrl, or a domain-derived
@@ -240,6 +320,10 @@ async function buildUnregisteredResult(query: LookupQuery, publicUrl: string): P
  * refuse a private/loopback/link-local address, never follow a redirect. Returns `null`
  * on any failure, including a non-JSON body. */
 async function fetchJsonCapped(url: string): Promise<unknown | null> {
+  return (await fetchJsonWithHash(url))?.json ?? null;
+}
+
+async function fetchJsonWithHash(url: string): Promise<{ json: unknown; sha256: string } | null> {
   let hostname: string;
   try {
     hostname = new URL(url).hostname;
@@ -253,8 +337,7 @@ async function fetchJsonCapped(url: string): Promise<unknown | null> {
     const reader = res.body?.getReader();
     if (!reader) return null;
     let received = 0;
-    let text = "";
-    const decoder = new TextDecoder();
+    const chunks: Uint8Array[] = [];
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -263,9 +346,10 @@ async function fetchJsonCapped(url: string): Promise<unknown | null> {
         await reader.cancel();
         return null;
       }
-      text += decoder.decode(value, { stream: true });
+      chunks.push(value);
     }
-    return JSON.parse(text);
+    const bytes = Buffer.concat(chunks);
+    return { json: JSON.parse(bytes.toString("utf8")), sha256: createHash("sha256").update(bytes).digest("hex") };
   } catch {
     return null;
   }

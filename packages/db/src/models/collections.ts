@@ -598,6 +598,75 @@ export const rateLimits = defineCollection({
   indexes: [{ name: "expiresAt_ttl", key: { expiresAt: 1 }, expireAfterSeconds: 0 }],
 });
 
+// ------------------------------------------------------------------ unclaimed profiles
+
+/** docs/SPEC.md §16: a domain an agent on OpenGlass has looked up and found unregistered,
+ * listed so its operator can find and claim it. Keyed by the bare hostname. Holds only
+ * what the platform fetched or computed itself (never a caller-supplied name or claim),
+ * per CLAUDE.md's "Profiles show verifiable facts only". Claimed when an agent proves
+ * control of the domain through domain verification. */
+export const unclaimedProfiles = defineCollection({
+  name: "unclaimed_profiles",
+  schema: z.strictObject({
+    _id: z.string().min(1).max(253),
+    /** Where the platform itself found an agent card for this domain, or null. */
+    agentCardUrl: z.string().max(2048).nullable(),
+    /** sha256 of the card bytes as fetched, so a later reader can tell whether it changed. */
+    cardSha256: Hash.nullable(),
+    cardFetchedAt: z.date().nullable(),
+    listedBy: AgentId,
+    listedAt: z.date(),
+    lastSeenAt: z.date(),
+    claimedAgentId: AgentId.nullable(),
+    claimedAt: z.date().nullable(),
+  }),
+  indexes: [
+    { name: "listedAt", key: { listedAt: -1 } },
+    { name: "claimedAgentId", key: { claimedAgentId: 1 }, partialFilterExpression: { claimedAgentId: { $type: "string" } } },
+  ],
+});
+
+// ------------------------------------------------------------------ apps/checkup
+
+/** Agent Checkup (apps/checkup): one report per check actually run. Also the 1-hour result
+ * cache (the newest report for a `targetKey` younger than an hour is served again). */
+export const checkupReports = defineCollection({
+  name: "checkup_reports",
+  schema: z.strictObject({
+    _id: z.string().regex(/^chk_[0-9A-HJKMNP-TV-Z]{26}$/),
+    targetKey: z.string().min(1).max(2048),
+    /** The full JSON report as returned to the caller. */
+    report: z.record(z.string(), z.unknown()),
+    attestationId: AttestationId.nullable(),
+    recordId: RecordId.nullable(),
+    createdAt: z.date(),
+    expiresAt: z.date(),
+  }),
+  indexes: [
+    { name: "targetKey_createdAt", key: { targetKey: 1, createdAt: -1 } },
+    { name: "expiresAt_ttl", key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+  ],
+});
+
+/** Agent Checkup metrics: one row per countable event. Raw rows, aggregated on read by the
+ * admin page; nothing here identifies a caller beyond the coarse `source` class. */
+export const checkupEvents = defineCollection({
+  name: "checkup_events",
+  schema: z.strictObject({
+    _id: ObjectIdSchema,
+    kind: z.enum(["check_run", "cache_hit", "report_open", "claim_click", "unclaimed_listed"]),
+    /** `registry` for A2A Registry probes (by user-agent), `user` otherwise. */
+    source: z.enum(["user", "registry"]),
+    targetKey: z.string().max(2048).nullable(),
+    reportId: z.string().max(64).nullable(),
+    at: z.date(),
+  }),
+  indexes: [
+    { name: "kind_at", key: { kind: 1, at: -1 } },
+    { name: "kind_targetKey", key: { kind: 1, targetKey: 1 } },
+  ],
+});
+
 // ------------------------------------------------------------------ migration bookkeeping
 
 /** Written by migrate-mongo (see migrate.ts). */
@@ -623,6 +692,7 @@ export const allCollections = [
   owners, agents, sessions, attestations, invites, messages, records, viewerGrants, viewerAccessLog,
   integrationStatusOverrides, integrationVotes, integrationRequests,
   loginTokens, webSessions, requestNonces, rateLimits, activitySnapshots,
+  unclaimedProfiles, checkupReports, checkupEvents,
   changelog, migrationLock,
 ] as const;
 
@@ -633,6 +703,9 @@ export type AttestationDoc = z.infer<typeof attestations.schema>;
 export type InviteDoc = z.infer<typeof invites.schema>;
 export type MessageDoc = z.infer<typeof messages.schema>;
 export type RecordDoc = z.infer<typeof records.schema>;
+export type UnclaimedProfileDoc = z.infer<typeof unclaimedProfiles.schema>;
+export type CheckupReportDoc = z.infer<typeof checkupReports.schema>;
+export type CheckupEventDoc = z.infer<typeof checkupEvents.schema>;
 export type ViewerGrantDoc = z.infer<typeof viewerGrants.schema>;
 export type ViewerAccessLogDoc = z.infer<typeof viewerAccessLog.schema>;
 export type IntegrationStatusOverrideDoc = z.infer<typeof integrationStatusOverrides.schema>;

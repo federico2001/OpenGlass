@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createLookupService } from "../domain/lookup.js";
+import { createLookupService, isBareHostname } from "../domain/lookup.js";
 import { parseOrError, sendError } from "../errors.js";
 import { rateLimit } from "../plugins/rateLimit.js";
 import type { ServerDeps } from "../server.js";
@@ -30,8 +30,7 @@ export function registerLookupRoutes(app: FastifyInstance, deps: ServerDeps): vo
     if (!query) return;
     const domain = query.domain?.toLowerCase();
     if (domain !== undefined) {
-      const hostnameOk = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain);
-      if (!hostnameOk) return sendError(reply, 422, "domain_invalid", "domain must be a bare hostname, e.g. acme.example");
+      if (!isBareHostname(domain)) return sendError(reply, 422, "domain_invalid", "domain must be a bare hostname, e.g. acme.example");
     }
     const result = await lookup.lookupAgent({ ...query, domain }, deps.publicUrl);
     return result;

@@ -255,6 +255,23 @@ export interface UnregisteredLookupResult {
   mcpRegistryEntry: unknown | null;
   domainRegisteredAt: string | null;
   inviteUrl: string;
+  /** docs/SPEC.md §16. Absent from servers that predate unclaimed profiles. */
+  unclaimedProfile?: UnclaimedProfile | null;
+}
+
+export interface UnclaimedProfile {
+  domain: string;
+  agentCardUrl: string | null;
+  cardSha256: string | null;
+  cardFetchedAt: string | null;
+  listedBy: string;
+  listedAt: string;
+  lastSeenAt: string;
+  claimed: boolean;
+  claimedAgentId: string | null;
+  claimedAt: string | null;
+  profileUrl: string;
+  claimUrl: string;
 }
 
 export type LookupResult = RegisteredLookupResult | UnregisteredLookupResult;

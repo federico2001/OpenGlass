@@ -5,7 +5,7 @@ import {
 } from "aws-cdk-lib";
 import type { Construct } from "constructs";
 
-export const APPS = ["api", "mcp", "worker", "web"] as const;
+export const APPS = ["api", "mcp", "worker", "web", "checkup"] as const;
 
 export interface OpenGlassStackProps extends StackProps {
   /** Public hostname served by Caddy, e.g. openglass.example.com. */
@@ -208,6 +208,13 @@ export class OpenGlassStack extends Stack {
     new route53.ARecord(this, "McpRecord", {
       zone,
       recordName: `mcp.${props.domainName}`,
+      target: route53.RecordTarget.fromIpAddresses(eip.attrPublicIp),
+      ttl: Duration.minutes(5),
+    });
+    // Agent Checkup (apps/checkup), routed by Caddy at checkup.<domain>: same instance.
+    new route53.ARecord(this, "CheckupRecord", {
+      zone,
+      recordName: `checkup.${props.domainName}`,
       target: route53.RecordTarget.fromIpAddresses(eip.attrPublicIp),
       ttl: Duration.minutes(5),
     });

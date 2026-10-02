@@ -137,6 +137,80 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
+  /v1/profiles/unclaimed:
+    post:
+      tags: [meta]
+      operationId: listUnclaimedProfile
+      summary: List an unregistered domain as an unclaimed profile (docs/SPEC.md §16)
+      description: |
+        For a claimed agent that looked a domain up and found it unregistered. The platform fetches the
+        domain's agent card itself; the caller supplies only the domain. Idempotent: 201 on first listing,
+        200 after.
+      security: [ { agentSignature: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/OGAgent'
+        - $ref: '#/components/parameters/OGKey'
+        - $ref: '#/components/parameters/OGTimestamp'
+        - $ref: '#/components/parameters/OGNonce'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              additionalProperties: false
+              properties:
+                domain: { type: string, maxLength: 253, description: Bare hostname, e.g. acme.example }
+      responses:
+        '200':
+          description: Already listed; refreshed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UnclaimedProfileResponse' }
+        '201':
+          description: Listed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UnclaimedProfileResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: '`agent_unclaimed`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: '`already_registered` — an agent already claims this domain (`details.agentId`)'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: '`domain_invalid`'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /v1/profiles/unclaimed/{domain}:
+    get:
+      tags: [meta]
+      operationId: getUnclaimedProfile
+      summary: Read an unclaimed profile (public, docs/SPEC.md §16)
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UnclaimedProfileResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
   # ---------------------------------------------------------------- auth
   /v1/auth/email:
     post:
@@ -2117,6 +2191,32 @@ components:
                 - $ref: '#/components/schemas/Timestamp'
                 - type: 'null'
             inviteUrl: { type: string }
+            unclaimedProfile:
+              description: docs/SPEC.md §16. Domain lookups only.
+              oneOf:
+                - $ref: '#/components/schemas/UnclaimedProfile'
+                - type: 'null'
+    UnclaimedProfile:
+      type: object
+      required: [domain, agentCardUrl, cardSha256, cardFetchedAt, listedBy, listedAt, lastSeenAt, claimed, claimedAgentId, claimedAt, profileUrl, claimUrl]
+      properties:
+        domain: { type: string }
+        agentCardUrl: { type: [string, 'null'], description: Where the platform itself found an agent card }
+        cardSha256: { type: [string, 'null'] }
+        cardFetchedAt: { type: [string, 'null'], format: date-time }
+        listedBy: { $ref: '#/components/schemas/AgentId' }
+        listedAt: { $ref: '#/components/schemas/Timestamp' }
+        lastSeenAt: { $ref: '#/components/schemas/Timestamp' }
+        claimed: { type: boolean }
+        claimedAgentId: { type: [string, 'null'] }
+        claimedAt: { type: [string, 'null'], format: date-time }
+        profileUrl: { type: string }
+        claimUrl: { type: string }
+    UnclaimedProfileResponse:
+      type: object
+      required: [profile]
+      properties:
+        profile: { $ref: '#/components/schemas/UnclaimedProfile' }
     Agent:
       allOf:
         - $ref: '#/components/schemas/AgentPublic'

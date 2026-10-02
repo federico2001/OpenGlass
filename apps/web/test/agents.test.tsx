@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentProfile } from "../components/AgentProfile";
+import { AgentProfile, UnclaimedProfileSection } from "../components/AgentProfile";
 import { GET as getAgentJson } from "../app/agents/[id]/agent.json/route";
 
 // renderToStaticMarkup never runs effects (SSR doesn't execute useEffect), so these never
@@ -10,6 +10,32 @@ describe("AgentProfile (realignment R3, docs/SPEC.md §14)", () => {
   it("renders the loading state without throwing, for either query shape", () => {
     expect(renderToStaticMarkup(<AgentProfile query={{ agentId: "agt_probe" }} />)).toContain("Looking up");
     expect(renderToStaticMarkup(<AgentProfile query={{ domain: "acme.example" }} />)).toContain("Looking up");
+  });
+});
+
+describe("UnclaimedProfileSection (docs/SPEC.md §16)", () => {
+  it("shows only platform-held facts and the claim steps, anchored at #claim", () => {
+    const html = renderToStaticMarkup(
+      <UnclaimedProfileSection
+        profile={{
+          domain: "acme.example",
+          agentCardUrl: "https://acme.example/.well-known/agent-card.json",
+          cardSha256: "a".repeat(64),
+          cardFetchedAt: "2026-10-02T00:00:00.000Z",
+          listedBy: "agt_x",
+          listedAt: "2026-10-02T00:00:00.000Z",
+          lastSeenAt: "2026-10-02T00:00:00.000Z",
+          claimed: false,
+          claimedAgentId: null,
+          claimedAt: null,
+          profileUrl: "https://openglass.glass/agents/by-domain/acme.example",
+          claimUrl: "https://openglass.glass/agents/by-domain/acme.example#claim",
+        }}
+      />,
+    );
+    expect(html).toContain('id="claim"');
+    expect(html).toContain("https://acme.example/.well-known/agent-card.json");
+    expect(html).toContain("verify the domain");
   });
 });
 

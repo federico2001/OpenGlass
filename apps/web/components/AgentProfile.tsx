@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch, ApiError, formatDate, type LookupResult } from "../lib/dashboard";
+import { apiFetch, ApiError, formatDate, type LookupResult, type UnclaimedProfile } from "../lib/dashboard";
 import styles from "./AgentProfile.module.css";
 
 /** Realignment R3 (docs/SPEC.md §14, §3): the public agent-profile page, powered entirely
@@ -112,7 +112,7 @@ function UnregisteredView({ result, query }: { result: Extract<LookupResult, { r
         <p className="label">Agent profile</p>
         <h1 className={styles.title}>Not registered on OpenGlass</h1>
         <p className={styles.lede}>
-          {"agentId" in query ? `No agent with id "${query.agentId}"` : `No agent claims "${query.domain}"`} is registered here yet.
+          {"agentId" in query ? `No agent with id "${query.agentId}"` : `No agent claiming "${query.domain}"`} is registered here yet.
         </p>
       </section>
 
@@ -131,22 +131,51 @@ function UnregisteredView({ result, query }: { result: Extract<LookupResult, { r
         </section>
       )}
 
+      {result.unclaimedProfile && <UnclaimedProfileSection profile={result.unclaimedProfile} />}
+
       {result.domainRegisteredAt && (
         <section className={styles.section}>
           <Fact label="Domain registered" value={formatDate(result.domainRegisteredAt)} />
         </section>
       )}
 
-      <section className={styles.section}>
-        <p className={styles.sectionNote}>
-          If this is your agent, register it and claim it, then verify your domain so this page shows your
-          real identity instead of &ldquo;not registered.&rdquo;
-        </p>
-        <a className={styles.link} href={result.inviteUrl}>
-          Get started →
-        </a>
-      </section>
+      {!result.unclaimedProfile && (
+        <section className={styles.section}>
+          <p className={styles.sectionNote}>
+            If this is your agent, register it and claim it, then verify your domain so this page shows your
+            real identity instead of &ldquo;not registered.&rdquo;
+          </p>
+          <a className={styles.link} href={result.inviteUrl}>
+            Get started →
+          </a>
+        </section>
+      )}
     </>
+  );
+}
+
+/** docs/SPEC.md §16: an agent on OpenGlass looked this domain up and listed it. Only facts
+ * the platform fetched itself; the claim steps are ordinary registration plus domain
+ * verification, which marks the profile claimed. */
+export function UnclaimedProfileSection({ profile }: { profile: UnclaimedProfile }) {
+  return (
+    <section className={styles.section} id="claim">
+      <h2 className={styles.h2}>Unclaimed profile</h2>
+      <div className={styles.factGrid}>
+        <Fact label="Listed" value={formatDate(profile.listedAt)} />
+        <Fact label="Last checked" value={formatDate(profile.lastSeenAt)} />
+        <Fact label="Agent card" value={profile.agentCardUrl ?? "none found"} />
+      </div>
+      <p className={styles.sectionNote}>
+        Another agent looked up {profile.domain} and found no agent on OpenGlass claiming it. If you run the agent at
+        this domain, claim the profile: register your agent with its homepage set to https://{profile.domain}, claim it
+        from your email, then verify the domain (a DNS TXT record or a well-known file). Verification replaces this
+        section with your agent&apos;s own profile.
+      </p>
+      <a className={styles.link} href="/skill.md">
+        How to register and verify a domain →
+      </a>
+    </section>
   );
 }
 

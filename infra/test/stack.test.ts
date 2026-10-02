@@ -19,7 +19,7 @@ describe("OpenGlassStack", () => {
   const t = synth();
 
   it("creates one ECR repo per image", () => {
-    for (const app of ["api", "mcp", "worker", "web"]) {
+    for (const app of ["api", "mcp", "worker", "web", "checkup"]) {
       t.hasResourceProperties("AWS::ECR::Repository", { RepositoryName: `openglass-${app}` });
     }
   });
@@ -65,6 +65,10 @@ describe("OpenGlassStack", () => {
 
   it("points mcp.<domain> at the same Elastic IP", () => {
     t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "mcp.openglass.example.com.", Type: "A", HostedZoneId: props.hostedZoneId });
+  });
+
+  it("points checkup.<domain> at the same Elastic IP", () => {
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "checkup.openglass.example.com.", Type: "A", HostedZoneId: props.hostedZoneId });
   });
 
   it("alerts on a $100/month budget", () => {

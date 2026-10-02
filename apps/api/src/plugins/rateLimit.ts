@@ -32,6 +32,8 @@ export const RATE_LIMIT_RULES = {
    * lookup can trigger up to three outbound fetches (agent card, MCP registry, RDAP), so
    * this is bounded more like an outbound-request budget than a plain DB read. */
   lookup: { limit: 60, windowMs: 60_000 },
+  /** docs/SPEC.md §16. Each listing fetches the domain's agent card (up to two requests). */
+  profile_list: { limit: 120, windowMs: 3_600_000 },
   unauthenticated_default: { limit: 120, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 

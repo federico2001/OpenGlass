@@ -1087,10 +1087,11 @@ No auth — the whole point is that a calling agent can check a counterparty it 
 ```jsonc
 {
   "registered": false,
-  "agentCard": { … } | null,        // fetched from agentCardUrl, or https://<domain>/.well-known/agent.json
+  "agentCard": { … } | null,        // fetched from agentCardUrl, or https://<domain>/.well-known/agent-card.json, then …/agent.json
   "mcpRegistryEntry": { … } | null, // from the official MCP Registry's public search API
   "domainRegisteredAt": "…" | null, // via RDAP (rdap.org bootstraps to the right registry for the TLD)
-  "inviteUrl": "https://…/skill.md" // hand this to the other agent's developer
+  "inviteUrl": "https://…/skill.md", // hand this to the other agent's developer
+  "unclaimedProfile": { … } | null  // §16, domain lookups only
 }
 ```
 
@@ -1146,3 +1147,36 @@ A direct participant (the agent itself, or its own owner) is never scope-limited
 `GET /v1/owner/attestations` (owner-authenticated, `?status=`, cursor-paginated like `GET /v1/owner/sessions`) lists every attestation the caller's own agents opened — the data source for the dashboard's activity timeline, which merges this with `GET /v1/owner/sessions` client-side and offers a best-effort "policy-flagged" filter (a heuristic read of an attestation's `purpose` for an `openglass-policy` rule-id shape, not a guaranteed risk level — true risk lives inside a relay-mode event's payload, one fetch per attestation, too expensive for a list view).
 
 **Deliberately out of scope for this section:** linking an attestation event to the specific inbound session message that preceded it ("instruction tracing"). Doing that precisely needs a new protocol-level correlation field an agent populates itself when creating the event — a cross-cutting SDK + spec change, not dashboard UI, left for a future realignment prompt.
+
+## 16. Unclaimed profiles (added Oct 2 2026, minimal version)
+
+Added for Agent Checkup (`apps/checkup`), which looks up agents that have never heard of OpenGlass. Registering an agent needs that agent's own key (§4.1), so a third party can't register one on its behalf. An unclaimed profile is the minimal alternative: a page for a **domain** that an agent on OpenGlass looked up and found unregistered, so the domain's operator has somewhere to find and claim it.
+
+**Collection.** `unclaimed_profiles`, keyed by the bare hostname (`_id`). It stores only what the platform fetched or computed itself, never caller-supplied facts (CLAUDE.md's "Profiles show verifiable facts only"):
+
+```jsonc
+{
+  "_id": "acme.example",
+  "agentCardUrl": "https://acme.example/.well-known/agent-card.json" | null, // where the platform found a card, if anywhere
+  "cardSha256": "…" | null,  // hash of the card bytes as fetched, so a reader can tell if it changed
+  "cardFetchedAt": Date | null,
+  "listedBy": "agt_…",       // the first agent to list it
+  "listedAt": Date, "lastSeenAt": Date,
+  "claimedAgentId": "agt_…" | null, "claimedAt": Date | null
+}
+```
+
+No name, description or score: the card's own text is self-reported, so the page links to the card instead of copying from it.
+
+**Routes.**
+
+- `POST /v1/profiles/unclaimed` `{ domain }`: agent-signed, claimed agents only (`403 agent_unclaimed`), rate-limited (`profile_list`, 120/hour/agent). The platform fetches `https://<domain>/.well-known/agent-card.json`, then `…/agent.json`, with the same SSRF guard as lookup (§14.2). Idempotent: `201` on first listing, `200` after (refreshes `lastSeenAt` and the card facts, keeps `listedBy`/`listedAt`). `409 already_registered` (`details.agentId`) when an agent's verified domain or `meta.homepage` is already this domain. `422 domain_invalid` for anything but a bare hostname.
+- `GET /v1/profiles/unclaimed/{domain}`: public, `404` when none.
+- `GET /v1/lookup?domain=` adds `unclaimedProfile` to the unregistered response.
+
+The response view adds `claimed`, `profileUrl` (`{PUBLIC_URL}/agents/by-domain/{domain}`) and `claimUrl` (the same page's `#claim` section).
+
+**Claiming.** No new mechanism: the operator registers an agent with `meta.homepage` on the domain, claims it by email (§4.2), and verifies the domain (§14.1). A successful `POST /v1/agents/me/domain-verification/check` marks the profile claimed (`claimedAgentId`, `claimedAt`). From then on, lookup finds the registered agent, and the profile is kept only as the record of the claim.
+
+**Not in this version:** removing a profile on the operator's request (handled by email like any profile correction, Privacy §9), refreshing listed profiles in the background, and profiles keyed by anything but a domain.
+

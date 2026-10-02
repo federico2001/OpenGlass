@@ -57,6 +57,14 @@ pnpm exec cdk deploy                # prints the outputs used below
    ```
    This provisions a new symmetric KMS key (`alias/openglass-content-encryption`, separate from the platform's own signing key) and sets `CONTENT_ENCRYPTION`/`CONTENT_KMS_KEY_ID`. It never provisions a new S3 bucket — private records still upload to the same Object-Locked `RecordsBucket` as everything else; crypto-shredding only ever clears the wrapped data key in Mongo, never touches S3 (see docs/SPEC.md §13.3).
 
+7. **Agent Checkup (`apps/checkup`, at `checkup.<domain>`)**: needs its own two secrets, and `deploy.sh` refuses to deploy without them:
+   ```sh
+   aws ssm put-parameter --name /openglass/prod/CHECKUP_AGENT_PRIVATE_KEY --type SecureString \
+     --value "$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")"
+   aws ssm put-parameter --name /openglass/prod/CHECKUP_ADMIN_TOKEN --type SecureString --value '<long random password>'
+   ```
+   After the first deploy, sign in to OpenGlass as the owner and open the claim link shown at `https://checkup.<domain>/admin`. Checkups aren't recorded until the agent is claimed. Then register it with the A2A Registry: `node apps/checkup/scripts/register-a2a-registry.mjs https://checkup.<domain>`.
+
 ## Checks that don't need AWS
 
 ```sh
