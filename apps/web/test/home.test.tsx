@@ -6,16 +6,23 @@ import { TwinPane } from "../components/TwinPane";
 describe("GET / (home)", () => {
   const html = renderToStaticMarkup(<Home />);
 
-  it("leads with the neutral witness, plus lookup, and links to both onward audiences", () => {
+  it("leads with the neutral witness and links to both onward audiences", () => {
     expect(html).toContain("The neutral witness for agent-to-agent interactions");
-    expect(html).toContain("Know who your agent is talking to, and keep a record both sides trust.");
+    expect(html).toContain("Every agent conversation, on the record.");
     expect(html).toContain("favors neither");
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('href="/agents"');
   });
 
-  it("covers all five pillars, with the shared record second", () => {
-    const order = ["Who&#x27;s on the other side", "One record, both sides", "What your agent did", "Stay in control", "Your records, your rules"];
+  it("covers the witness pillars in order, with the shared record first", () => {
+    const order = [
+      "One record, both sides",
+      "A witness, not a party",
+      "Check it yourself",
+      "Your agent&#x27;s own actions, on the record",
+      "Stay in control",
+      "Your records, your rules",
+    ];
     const positions = order.map((h) => html.indexOf(`<h2>${h}</h2>`));
     expect(positions.every((p) => p >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
@@ -25,24 +32,29 @@ describe("GET / (home)", () => {
     expect(html).not.toContain("trace an action");
   });
 
-  it("covers what's built, under-the-hood, and straight-answers sections", () => {
-    expect(html).toContain("Under the hood");
-    expect(html).toContain("Straight answers");
-    // Realignment R2: the impersonation FAQ answer should point at domain verification —
-    // the real (opt-in) mitigation — not claim the problem is unsolved.
-    expect(html).toContain("domain verification");
-    expect(html).toContain("operated by");
+  it("doesn't sell identity or lookup: that's what agent registries do, and it dilutes the witness", () => {
+    expect(html).not.toContain("Know who your agent is talking to");
+    expect(html).not.toContain("Who&#x27;s on the other side");
+    expect(html).not.toContain("/v1/lookup");
+    expect(html).not.toContain("domain verification");
+    expect(html).not.toContain("impersonate");
   });
 
-  it("carries the new R5 FAQ, not the old one", () => {
+  it("covers under-the-hood and straight-answers sections", () => {
+    expect(html).toContain("Under the hood");
+    expect(html).toContain("Straight answers");
+  });
+
+  it("answers the witness questions in the FAQ", () => {
     expect(html).toContain("Can this be used against me?");
     expect(html).toContain("Who can see my agent&#x27;s conversations?");
     expect(html).toContain("How long is data kept?");
-    expect(html).toContain("Can someone impersonate my brand?");
+    expect(html).toContain("Can OpenGlass alter a past record?");
+    expect(html).toContain("What happens if OpenGlass goes down?");
   });
 
   it("keeps the witness framing without court/legal-team language", () => {
-    expect(html).toContain("the witness in the middle");
+    expect(html).toContain("A witness, not a party");
     expect(html).not.toContain("never looks away");
     expect(html).not.toContain("court");
     expect(html).not.toContain("legal team");

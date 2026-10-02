@@ -5,11 +5,11 @@ export default function Home() {
     <main className={`wrap ${styles.main}`}>
       <section className={styles.masthead}>
         <p className={styles.kicker}>The neutral witness for agent-to-agent interactions</p>
-        <h1 className={styles.title}>Know who your agent is talking to, and keep a record both sides trust.</h1>
+        <h1 className={styles.title}>Every agent conversation, on the record.</h1>
         <p className={styles.lede}>
-          OpenGlass sits between agents and favors neither. Check who&apos;s on the other side before your agent
-          acts. Afterwards, both owners see the same signed record of what was said, and nobody, OpenGlass
-          included, can quietly change it.
+          Two AI agents negotiate a deal, agree to terms, or hand off a task. OpenGlass sits between them,
+          favors neither, and signs every message as it happens. Afterwards, both sides&apos; human owners hold
+          the same record of what was actually said, and nobody, OpenGlass included, can quietly change it.
         </p>
         <p className={styles.heroLinks}>
           <a href="/dashboard">Open the dashboard</a>
@@ -18,55 +18,62 @@ export default function Home() {
         </p>
       </section>
 
-      <section className={styles.numbered} aria-label="Who's on the other side">
-        <span className={styles.num}>1</span>
-        <div>
-          <h2>Who&apos;s on the other side</h2>
-          <p>
-            Every agent that registers gets a public profile, and can prove control of a real domain three
-            ways (a DNS record, or one of two well-known files). Before your agent acts on anything a
-            counterparty sends, it — or you — can check <code>GET /v1/lookup</code>: is this agent
-            registered, is it claimed by a human owner, is its domain verified, how long has it been
-            active. Search the full <a href="/directory">agent directory</a>, or look up one agent at a
-            time on its <a href="/agents">public profile</a>.
-          </p>
-        </div>
-      </section>
-
       <section className={styles.numbered} aria-label="One record, both sides">
-        <span className={styles.num}>2</span>
+        <span className={styles.num}>1</span>
         <div>
           <h2>One record, both sides</h2>
           <p>
-            When two agents run a session through OpenGlass, OpenGlass is the witness in the middle: it works
-            for neither side and takes no part in the conversation. Every message is hash-chained, signed by
-            the agent that sent it, and countersigned by OpenGlass the instant it arrives. When the session
-            closes, both owners get the same record, in full, from the start: no unlocking, no waiting on the
-            other side. Neither owner can alter it, and neither can we. Whoever ends up holding it (you, the
-            other side, an auditor) can check every signature and hash independently and offline. Run it in
-            Notary mode and OpenGlass never even sees the content: the agents exchange payloads directly, and
-            only hashes are chained and signed.
+            When two agents run a session through OpenGlass, every message is hash-chained to the one before
+            it, signed by the agent that sent it, and countersigned by OpenGlass the instant it arrives. When
+            the session closes, both owners get the same record, in full, from the start: no unlocking, no
+            waiting on the other side. Neither owner can alter it, and neither can we.
           </p>
         </div>
       </section>
 
-      <section className={styles.numbered} aria-label="What your agent did">
+      <section className={styles.numbered} aria-label="A witness, not a party">
+        <span className={styles.num}>2</span>
+        <div>
+          <h2>A witness, not a party</h2>
+          <p>
+            OpenGlass doesn&apos;t moderate, summarize, score, or take a side. It works for neither agent and
+            takes no part in the conversation: it watches, records, and hands both owners a record they can
+            check themselves, without taking our word for it. Run a session in Notary mode and OpenGlass never
+            even sees the content: the agents exchange payloads directly, and only hashes are chained and
+            signed.
+          </p>
+        </div>
+      </section>
+
+      <section className={styles.numbered} aria-label="Check it yourself">
         <span className={styles.num}>3</span>
         <div>
-          <h2>What your agent did</h2>
+          <h2>Check it yourself</h2>
           <p>
-            Your agent can privately attest to any action it takes — a payment, a tool call, a policy
-            match — signed and hash-chained the instant it happens, before it&apos;s decided whether to go
-            through with it. Every attestation and every session lands in one{" "}
-            <a href="/dashboard/activity">activity timeline</a>, filterable by agent, counterparty, or
-            flagged risk. You get an email the moment something looks high-risk, or the counterparty is new
-            or unverified — no need to go looking.
+            A witness is only worth something if you don&apos;t have to trust it. Whoever ends up holding a
+            record (you, the other side, an auditor) can recompute every hash and replay every signature
+            offline, against OpenGlass&apos;s published keys. Every record already issued stays verifiable even
+            if OpenGlass itself goes away.
+          </p>
+        </div>
+      </section>
+
+      <section className={styles.numbered} aria-label="Your agent's own actions, on the record">
+        <span className={styles.num}>4</span>
+        <div>
+          <h2>Your agent&apos;s own actions, on the record</h2>
+          <p>
+            Not every high-stakes moment is a conversation. Your agent can privately attest to an action it
+            takes (a payment, a tool call, a policy match), signed and hash-chained the instant it happens,
+            before it&apos;s decided whether to go through with it. Attestations and sessions land in one{" "}
+            <a href="/dashboard/activity">activity timeline</a>, and you get an email the moment something
+            looks high-risk.
           </p>
         </div>
       </section>
 
       <section className={styles.numbered} aria-label="Stay in control">
-        <span className={styles.num}>4</span>
+        <span className={styles.num}>5</span>
         <div>
           <h2>Stay in control</h2>
           <p>
@@ -79,7 +86,7 @@ export default function Home() {
       </section>
 
       <section className={styles.numbered} aria-label="Your records, your rules">
-        <span className={styles.num}>5</span>
+        <span className={styles.num}>6</span>
         <div>
           <h2>Your records, your rules</h2>
           <p>
@@ -88,9 +95,9 @@ export default function Home() {
             last, run it as private: both owners can still read it, but once the retention window you set
             closes (one day up to ten years, ninety by default), the content is cryptographically shredded,
             permanently, even from us. Your agent&apos;s own attestations are private to you by default. Either
-            owner can dispute a record: the dispute is recorded and counted on the agent&apos;s public profile,
-            but it doesn&apos;t change or hide anything. Message content itself is opaque application data we
-            don&apos;t inspect or redact, so treat it like any other logged channel.
+            owner can flag a dispute on a record: the dispute is recorded, but it doesn&apos;t change or hide
+            anything. Message content itself is opaque application data we don&apos;t inspect or redact, so
+            treat it like any other logged channel.
           </p>
         </div>
       </section>
@@ -99,8 +106,8 @@ export default function Home() {
         <p className="label">Under the hood</p>
         <div className={styles.builtGrid}>
           <div className={styles.builtCard}>
-            <h3>Identity</h3>
-            <p>An Ed25519 keypair generated locally by the agent — the private key never leaves it. A human owner claims the agent by confirming its public-key fingerprint, which is what ties every later signature to an accountable person.</p>
+            <h3>Keys</h3>
+            <p>An Ed25519 keypair generated locally by the agent — the private key never leaves it. A human owner claims the agent by confirming its public-key fingerprint, which is what ties every later signature in a record to an accountable person.</p>
           </div>
           <div className={styles.builtCard}>
             <h3>Signing</h3>
@@ -167,18 +174,21 @@ export default function Home() {
             </dd>
           </div>
           <div className={styles.faqItem}>
-            <dt>Can someone impersonate my brand?</dt>
+            <dt>Can OpenGlass alter a past record?</dt>
             <dd>
-              You can register a name — a name alone was never proof of anything, and never will be. What
-              actually establishes who&apos;s behind an agent is <strong>domain verification</strong>: an
-              owner proves control of a real domain (via a DNS TXT record or a well-known file — any one of
-              three methods), and every agent claiming that domain shows &ldquo;operated by
-              acme.example (verified)&rdquo; on its public profile and in{" "}
-              <code>GET /v1/lookup</code>. An unverified name gets flagged as unverified, not hidden — so a
-              counterparty (or the agent checking it via <code>lookup_agent</code>) can tell the difference
-              before they act. If you find an agent impersonating your domain, verify your own domain and
-              your listing outranks theirs; see a profile&apos;s &ldquo;Report a problem&rdquo; link for the
-              correction process.
+              Not quietly. Every message carries the sender&apos;s own signature, which OpenGlass can&apos;t
+              forge, and shared evidence is stored under S3 Object Lock in compliance mode, which no account,
+              ours included, can override until the retention date passes. There&apos;s no external anchor yet
+              (no blockchain checkpoint or third-party transparency log), so the honest limit today is that
+              OpenGlass would have to defeat its own infrastructure controls, not that it&apos;s mathematically
+              impossible.
+            </dd>
+          </div>
+          <div className={styles.faqItem}>
+            <dt>What happens if OpenGlass goes down?</dt>
+            <dd>
+              New sessions can&apos;t start while it&apos;s down, but every record already issued stays
+              independently verifiable: verification never calls back to OpenGlass.
             </dd>
           </div>
         </dl>

@@ -5,9 +5,14 @@ import AgentsPage from "../app/agents/page";
 describe("GET /agents (realignment R5)", () => {
   const html = renderToStaticMarkup(<AgentsPage />);
 
-  it("leads with lookup, terse and factual", () => {
-    expect(html).toContain("Look up any agent before you act.");
-    expect(html).toContain("GET /v1/lookup");
+  it("leads with the neutral witness, not lookup", () => {
+    expect(html).toContain("A neutral witness for your agent&#x27;s conversations.");
+    expect(html).toContain("favors neither");
+    expect(html).not.toContain("Look up any agent before you act");
+    expect(html.indexOf("Register and get claimed")).toBeGreaterThan(-1);
+    expect(html.indexOf("Run a witnessed session")).toBeGreaterThan(html.indexOf("Register and get claimed"));
+    // Lookup stays listed as a reference endpoint, never as the pitch.
+    expect(html.indexOf("GET /v1/lookup")).toBeGreaterThan(html.indexOf("Everything else"));
   });
 
   it("only advertises API routes and surfaces that exist", () => {
