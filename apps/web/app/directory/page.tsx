@@ -1,82 +1,98 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { apiFetch, formatDate, type DirectoryAgent } from "../../lib/dashboard";
+import { useState, type FormEvent } from "react";
+import { apiFetch, ApiError, formatDate, type LookupResult, type RegisteredLookupResult } from "../../lib/dashboard";
+import { parseAgentId } from "../../lib/agentId";
 import styles from "./page.module.css";
 
-export default function DirectoryPage() {
-  const [query, setQuery] = useState("");
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [items, setItems] = useState<DirectoryAgent[]>([]);
-  const [loading, setLoading] = useState(true);
+type Outcome =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "invalid" }
+  | { kind: "not-found"; agentId: string }
+  | { kind: "error"; message: string }
+  | { kind: "found"; result: RegisteredLookupResult };
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    const handle = setTimeout(() => {
-      const params = new URLSearchParams();
-      if (query.trim()) params.set("q", query.trim());
-      if (verifiedOnly) params.set("verified", "true");
-      apiFetch<{ items: DirectoryAgent[] }>(`/v1/directory?${params.toString()}`)
-        .then((res) => {
-          if (!cancelled) setItems(res.items);
-        })
-        .catch(() => {
-          if (!cancelled) setItems([]);
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
-  }, [query, verifiedOnly]);
+export default function DirectoryPage() {
+  const [input, setInput] = useState("");
+  const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const agentId = parseAgentId(input);
+    if (!agentId) {
+      setOutcome({ kind: "invalid" });
+      return;
+    }
+    setOutcome({ kind: "loading" });
+    try {
+      const res = await apiFetch<LookupResult>(`/v1/lookup?${new URLSearchParams({ agentId }).toString()}`);
+      setOutcome(res.registered ? { kind: "found", result: res } : { kind: "not-found", agentId });
+    } catch (err: unknown) {
+      setOutcome({ kind: "error", message: err instanceof ApiError ? err.message : "Something went wrong. Try again." });
+    }
+  }
 
   return (
     <main className={`wrap ${styles.main}`}>
       <section className={styles.masthead}>
         <p className="label">Agent directory</p>
-        <h1 className={styles.title}>Find registered agents</h1>
+        <h1 className={styles.title}>Find a registered agent</h1>
         <p className={styles.lede}>
-          Only agents whose owner opted in appear here — most registered agents are private by default.
+          Enter an agent&apos;s ID to open its profile. IDs start with <code>agt_</code>; the agent&apos;s
+          owner can find it on their dashboard, and it appears on every record the agent signs.
         </p>
       </section>
 
-      <div className={styles.controls}>
+      <form className={styles.controls} onSubmit={onSubmit} noValidate>
         <input
+          aria-label="Agent ID"
           type="search"
-          placeholder="Search by name or description…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className={styles.search}
+          inputMode="text"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="agt_01J8Z3…"
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            if (outcome.kind === "invalid") setOutcome({ kind: "idle" });
+          }}
+          aria-invalid={outcome.kind === "invalid"}
+          aria-describedby="agent-id-status"
+          className={`${styles.search} ${styles.idInput}`}
         />
-        <label className={styles.checkboxLabel}>
-          <input type="checkbox" checked={verifiedOnly} onChange={(e) => setVerifiedOnly(e.target.checked)} />
-          Verified only
-        </label>
-      </div>
+        <button type="submit" className={styles.button} disabled={outcome.kind === "loading" || input.trim() === ""}>
+          Find agent
+        </button>
+      </form>
 
-      {loading ? (
-        <p className={styles.empty}>Loading…</p>
-      ) : items.length === 0 ? (
-        <p className={styles.empty}>No agents match.</p>
-      ) : (
-        <div className={styles.grid}>
-          {items.map((agent) => (
-            <Link key={agent.id} href={`/agents/${agent.id}`} className={styles.card}>
-              <div className={styles.cardTop}>
-                <p className={styles.name}>{agent.name}</p>
-                {agent.verifiedBadge && <span className={styles.verifiedBadge}>Verified</span>}
-              </div>
-              {agent.description && <p className={styles.desc}>{agent.description}</p>}
-              <p className={styles.meta}>registered {formatDate(agent.createdAt)}</p>
-            </Link>
-          ))}
-        </div>
-      )}
+      <div id="agent-id-status" aria-live="polite">
+        {outcome.kind === "loading" && <p className={styles.empty}>Looking up…</p>}
+        {outcome.kind === "invalid" && (
+          <p className={styles.empty}>
+            That isn&apos;t an agent ID. An agent ID is <code>agt_</code> followed by 26 letters and digits.
+          </p>
+        )}
+        {outcome.kind === "not-found" && (
+          <p className={styles.empty}>
+            No registered agent has the ID <code>{outcome.agentId}</code>.
+          </p>
+        )}
+        {outcome.kind === "error" && <p className={styles.empty}>{outcome.message}</p>}
+        {outcome.kind === "found" && (
+          <Link href={`/agents/${outcome.result.agentId}`} className={`${styles.card} ${styles.result}`}>
+            <div className={styles.cardTop}>
+              <p className={styles.name}>{outcome.result.name}</p>
+              {outcome.result.verifiedOwner && <span className={styles.verifiedBadge}>{outcome.result.verifiedOwner.domain}</span>}
+            </div>
+            <p className={styles.agentId}>{outcome.result.agentId}</p>
+            <p className={styles.meta}>
+              {outcome.result.claimed ? "claimed by an owner" : "unclaimed"} · first seen {formatDate(outcome.result.firstSeen)}
+            </p>
+          </Link>
+        )}
+      </div>
     </main>
   );
 }

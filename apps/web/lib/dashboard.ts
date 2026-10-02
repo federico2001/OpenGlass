@@ -212,14 +212,6 @@ export interface LiveFeedResponse {
   nextCursor: string | null;
 }
 
-export interface DirectoryAgent {
-  id: string;
-  name: string;
-  description: string;
-  verifiedBadge: boolean;
-  createdAt: string;
-}
-
 // Realignment R2/R3 (docs/SPEC.md §14) — mirrors apps/api/src/domain/lookup.ts's
 // RegisteredLookupResult/UnregisteredLookupResult exactly.
 export interface LookupActivity {
