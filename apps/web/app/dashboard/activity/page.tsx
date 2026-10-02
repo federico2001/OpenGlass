@@ -122,7 +122,7 @@ export default function ActivityTimelinePage() {
       purpose: a.purpose,
       status: a.status,
       createdAt: a.createdAt,
-      href: `/dashboard/agents/${a.attestor.agentId}`,
+      href: `/dashboard/attestations/${a.id}`,
       agentId: a.attestor.agentId,
       counterpartyAgentId: null, // one-party by design (SPEC §12) — nothing to show here
       looksPolicyFlagged: looksPolicyFlagged(a.purpose),

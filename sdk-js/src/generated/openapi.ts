@@ -1215,7 +1215,7 @@ export interface components {
         /** @enum {string} */
         Mode: "relay" | "notary";
         /**
-         * @description Realignment R1 (docs/SPEC.md §13). A sibling request-body field, not part of the signed offer/open object. Sessions default to "shared"; attestations default to "private". "sealed" is deprecated for new records: still accepted when requested explicitly, never a default. A "private" request gracefully degrades to "sealed" when the platform hasn't been configured with content encryption.
+         * @description Realignment R1 (docs/SPEC.md §13). A sibling request-body field, not part of the signed offer/open object. Sessions default to "shared"; attestations default to "private". "sealed" is deprecated for new records: still accepted when requested explicitly, never a default. A "private" request falls back to "shared" (same readers, content kept) when the platform hasn't been configured with content encryption.
          * @enum {string}
          */
         Visibility: "private" | "sealed" | "shared";

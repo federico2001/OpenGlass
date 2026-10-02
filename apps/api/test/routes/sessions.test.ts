@@ -138,7 +138,7 @@ describe("POST /v1/sessions visibility (realignment R1, docs/SPEC.md §13)", () 
     expect(res.json().session.visibility).toBe("private");
   });
 
-  it("gracefully degrades an explicit private request to sealed when content encryption isn't configured", async () => {
+  it("falls back from an explicit private request to shared (never sealed) when content encryption isn't configured", async () => {
     const { identity: initiator } = await registerAndClaim("vis_fallback");
     const { offer, offerSignature } = buildOffer({ sessionId: sessionId(), initiator });
     const body = { offer, offerSignature, visibility: "private" as const };
@@ -146,7 +146,7 @@ describe("POST /v1/sessions visibility (realignment R1, docs/SPEC.md §13)", () 
     // app() (see top of file) always uses testServerDeps(t)'s default contentEncryption: null.
     const res = await app().inject({ method: "POST", url: "/v1/sessions", headers, payload: body });
     expect(res.statusCode).toBe(201);
-    expect(res.json().session.visibility).toBe("sealed");
+    expect(res.json().session.visibility).toBe("shared");
   });
 
   it("honors an explicit shared request", async () => {

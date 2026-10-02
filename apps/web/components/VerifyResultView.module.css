@@ -1,0 +1,49 @@
+.result {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid;
+}
+
+.good {
+  border-color: var(--accent);
+  background: var(--bg-inset);
+}
+
+.bad {
+  border-color: var(--danger);
+  background: var(--bg-inset);
+}
+
+.headline {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.good .headline {
+  color: var(--accent-text);
+}
+
+.bad .headline {
+  color: var(--danger);
+}
+
+.list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.errors {
+  color: var(--danger);
+}
+
+.notes {
+  color: var(--ink-soft);
+}
+
+.list code {
+  font-family: var(--font-data);
+  font-size: 12px;
+}

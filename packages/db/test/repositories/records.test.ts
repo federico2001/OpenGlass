@@ -129,6 +129,23 @@ describe("records repository: sealed unseal/dispute state machine (realignment R
   });
 });
 
+describe("records repository: a sole owner opening a legacy sealed one-party record", () => {
+  it("requestUnseal then approveUnseal by the only participant owner unseals it", async () => {
+    const agents = (validDocs.records as unknown as RecordDoc).participantAgentIds;
+    const doc = baseRecord({
+      visibility: "sealed",
+      sealedState: { status: "sealed", requestedBy: null, approvals: [], unsealedAt: null, disputedBy: null, disputedAt: null },
+      participantOwnerIds: [OWNER_A],
+      participantAgentIds: [agents[0]!],
+    });
+    await insert(doc);
+    const requested = await requestUnseal(t.db, doc._id, OWNER_A);
+    expect(requested!.sealedState!.status).toBe("unseal_requested");
+    const approved = await approveUnseal(t.db, doc._id, OWNER_A);
+    expect(approved!.sealedState!.status).toBe("unsealed");
+  });
+});
+
 describe("records repository: disputeRecord on shared/private records", () => {
   it.each(["shared", "private"] as const)("flags a %s record and changes nothing else", async (visibility) => {
     const doc = baseRecord({ visibility });

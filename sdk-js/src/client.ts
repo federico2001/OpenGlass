@@ -312,7 +312,7 @@ export class OpenGlassClient {
     ttlMs?: number;
     /** docs/SPEC.md §13. Defaults to "shared" when omitted: both participant owners can
      * read the full record from the moment it's issued. "sealed" is deprecated. A
-     * "private" request gracefully degrades to "sealed" server-side if content encryption
+     * "private" request falls back to "shared" (same readers, content kept) server-side if content encryption
      * isn't configured there. */
     visibility?: Visibility;
   }): Promise<{ session: Session; invite: Invite & { token: string | null; url: string | null } }> {
@@ -415,47 +415,90 @@ export class OpenGlassClient {
    * from each message's own response) — pass them yourself only if you're managing
    * session state across separate processes and need to resume mid-chain.
    */
+  /**
+   * Sends one witnessed message. `seq`/`prevHash` (the message's place in the hash chain)
+   * are handled for you: this client tracks the head from its own sends, reads it from the
+   * session when it doesn't know it yet (e.g. the initiator right after the counterparty
+   * accepts, or a fresh process), and when the other agent has sent something in between
+   * (the server answers `409 chain_conflict` with the real head, docs/SPEC.md §5.3/D8)
+   * re-chains onto that head and retries, up to `retryOnConflict` times (default 3). Pass
+   * `seq`/`prevHash` yourself only to manage chain state explicitly; no automatic retry
+   * happens then.
+   */
   async sendMessage(
     sessionId: string,
     payload: unknown,
-    opts: { contentType?: string; seq?: number; prevHash?: string } = {},
+    opts: { contentType?: string; seq?: number; prevHash?: string; retryOnConflict?: number } = {},
   ): Promise<{ head: { seq: number; hash: string } }> {
     const identity = this.requireIdentity();
-    const tracked = this.headBySession.get(sessionId);
-    const seq = opts.seq ?? (tracked ? tracked.seq + 1 : undefined);
-    const prevHash = opts.prevHash ?? tracked?.prevHash;
-    if (seq === undefined || prevHash === undefined) {
+    const manual = opts.seq !== undefined || opts.prevHash !== undefined;
+    const maxRetries = opts.retryOnConflict ?? 3;
+    for (let attempt = 0; ; attempt++) {
+      let seq: number | undefined;
+      let prevHash: string | undefined;
+      if (manual) {
+        const tracked = this.headBySession.get(sessionId);
+        seq = opts.seq ?? (tracked ? tracked.seq + 1 : undefined);
+        prevHash = opts.prevHash ?? tracked?.prevHash;
+        if (seq === undefined || prevHash === undefined) {
+          throw new Error(`No tracked head for session ${sessionId} — pass both seq and prevHash, or neither.`);
+        }
+      } else {
+        const head = this.headBySession.get(sessionId) ?? (await this.fetchSessionHead(sessionId));
+        seq = head.seq + 1;
+        prevHash = head.prevHash;
+      }
+
+      const payloadHash = hex(sha256(Buffer.from(canonicalize(payload), "utf8")));
+      const envelope: MessageEnvelope = {
+        v: 1,
+        type: "openglass.message",
+        sessionId,
+        seq,
+        prevHash,
+        sender: { agentId: identity.agentId!, kid: identity.kid },
+        contentType: opts.contentType ?? "application/json",
+        payloadHash,
+        sentAt: new Date().toISOString(),
+      };
+      const hashBytes = sha256(concatBytes(Buffer.from(prevHash, "hex"), Buffer.from(canonicalize(envelope), "utf8")));
+      const hash = hex(hashBytes);
+      const signature: Signature = { alg: "Ed25519", kid: identity.kid, sig: base64UrlEncode(signEd25519(sigInput("message", hashBytes), identity.privateKey)) };
+
+      try {
+        const result = await signedRequest<{ head: { seq: number; hash: string } }>(
+          this.baseUrl,
+          "POST",
+          `/v1/sessions/${sessionId}/messages`,
+          { envelope, hash, signature, payload },
+          identity,
+        );
+        this.headBySession.set(sessionId, { seq: result.head.seq, prevHash: result.head.hash });
+        return result;
+      } catch (err) {
+        const conflict = chainConflictHead(err);
+        if (manual || attempt >= maxRetries || conflict === undefined) throw err;
+        if (conflict?.hash) this.headBySession.set(sessionId, { seq: conflict.seq, prevHash: conflict.hash });
+        else this.headBySession.delete(sessionId); // re-read (and genesisHash) from the session
+      }
+    }
+  }
+
+  /** The session's current chain head, from the server: the last message's hash, or
+   * `genesisHash` before any message. */
+  private async fetchSessionHead(sessionId: string): Promise<{ seq: number; prevHash: string }> {
+    const session = await this.getSession(sessionId);
+    const prevHash = session.head?.hash ?? session.genesisHash;
+    if (!prevHash) {
       throw new Error(
-        `No tracked head for session ${sessionId} — call offerSession/waitForActive/acceptInvite first, or pass seq/prevHash explicitly.`,
+        `Session ${sessionId} isn't active yet (status: ${session.status}) — wait for the counterparty to accept (waitForActive) before sending.`,
       );
     }
-
-    const payloadHash = hex(sha256(Buffer.from(canonicalize(payload), "utf8")));
-    const envelope: MessageEnvelope = {
-      v: 1,
-      type: "openglass.message",
-      sessionId,
-      seq,
-      prevHash,
-      sender: { agentId: identity.agentId!, kid: identity.kid },
-      contentType: opts.contentType ?? "application/json",
-      payloadHash,
-      sentAt: new Date().toISOString(),
-    };
-    const hashBytes = sha256(concatBytes(Buffer.from(prevHash, "hex"), Buffer.from(canonicalize(envelope), "utf8")));
-    const hash = hex(hashBytes);
-    const signature: Signature = { alg: "Ed25519", kid: identity.kid, sig: base64UrlEncode(signEd25519(sigInput("message", hashBytes), identity.privateKey)) };
-
-    const result = await signedRequest<{ head: { seq: number; hash: string } }>(
-      this.baseUrl,
-      "POST",
-      `/v1/sessions/${sessionId}/messages`,
-      { envelope, hash, signature, payload },
-      identity,
-    );
-    this.headBySession.set(sessionId, { seq: result.head.seq, prevHash: result.head.hash });
-    return result;
+    const head = { seq: session.head?.seq ?? 0, prevHash };
+    this.headBySession.set(sessionId, head);
+    return head;
   }
+
 
   // ---- Pause + close + records ----------------------------------------------------
 
@@ -721,4 +764,13 @@ function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
   out.set(a, 0);
   out.set(b, a.length);
   return out;
+}
+
+/** For a `409 chain_conflict` error: the server's current head (`null` hash before any
+ * message). `undefined` for any other error. */
+function chainConflictHead(err: unknown): { seq: number; hash: string | null } | null | undefined {
+  if (!(err instanceof OpenGlassApiError) || err.status !== 409) return undefined;
+  const error = (err.body as { error?: { code?: string; details?: { head?: { seq: number; hash: string | null } } } } | null)?.error;
+  if (error?.code !== "chain_conflict") return undefined;
+  return error.details?.head ?? null;
 }

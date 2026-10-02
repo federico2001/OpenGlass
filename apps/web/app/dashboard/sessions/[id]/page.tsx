@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { PayloadView } from "../../../../components/PayloadView";
 import { StatusBadge } from "../../../../components/StatusBadge";
+import { VerifyResultView } from "../../../../components/VerifyResultView";
 import {
   ApiError,
   apiFetch,
   formatDate,
   shortHash,
+  checkRecord,
   type AgentPublic,
   type LookupResult,
   type MessageView,
@@ -121,10 +124,9 @@ export default function SessionDetailPage() {
     setVerifyError(null);
     setVerifyResult(null);
     try {
-      const bundle = await apiFetch(`/v1/records/${session.recordId}/bundle`);
-      const res = await fetch("/v1/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(bundle) });
-      const json = (await res.json()) as VerifyResult;
-      setVerifyResult(json);
+      const check = await checkRecord(session.recordId);
+      if (check.kind === "verified") setVerifyResult(check.result);
+      else setVerifyError("This record is sealed, so only its receipt is available. Once it's unsealed, the full record can be verified.");
     } catch (err) {
       setVerifyError(err instanceof Error ? err.message : "Could not run verification.");
     } finally {
@@ -259,7 +261,7 @@ export default function SessionDetailPage() {
             <tr><td>Created</td><td>{formatDate(session.createdAt)}</td></tr>
             <tr><td>Activated</td><td>{formatDate(session.activatedAt)}</td></tr>
             <tr><td>Closed</td><td>{formatDate(session.closedAt)}</td></tr>
-            <tr><td>Genesis hash</td><td><code>{shortHash(session.head.hash ? session.head.hash : null)}</code></td></tr>
+            <tr><td>Latest hash</td><td><code>{shortHash(session.head.hash ? session.head.hash : null)}</code></td></tr>
           </tbody>
         </table>
       </section>
@@ -272,13 +274,12 @@ export default function SessionDetailPage() {
           <ol className={styles.timeline}>
             {messages.map((message) => {
               const senderName = participants[message.envelope.sender.agentId]?.name ?? message.envelope.sender.agentId;
-              const text = typeof message.payload?.text === "string" ? message.payload.text : null;
               return (
                 <li key={message.id} className={styles.messageItem}>
                   <span className={styles.seqBadge}>{message.seq}</span>
                   <div className={styles.messageBody}>
                     <p className={styles.messageSender}>{senderName}</p>
-                    <p className={styles.messageText}>{text ?? "(notary mode — payload not stored by OpenGlass)"}</p>
+                    <PayloadView message={message} />
                     <p className={styles.messageMeta}>
                       hash {shortHash(message.hash)} · signed {message.signature.alg} · countersigned {formatDate(message.receivedAt)}
                     </p>
@@ -386,18 +387,7 @@ export default function SessionDetailPage() {
               the public <code>POST /v1/verify</code> endpoint — the same check anyone can run without trusting OpenGlass&apos;s word.
             </p>
             {verifyError && <p className={styles.error}>{verifyError}</p>}
-            {verifyResult && (
-              <div className={verifyResult.valid ? styles.verifyGood : styles.verifyBad}>
-                <p className={styles.verifyHeadline}>{verifyResult.valid ? "Verified valid" : "Verification failed"}</p>
-                {verifyResult.errors.length > 0 && (
-                  <ul className={styles.errorList}>
-                    {verifyResult.errors.map((e) => (
-                      <li key={e}>{e}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+            {verifyResult && <VerifyResultView result={verifyResult} />}
           </div>
         </section>
       )}

@@ -99,11 +99,11 @@ describe("POST /v1/attestations visibility (realignment R1, docs/SPEC.md §13)",
     expect(res.json().attestation.visibility).toBe("private");
   });
 
-  it("gracefully degrades the default private to sealed when content encryption isn't configured", async () => {
+  it("falls back from the default private to shared (never sealed) when content encryption isn't configured", async () => {
     const attestor = await registerAndClaim(`vis_fallback_${newId("agt").slice(-6)}`);
     const res = await openAttestation(attestor); // app() (top of file) has contentEncryption: null
     expect(res.statusCode).toBe(201);
-    expect(res.json().attestation.visibility).toBe("sealed");
+    expect(res.json().attestation.visibility).toBe("shared");
   });
 
   it("honors an explicit shared request", async () => {

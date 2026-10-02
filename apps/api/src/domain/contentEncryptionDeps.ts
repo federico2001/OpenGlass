@@ -4,7 +4,7 @@ import type { Config } from "../config.js";
 /**
  * Realignment R1 (docs/SPEC.md §13): envelope encryption for `visibility: "private"`
  * record content. `null` when `CONTENT_ENCRYPTION` isn't configured, in which case a
- * `visibility: "private"` request gracefully degrades to `sealed` (see
+ * `visibility: "private"` request falls back to `shared` (same readers, content kept) (see
  * apps/api/src/routes/sessions.ts / attestations.ts) rather than erroring — mirrors
  * `createX402Deps`'s "off until a real payout wallet is set" pattern exactly.
  */

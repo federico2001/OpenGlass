@@ -50,7 +50,7 @@ pnpm exec cdk deploy                # prints the outputs used below
    aws ssm put-parameter --name /openglass/prod/CDP_API_KEY_SECRET --type SecureString --value '<cdp-api-key-secret>'
    ```
    The free public facilitator (used when these are unset, e.g. local dev) only settles Base Sepolia testnet — real payments need a CDP API key from [portal.cdp.coinbase.com/api-keys/secret](https://portal.cdp.coinbase.com/api-keys/secret), IP-allowlisted to the stack's `PublicIp` output.
-6. **Private-visibility records (realignment R1, optional)**: omit `OG_ENABLE_PRIVATE_VISIBILITY` and a `visibility: "private"` request gracefully degrades to `sealed` — no new AWS resource, no added cost. To actually enable envelope encryption for `visibility: "private"` records:
+6. **Private-visibility records (realignment R1, optional)**: omit `OG_ENABLE_PRIVATE_VISIBILITY` and a `visibility: "private"` request falls back to `shared` (same readers, content kept) — no new AWS resource, no added cost. To actually enable envelope encryption for `visibility: "private"` records:
    ```sh
    export OG_ENABLE_PRIVATE_VISIBILITY=true
    pnpm exec cdk deploy

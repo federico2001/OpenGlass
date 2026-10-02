@@ -18,7 +18,7 @@ from .crypto import (
     to_hex,
 )
 from .crypto.verify_bundle import VerifyResult, verify_bundle as _verify_bundle
-from .http import public_request, random_attestation_id, random_session_id, signed_request
+from .http import OpenGlassApiError, public_request, random_attestation_id, random_session_id, signed_request
 from .types import (
     Accept,
     AgentIdentity,
@@ -47,6 +47,23 @@ class OpenGlassTimeoutError(Exception):
 class _Head:
     seq: int
     prev_hash: str
+
+
+def _error_part(err: OpenGlassApiError) -> dict[str, Any]:
+    body = err.body if isinstance(err.body, dict) else {}
+    error = body.get("error")
+    return error if isinstance(error, dict) else {}
+
+
+def _error_code(err: OpenGlassApiError) -> str | None:
+    code = _error_part(err).get("code")
+    return code if isinstance(code, str) else None
+
+
+def _error_head(err: OpenGlassApiError) -> dict[str, Any] | None:
+    details = _error_part(err).get("details")
+    head = details.get("head") if isinstance(details, dict) else None
+    return head if isinstance(head, dict) else None
 
 
 class OpenGlassClient:
@@ -187,7 +204,7 @@ class OpenGlassClient:
         an open (bearer-link) invite instead of one addressed to a specific agent.
         ``visibility`` (SPEC §13) defaults to "shared" server-side when omitted: both
         participant owners can read the full record from the moment it's issued. "sealed" is
-        deprecated. A "private" request gracefully degrades to "sealed" if the platform lacks
+        deprecated. A "private" request falls back to "shared" (same readers, content kept) if the platform lacks
         content encryption."""
         identity, agent_id = self._require_registered()
         sid = session_id or random_session_id()
@@ -278,42 +295,87 @@ class OpenGlassClient:
     # ---- Messages ----------------------------------------------------------
 
     def send_message(
-        self, session_id: str, payload: Any, content_type: str = "application/json", seq: int | None = None, prev_hash: str | None = None
+        self,
+        session_id: str,
+        payload: Any,
+        content_type: str = "application/json",
+        seq: int | None = None,
+        prev_hash: str | None = None,
+        retry_on_conflict: int = 3,
     ) -> dict[str, Any]:
-        """Sends one witnessed message. ``seq``/``prev_hash`` are tracked automatically
-        per session (from the ``genesisHash`` set by ``offer_session``/``wait_for_active``/
-        ``accept_invite``, then from each message's own response) — pass them yourself
-        only if you're managing session state across separate processes."""
+        """Sends one witnessed message.
+
+        ``seq``/``prev_hash`` (the message's place in the hash chain) are handled for you:
+        this client tracks the head from its own sends, reads it from the session when it
+        doesn't know it yet (e.g. the initiator right after the counterparty accepts, or
+        a fresh process), and when the other agent has sent something in between (the
+        server answers ``409 chain_conflict`` with the real head, docs/SPEC.md §5.3/D8)
+        re-chains onto that head and retries, up to ``retry_on_conflict`` times. Pass
+        ``seq``/``prev_hash`` yourself only to manage chain state explicitly; no automatic
+        retry happens then."""
         identity, agent_id = self._require_registered()
-        tracked = self._head_by_session.get(session_id)
-        resolved_seq = seq if seq is not None else (tracked.seq + 1 if tracked else None)
-        resolved_prev_hash = prev_hash if prev_hash is not None else (tracked.prev_hash if tracked else None)
-        if resolved_seq is None or resolved_prev_hash is None:
+        manual = seq is not None or prev_hash is not None
+        attempt = 0
+        while True:
+            if manual:
+                tracked = self._head_by_session.get(session_id)
+                resolved_seq = seq if seq is not None else (tracked.seq + 1 if tracked else None)
+                resolved_prev_hash = prev_hash if prev_hash is not None else (tracked.prev_hash if tracked else None)
+                if resolved_seq is None or resolved_prev_hash is None:
+                    raise RuntimeError(
+                        f"No tracked head for session {session_id} — pass both seq and prev_hash, or neither."
+                    )
+            else:
+                head = self._head_by_session.get(session_id) or self._fetch_session_head(session_id)
+                resolved_seq, resolved_prev_hash = head.seq + 1, head.prev_hash
+
+            payload_hash = to_hex(sha256(canonicalize(payload).encode("utf-8")))
+            envelope: MessageEnvelope = {
+                "v": 1,
+                "type": "openglass.message",
+                "sessionId": session_id,
+                "seq": resolved_seq,
+                "prevHash": resolved_prev_hash,
+                "sender": {"agentId": agent_id, "kid": identity.kid},
+                "contentType": content_type,
+                "payloadHash": payload_hash,
+                "sentAt": _iso(datetime.now(timezone.utc)),
+            }
+            hash_bytes = sha256(bytes.fromhex(resolved_prev_hash) + canonicalize(envelope).encode("utf-8"))
+            h = to_hex(hash_bytes)
+            signature: Signature = {"alg": "Ed25519", "kid": identity.kid, "sig": base64url_encode(sign_ed25519(sig_input("message", hash_bytes), identity.private_key))}
+
+            try:
+                result = self._signed("POST", f"/v1/sessions/{session_id}/messages", {"envelope": envelope, "hash": h, "signature": signature, "payload": payload})
+            except OpenGlassApiError as err:
+                if manual or attempt >= retry_on_conflict or _error_code(err) != "chain_conflict":
+                    raise
+                attempt += 1
+                server_head = _error_head(err)
+                if server_head and server_head.get("hash"):
+                    self._head_by_session[session_id] = _Head(seq=server_head["seq"], prev_hash=server_head["hash"])
+                else:
+                    self._head_by_session.pop(session_id, None)  # re-read (and genesisHash) from the session
+                continue
+
+            head = result["head"]
+            self._head_by_session[session_id] = _Head(seq=head["seq"], prev_hash=head["hash"])
+            return result
+
+    def _fetch_session_head(self, session_id: str) -> _Head:
+        """The session's current chain head, from the server: the last message's hash, or
+        ``genesisHash`` before any message."""
+        session = self.get_session(session_id)
+        head = session.get("head") or {}
+        prev = head.get("hash") or session.get("genesisHash")
+        if not prev:
             raise RuntimeError(
-                f"No tracked head for session {session_id} — call offer_session/wait_for_active/accept_invite first, "
-                "or pass seq/prev_hash explicitly."
+                f"Session {session_id} isn't active yet (status: {session.get('status')}) — wait for the counterparty "
+                "to accept (wait_for_active) before sending."
             )
-
-        payload_hash = to_hex(sha256(canonicalize(payload).encode("utf-8")))
-        envelope: MessageEnvelope = {
-            "v": 1,
-            "type": "openglass.message",
-            "sessionId": session_id,
-            "seq": resolved_seq,
-            "prevHash": resolved_prev_hash,
-            "sender": {"agentId": agent_id, "kid": identity.kid},
-            "contentType": content_type,
-            "payloadHash": payload_hash,
-            "sentAt": _iso(datetime.now(timezone.utc)),
-        }
-        hash_bytes = sha256(bytes.fromhex(resolved_prev_hash) + canonicalize(envelope).encode("utf-8"))
-        h = to_hex(hash_bytes)
-        signature: Signature = {"alg": "Ed25519", "kid": identity.kid, "sig": base64url_encode(sign_ed25519(sig_input("message", hash_bytes), identity.private_key))}
-
-        result = self._signed("POST", f"/v1/sessions/{session_id}/messages", {"envelope": envelope, "hash": h, "signature": signature, "payload": payload})
-        head = result["head"]
-        self._head_by_session[session_id] = _Head(seq=head["seq"], prev_hash=head["hash"])
-        return result
+        tracked = _Head(seq=head.get("seq", 0), prev_hash=prev)
+        self._head_by_session[session_id] = tracked
+        return tracked
 
     # ---- Close + records ----------------------------------------------------------
 
