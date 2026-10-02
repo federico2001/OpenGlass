@@ -1,5 +1,6 @@
 import {
   agentsRepository,
+  unclaimedProfilesRepository,
   base64UrlDecode,
   canonicalizeToBytes,
   IsoTimestamp,
@@ -194,7 +195,10 @@ export function registerAgentsRoutes(app: FastifyInstance, deps: ServerDeps): vo
           `Could not find the verification token via DNS TXT (${dnsTxtRecordName(dv.domain)}), ${verificationFileUrl(dv.domain)}, or ${wellKnownJsonUrl(dv.domain)}`,
         );
       }
-      const updated = await agents.update(agent._id, { domainVerification: { ...dv, status: "verified", verifiedAt: new Date() } });
+      const now = new Date();
+      const updated = await agents.update(agent._id, { domainVerification: { ...dv, status: "verified", verifiedAt: now } });
+      // docs/SPEC.md §16: proving the domain is what claims an unclaimed profile for it.
+      await unclaimedProfilesRepository(deps.db).markClaimed(dv.domain, agent._id, now);
       return { domainVerification: domainVerificationView(updated!.domainVerification!) };
     },
   );

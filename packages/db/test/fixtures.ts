@@ -111,6 +111,15 @@ export const validDocs: Record<string, Record<string, unknown>> = {
     packages: { npmWeeklyDownloads: 12, pypiDailyDownloads: 2, pypiWeeklyDownloads: 9, pypiMonthlyDownloads: 30 },
     github: { stars: 4, forks: 1, watchers: 2, openIssues: 0 },
   },
+  unclaimed_profiles: {
+    _id: "acme.example", agentCardUrl: "https://acme.example/.well-known/agent-card.json", cardSha256: hash, cardFetchedAt: now,
+    listedBy: `agt_${U}`, listedAt: now, lastSeenAt: now, claimedAgentId: null, claimedAt: null,
+  },
+  checkup_reports: {
+    _id: `chk_${U}`, targetKey: "acme.example", report: { v: 1, sections: {} },
+    attestationId: `att_${U}`, recordId: null, createdAt: now, expiresAt: now,
+  },
+  checkup_events: { _id: new ObjectId(), kind: "check_run", source: "user", targetKey: "acme.example", reportId: `chk_${U}`, at: now },
   changelog: { _id: new ObjectId(), fileName: "20260922000000-x.js", appliedAt: now, migrationBlock: Date.now() },
   migration_lock: { _id: "migrate", holder: "h", expiresAt: now },
 };
@@ -139,4 +148,7 @@ export const invalidDocs: [collection: string, why: string, doc: Record<string, 
   ["integration_status", "bad status", { ...validDocs.integration_status, status: "shipped" }],
   ["integration_requests", "bad status", { ...validDocs.integration_requests, status: "resolved" }],
   ["rate_limits", "fractional count", { ...validDocs.rate_limits, count: 1.5 }],
+  ["unclaimed_profiles", "bad listedBy", { ...validDocs.unclaimed_profiles, listedBy: "acme" }],
+  ["checkup_reports", "bad id prefix", { ...validDocs.checkup_reports, _id: `rec_${U}` }],
+  ["checkup_events", "unknown kind", { ...validDocs.checkup_events, kind: "page_view" }],
 ];

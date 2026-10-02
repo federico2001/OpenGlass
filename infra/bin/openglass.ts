@@ -28,4 +28,5 @@ new OpenGlassStack(app, "OpenGlass", {
       }
     : undefined,
   enablePrivateVisibility: process.env.OG_ENABLE_PRIVATE_VISIBILITY === "true",
+  amiId: process.env.OG_AMI_ID || undefined,
 });

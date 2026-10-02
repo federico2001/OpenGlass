@@ -197,6 +197,7 @@ jobs:
           - { app: mcp, file: docker/node-service.Dockerfile, args: "APP=mcp\nAPP_PORT=3001" }
           - { app: worker, file: docker/node-service.Dockerfile, args: "APP=worker\nAPP_PORT=3003" }
           - { app: web, file: apps/web/Dockerfile, args: "" }
+          - { app: checkup, file: apps/checkup/Dockerfile, args: "" }
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4

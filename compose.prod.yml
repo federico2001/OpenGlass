@@ -46,6 +46,20 @@ services:
     depends_on:
       api: { condition: service_healthy }
 
+  # Agent Checkup, at https://checkup.<domain>. CHECKUP_AGENT_PRIVATE_KEY and
+  # CHECKUP_ADMIN_TOKEN come from .env (SSM SecureStrings, see infra/README.md).
+  checkup:
+    <<: *app
+    image: ${ECR_REGISTRY:?}/openglass-checkup:${IMAGE_TAG:?}
+    environment:
+      PORT: "3004"
+      CHECKUP_PUBLIC_URL: https://checkup.${OPENGLASS_DOMAIN:?}
+      # Called directly over the Docker network, never through Caddy/TLS.
+      OPENGLASS_API_URL: http://api:3000
+      OPENGLASS_PUBLIC_URL: https://${OPENGLASS_DOMAIN:?}
+    depends_on:
+      api: { condition: service_healthy }
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped

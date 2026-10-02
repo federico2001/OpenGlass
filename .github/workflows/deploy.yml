@@ -37,6 +37,7 @@ jobs:
           - { app: mcp, file: docker/node-service.Dockerfile, args: "APP=mcp\nAPP_PORT=3001" }
           - { app: worker, file: docker/node-service.Dockerfile, args: "APP=worker\nAPP_PORT=3003" }
           - { app: web, file: apps/web/Dockerfile, args: "" }
+          - { app: checkup, file: apps/checkup/Dockerfile, args: "" }
     steps:
       - uses: actions/checkout@v7
       - uses: aws-actions/configure-aws-credentials@v6
@@ -122,3 +123,5 @@ jobs:
         run: |
           curl -fsS --retry 12 --retry-all-errors --retry-delay 5 --max-time 10 \
             -w '\nHTTP %{http_code}\n' "https://${{ vars.OPENGLASS_DOMAIN }}/health"
+          curl -fsS --retry 12 --retry-all-errors --retry-delay 5 --max-time 10 \
+            -w '\nHTTP %{http_code}\n' "https://checkup.${{ vars.OPENGLASS_DOMAIN }}/health"

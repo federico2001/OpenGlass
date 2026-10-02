@@ -47,3 +47,18 @@ mcp.{$SITE_ADDRESS} {
 
 	reverse_proxy mcp:3001
 }
+
+# Agent Checkup (apps/checkup): an A2A agent in its own right, so like the MCP server it
+# gets its own origin. Its agent card lives at /.well-known/agent-card.json on that origin.
+checkup.{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	reverse_proxy checkup:3004
+}

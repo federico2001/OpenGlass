@@ -27,3 +27,4 @@ export { sessionsRepository, type SessionsRepository } from "./sessions.js";
 export { viewerAccessLogRepository, type ViewerAccessLogRepository } from "./viewerAccessLog.js";
 export { viewerGrantsRepository, type ViewerGrantsRepository } from "./viewerGrants.js";
 export { webSessionsRepository, type WebSessionsRepository } from "./webSessions.js";
+export { unclaimedProfilesRepository, type UnclaimedProfilesRepository } from "./unclaimedProfiles.js";

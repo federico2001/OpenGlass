@@ -35,7 +35,7 @@ for p in json.load(sys.stdin)["Parameters"]:
     print(name + "=" + Q + value.replace(Q, B + Q) + Q)
 ' > .env
 umask 022
-for required in MONGODB_URI OPENGLASS_DOMAIN ACME_EMAIL S3_BUCKET KMS_KEY_ID; do
+for required in MONGODB_URI OPENGLASS_DOMAIN ACME_EMAIL S3_BUCKET KMS_KEY_ID CHECKUP_AGENT_PRIVATE_KEY CHECKUP_ADMIN_TOKEN; do
   grep -q "^$required=" .env || { echo "missing SSM parameter $SSM_PATH/$required" >&2; exit 1; }
 done
 
@@ -64,5 +64,5 @@ for _ in $(seq 1 30); do
 done
 echo "health check failed for $IMAGE_TAG" >&2
 compose ps >&2
-compose logs --tail 50 api mcp caddy >&2
+compose logs --tail 50 api mcp checkup caddy >&2
 exit 1

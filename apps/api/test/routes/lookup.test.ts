@@ -58,6 +58,18 @@ describe("GET /v1/lookup", () => {
     expect(res.headers["ratelimit-limit"]).toBeTruthy();
   });
 
+  it("doesn't cache a publicKey miss, so an agent finds itself right after registering", async () => {
+    const a = app();
+    const identity = testIdentity("lookup_fresh", "lookup_fresh_key");
+    const query = `/v1/lookup?publicKey=${identity.publicKey}`;
+    expect((await a.inject({ method: "GET", url: query })).json().registered).toBe(false);
+
+    const body = { name: "fresh", description: "d", publicKey: identity.publicKey };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/agents", body, identity, selfSigned: true });
+    const reg = await a.inject({ method: "POST", url: "/v1/agents", headers, payload: body });
+    expect((await a.inject({ method: "GET", url: query })).json()).toMatchObject({ registered: true, agentId: reg.json().agent.id });
+  });
+
   it("rejects a malformed domain", async () => {
     const res = await app().inject({ method: "GET", url: "/v1/lookup?domain=not_a_domain!!" });
     expect(res.statusCode).toBe(422);

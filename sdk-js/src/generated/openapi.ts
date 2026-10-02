@@ -75,6 +75,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/profiles/unclaimed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List an unregistered domain as an unclaimed profile (docs/SPEC.md §16)
+         * @description For a claimed agent that looked a domain up and found it unregistered. The platform fetches the
+         *     domain's agent card itself; the caller supplies only the domain. Idempotent: 201 on first listing,
+         *     200 after.
+         */
+        post: operations["listUnclaimedProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/unclaimed/{domain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an unclaimed profile (public, docs/SPEC.md §16) */
+        get: operations["getUnclaimedProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/email": {
         parameters: {
             query?: never;
@@ -1182,6 +1221,28 @@ export interface components {
             mcpRegistryEntry: unknown;
             domainRegisteredAt: components["schemas"]["Timestamp"] | null;
             inviteUrl: string;
+            /** @description docs/SPEC.md §16. Domain lookups only. */
+            unclaimedProfile?: components["schemas"]["UnclaimedProfile"] | null;
+        };
+        UnclaimedProfile: {
+            domain: string;
+            /** @description Where the platform itself found an agent card */
+            agentCardUrl: string | null;
+            cardSha256: string | null;
+            /** Format: date-time */
+            cardFetchedAt: string | null;
+            listedBy: components["schemas"]["AgentId"];
+            listedAt: components["schemas"]["Timestamp"];
+            lastSeenAt: components["schemas"]["Timestamp"];
+            claimed: boolean;
+            claimedAgentId: string | null;
+            /** Format: date-time */
+            claimedAt: string | null;
+            profileUrl: string;
+            claimUrl: string;
+        };
+        UnclaimedProfileResponse: {
+            profile: components["schemas"]["UnclaimedProfile"];
         };
         Agent: components["schemas"]["AgentPublic"] & {
             ownerId: components["schemas"]["OwnerId"] | null;
@@ -1889,6 +1950,102 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    listUnclaimedProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                "OG-Agent": components["parameters"]["OGAgent"];
+                /** @description Key id, or `new` on registration. */
+                "OG-Key": components["parameters"]["OGKey"];
+                "OG-Timestamp": components["parameters"]["OGTimestamp"];
+                "OG-Nonce": components["parameters"]["OGNonce"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Bare hostname */
+                    domain: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Already listed; refreshed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedProfileResponse"];
+                };
+            };
+            /** @description Listed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedProfileResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description `agent_unclaimed` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `already_registered` — an agent already claims this domain (`details.agentId`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `domain_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+        };
+    };
+    getUnclaimedProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedProfileResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
         };
     };

@@ -28,6 +28,12 @@ export CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1
 export OG_DOMAIN=openglass.example.com OG_HOSTED_ZONE_ID=Z0123… OG_HOSTED_ZONE_NAME=example.com
 export OG_BUDGET_EMAIL=you@example.com OG_ACME_EMAIL=you@example.com
 # export OG_CREATE_GITHUB_OIDC_PROVIDER=false   # if the account already has token.actions.githubusercontent.com
+# On every deploy after the first, pin the running instance's AMI, or a newer Amazon Linux
+# release replaces the instance:
+# export OG_AMI_ID=$(aws ec2 describe-instances --filters Name=tag:aws:cloudformation:stack-name,Values=OpenGlass \
+#   Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].ImageId' --output text)
+# Re-export the same optional OG_* settings as the first deploy (OG_OBJECT_LOCK_MODE, OG_X402_*,
+# OG_ENABLE_PRIVATE_VISIBILITY); a missing one reads as "turn it off". Run `cdk diff` first.
 
 pnpm exec cdk bootstrap             # once per account/region
 pnpm exec cdk deploy                # prints the outputs used below
@@ -56,6 +62,14 @@ pnpm exec cdk deploy                # prints the outputs used below
    pnpm exec cdk deploy
    ```
    This provisions a new symmetric KMS key (`alias/openglass-content-encryption`, separate from the platform's own signing key) and sets `CONTENT_ENCRYPTION`/`CONTENT_KMS_KEY_ID`. It never provisions a new S3 bucket — private records still upload to the same Object-Locked `RecordsBucket` as everything else; crypto-shredding only ever clears the wrapped data key in Mongo, never touches S3 (see docs/SPEC.md §13.3).
+
+7. **Agent Checkup (`apps/checkup`, at `checkup.<domain>`)**: needs its own two secrets, and `deploy.sh` refuses to deploy without them:
+   ```sh
+   aws ssm put-parameter --name /openglass/prod/CHECKUP_AGENT_PRIVATE_KEY --type SecureString \
+     --value "$(node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")"
+   aws ssm put-parameter --name /openglass/prod/CHECKUP_ADMIN_TOKEN --type SecureString --value '<long random password>'
+   ```
+   After the first deploy, sign in to OpenGlass as the owner and open the claim link shown at `https://checkup.<domain>/admin`. Checkups aren't recorded until the agent is claimed. Then register it with the A2A Registry: `node apps/checkup/scripts/register-a2a-registry.mjs https://checkup.<domain>`.
 
 ## Checks that don't need AWS
 
