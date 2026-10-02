@@ -67,6 +67,10 @@ describe("OpenGlassStack", () => {
     t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "mcp.openglass.example.com.", Type: "A", HostedZoneId: props.hostedZoneId });
   });
 
+  it("pins the instance's AMI when amiId is set, so a newer AMI doesn't replace it", () => {
+    synth({ amiId: "ami-0123456789abcdef0" }).hasResourceProperties("AWS::EC2::Instance", { ImageId: "ami-0123456789abcdef0" });
+  });
+
   it("points checkup.<domain> at the same Elastic IP", () => {
     t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "checkup.openglass.example.com.", Type: "A", HostedZoneId: props.hostedZoneId });
   });

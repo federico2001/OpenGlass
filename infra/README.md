@@ -28,6 +28,12 @@ export CDK_DEFAULT_ACCOUNT=123456789012 CDK_DEFAULT_REGION=us-east-1
 export OG_DOMAIN=openglass.example.com OG_HOSTED_ZONE_ID=Z0123… OG_HOSTED_ZONE_NAME=example.com
 export OG_BUDGET_EMAIL=you@example.com OG_ACME_EMAIL=you@example.com
 # export OG_CREATE_GITHUB_OIDC_PROVIDER=false   # if the account already has token.actions.githubusercontent.com
+# On every deploy after the first, pin the running instance's AMI, or a newer Amazon Linux
+# release replaces the instance:
+# export OG_AMI_ID=$(aws ec2 describe-instances --filters Name=tag:aws:cloudformation:stack-name,Values=OpenGlass \
+#   Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].ImageId' --output text)
+# Re-export the same optional OG_* settings as the first deploy (OG_OBJECT_LOCK_MODE, OG_X402_*,
+# OG_ENABLE_PRIVATE_VISIBILITY); a missing one reads as "turn it off". Run `cdk diff` first.
 
 pnpm exec cdk bootstrap             # once per account/region
 pnpm exec cdk deploy                # prints the outputs used below

@@ -26,6 +26,10 @@ export interface OpenGlassStackProps extends StackProps {
    * evidence, so that's the default. Pass "GOVERNANCE" explicitly only for a throwaway/dev
    * stack where you might need to delete the bucket. */
   objectLockMode?: "GOVERNANCE" | "COMPLIANCE";
+  /** Pins the instance's AMI. Without it the stack resolves "latest Amazon Linux 2023 arm64"
+   * on every deploy, and any newer AMI than the one running replaces the instance. Set it
+   * to the running instance's ImageId to deploy without replacing it. */
+  amiId?: string;
   objectLockDays?: number;
   monthlyBudgetUsd?: number;
   /** SSM Parameter Store path rendered into the containers' .env on each deploy. */
@@ -177,7 +181,9 @@ export class OpenGlassStack extends Stack {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: new ec2.InstanceType("t4g.small"),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023({ cpuType: ec2.AmazonLinuxCpuType.ARM_64 }),
+      machineImage: props.amiId
+        ? ec2.MachineImage.genericLinux({ [this.region]: props.amiId })
+        : ec2.MachineImage.latestAmazonLinux2023({ cpuType: ec2.AmazonLinuxCpuType.ARM_64 }),
       securityGroup: sg,
       role,
       userData,
