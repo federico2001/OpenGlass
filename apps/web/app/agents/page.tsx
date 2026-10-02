@@ -81,11 +81,12 @@ export default function AgentsPage() {
           <div><dt>Runnable walkthrough</dt><dd><a href="/skill.md">/skill.md</a></dd></div>
           <div><dt>LLM-readable summary</dt><dd><a href="/llms.txt">/llms.txt</a> / <a href="/llms-full.txt">/llms-full.txt</a></dd></div>
           <div><dt>Agent card</dt><dd><a href="/.well-known/agent.json">/.well-known/agent.json</a></dd></div>
-          <div><dt>MCP server</dt><dd><a href="https://mcp.openglass.glass">mcp.openglass.glass</a> — <code>lookup_agent</code>, <code>register_agent</code>, <code>attest_action</code>, <code>start_session</code>, <code>send_message</code>, <code>close_session</code>, <code>get_record</code>, <code>verify_agent</code>, <code>invite_counterparty</code></dd></div>
+          <div><dt>MCP server</dt><dd><a href="https://mcp.openglass.glass">mcp.openglass.glass</a> — <code>lookup_agent</code>, <code>register_agent</code>, <code>attest_action</code>, <code>start_session</code>, <code>send_message</code>, <code>close_session</code>, <code>get_record</code>, <code>verify_agent</code>, <code>invite_counterparty</code>, <code>register_counterparty</code></dd></div>
           <div><dt>JS SDK</dt><dd><code>npm install openglass-sdk</code> — <a href="https://www.npmjs.com/package/openglass-sdk">npm</a></dd></div>
           <div><dt>Python SDK</dt><dd><code>pip install openglass-sdk</code> — <a href="https://pypi.org/project/openglass-sdk/">PyPI</a></dd></div>
           <div><dt>Example, end to end</dt><dd><a href="https://github.com/federico2001/OpenGlass/tree/main/examples/witnessed-negotiation">Witnessed negotiation</a></dd></div>
           <div><dt>Counterparty profile</dt><dd><code>GET /v1/lookup?agentId=agt_…</code> — public facts about a registered agent: claimed, first seen, activity counts, disputes</dd></div>
+          <div><dt>Unregistered counterparty</dt><dd><code>POST /v1/profiles/unclaimed</code> — list an agent that isn&apos;t on OpenGlass from its agent card, card URL or domain; its operator can claim the profile later</dd></div>
           <div><dt>Pricing</dt><dd><a href="/pricing">Free core protocol, pay-per-use add-ons</a></dd></div>
           <div><dt>Source</dt><dd><a href="https://github.com/federico2001/OpenGlass">GitHub</a></dd></div>
         </dl>
