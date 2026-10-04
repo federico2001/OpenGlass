@@ -7,8 +7,9 @@ import styles from "../../../../components/app/Evidence.module.css";
 import { nameOf, useAgentNames } from "../../../../components/app/Interactions";
 import ui from "../../../../components/app/ui.module.css";
 import { PayloadView } from "../../../../components/PayloadView";
+import payloadStyles from "../../../../components/PayloadView.module.css";
 import { StatusBadge } from "../../../../components/StatusBadge";
-import { apiFetch, formatDate, shortHash, type MessageView, type OwnerAttestation } from "../../../../lib/dashboard";
+import { apiFetch, formatDate, shortHash, type FetchWitnessView, type MessageView, type OwnerAttestation } from "../../../../lib/dashboard";
 import { attestationCounterparty, counterpartyHref, describeEvent, plainStatus, plural } from "../../../../lib/interactions";
 import { useOwner } from "../../../../lib/ownerContext";
 
@@ -24,17 +25,20 @@ export default function AttestationPage() {
   const [loading, setLoading] = useState(true);
   const [attestation, setAttestation] = useState<OwnerAttestation | null>(null);
   const [events, setEvents] = useState<MessageView[]>([]);
+  const [witnesses, setWitnesses] = useState<FetchWitnessView[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       apiFetch<{ attestation: OwnerAttestation }>(`/v1/attestations/${id}`),
       apiFetch<{ items: MessageView[] }>(`/v1/attestations/${id}/events?limit=200`),
+      apiFetch<{ items: FetchWitnessView[] }>(`/v1/attestations/${id}/witnesses`).catch(() => ({ items: [] })),
     ])
-      .then(([attestationRes, eventsRes]) => {
+      .then(([attestationRes, eventsRes, witnessesRes]) => {
         if (cancelled) return;
         setAttestation(attestationRes.attestation);
         setEvents(eventsRes.items);
+        setWitnesses(witnessesRes.items);
       })
       .catch(() => {})
       .finally(() => {
@@ -167,6 +171,77 @@ export default function AttestationPage() {
           </ol>
         )}
       </section>
+
+      {witnesses.length > 0 && (
+        <section className={ui.section} aria-label="Independently witnessed">
+          <div className={ui.sectionHead}>
+            <h2 className={ui.h2}>What OpenGlass fetched directly</h2>
+          </div>
+          <p className={ui.hint} style={{ marginBottom: 14 }}>
+            {agentName} asked OpenGlass to fetch these URLs itself, rather than reporting what it saw. OpenGlass made
+            the request and is the one attesting to the response below — not {agentName}, and not the other server.
+            This proves the bytes came back from a TLS connection to that domain at that moment; it doesn&apos;t prove
+            who operates the server beyond its certificate.
+          </p>
+          <ol className={styles.thread}>
+            {witnesses.map((w) => (
+              <li key={w.id} className={styles.entry}>
+                <span className={styles.entryNum}>{w.seq}</span>
+                <div className={styles.entryBody}>
+                  <p className={styles.entryTitle}>
+                    Fetched <code>{w.url}</code>
+                  </p>
+                  <p className={styles.entrySummary}>
+                    HTTP {w.response.status} · {w.response.bodyBytes.toLocaleString()} bytes
+                    {w.response.bodyTruncated ? " (truncated)" : ""}
+                    {w.response.contentType ? ` · ${w.response.contentType}` : ""}
+                  </p>
+                  <p className={styles.entryMeta}>Witnessed directly by OpenGlass · {formatDate(w.fetchedAt)}</p>
+                  <details className={styles.evidence}>
+                    <summary>Raw response</summary>
+                    <div className={styles.content}>
+                      {w.response.bodyText !== null ? (
+                        <pre className={payloadStyles.json}>{w.response.bodyText}</pre>
+                      ) : (
+                        <p className={ui.hint}>Not text (or not decodable) — only its hash was kept.</p>
+                      )}
+                    </div>
+                  </details>
+                  <details className={ui.details}>
+                    <summary>Signed details</summary>
+                    <div className={ui.detailsBody}>
+                      <table className={ui.table}>
+                        <tbody>
+                          <tr>
+                            <td>Body sha256</td>
+                            <td>
+                              <code title={w.response.bodySha256}>{shortHash(w.response.bodySha256)}</code>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Chain hash</td>
+                            <td>
+                              <code title={w.hash}>{shortHash(w.hash)}</code>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Platform signature</td>
+                            <td>
+                              <code>
+                                {w.platformSignature.alg} · {w.platformSignature.kid}
+                              </code>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {attestation.recordId && (
         <section className={ui.section} aria-label="The record">

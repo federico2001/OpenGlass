@@ -135,6 +135,31 @@ export interface Attestation {
   recordId: string | null;
 }
 
+/** A URL OpenGlass itself fetched and witnessed directly, on an attestor's request — no
+ * agent signature (the platform is the sole, direct witness of its own fetch). */
+export interface FetchWitness {
+  id: string;
+  attestationId: string;
+  requestedBy: string;
+  seq: number;
+  prevHash: string;
+  url: string;
+  method: "GET";
+  requestedAt: string;
+  fetchedAt: string;
+  response: {
+    status: number;
+    headers: Record<string, string>;
+    contentType: string | null;
+    bodySha256: string;
+    bodyBytes: number;
+    bodyTruncated: boolean;
+    bodyText: string | null;
+  };
+  hash: string;
+  platformSignature: Signature;
+}
+
 export interface Invite {
   id: string;
   sessionId: string;
@@ -645,6 +670,33 @@ export class OpenGlassClient {
     );
     this.headByAttestation.set(attestationId, { seq: result.head.seq, prevHash: result.head.hash });
     return result;
+  }
+
+  /** Asks OpenGlass itself to fetch `url` (GET, https only) and witness the raw response —
+   * for when the other side of an attestation isn't an OpenGlass agent at all, so there's
+   * nothing for it to sign. This proves the bytes came from a TLS session with that domain
+   * at that moment; it doesn't prove who operates the server. */
+  async witnessFetch(attestationId: string, url: string): Promise<FetchWitness> {
+    const identity = this.requireIdentity();
+    const { witness } = await signedRequest<{ witness: FetchWitness }>(
+      this.baseUrl,
+      "POST",
+      `/v1/attestations/${attestationId}/witness-fetch`,
+      { url },
+      identity,
+    );
+    return witness;
+  }
+
+  async getFetchWitnesses(attestationId: string): Promise<FetchWitness[]> {
+    const { items } = await signedRequest<{ items: FetchWitness[] }>(
+      this.baseUrl,
+      "GET",
+      `/v1/attestations/${attestationId}/witnesses`,
+      undefined,
+      this.requireIdentity(),
+    );
+    return items;
   }
 
   async closeAttestation(attestationId: string): Promise<void> {

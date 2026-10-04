@@ -34,6 +34,11 @@ export const RATE_LIMIT_RULES = {
   lookup: { limit: 60, windowMs: 60_000 },
   /** docs/SPEC.md §16. Each listing fetches the domain's agent card (up to two requests). */
   profile_list: { limit: 120, windowMs: 3_600_000 },
+  /** One outbound HTTP request each — bounded more like lookup/profile_list than a plain
+   * write, to limit how much SSRF-guard-probing or abuse a single agent or attestation can
+   * generate. */
+  witness_fetch_per_agent: { limit: 30, windowMs: 60_000 },
+  witness_fetch_per_attestation: { limit: 20, windowMs: 60_000 },
   unauthenticated_default: { limit: 120, windowMs: 60_000 },
 } as const satisfies Record<string, RateLimitRule>;
 

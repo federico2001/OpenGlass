@@ -1,7 +1,8 @@
 import { agentsRepository, canonicalizeToBytes, hex, newId, sha256, signEd25519, base64UrlEncode, sigInput } from "@openglass/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import type { WitnessFetchResponse, WitnessFetchResult } from "../../src/domain/witnessFetch.js";
 import { openTestDb } from "../../../../packages/db/test/testDb.js";
-import { buildServer } from "../../src/server.js";
+import { buildServer, type ServerDeps } from "../../src/server.js";
 import {
   buildAttestationOpen,
   claimAgentDirectly,
@@ -22,11 +23,29 @@ afterAll(async () => {
   await t.cleanup();
 });
 beforeEach(async () => {
-  for (const c of ["agents", "owners", "attestations", "messages", "records", "rate_limits"]) await t.db.collection(c).deleteMany({});
+  for (const c of ["agents", "owners", "attestations", "messages", "records", "fetch_witnesses", "rate_limits"]) await t.db.collection(c).deleteMany({});
 });
 
-function app() {
-  return buildServer({ ...testServerDeps(t), healthChecks: {} });
+function app(overrides: Partial<ServerDeps> = {}) {
+  return buildServer({ ...testServerDeps(t), healthChecks: {}, ...overrides });
+}
+
+/** A fake performWitnessFetch, standing in for the real network call the same way
+ * profiles.test.ts fakes fetchAgentCard — no real server, no SSRF guard exercised here. */
+function fakeWitnessFetch(responseOverrides: Partial<WitnessFetchResponse> = {}): () => Promise<WitnessFetchResult> {
+  return async () => ({
+    ok: true,
+    response: {
+      status: 200,
+      headers: { "content-type": "text/plain" },
+      contentType: "text/plain",
+      bodySha256: hex(sha256(Buffer.from("hello from the other side"))),
+      bodyBytes: 25,
+      bodyTruncated: false,
+      bodyText: "hello from the other side",
+      ...responseOverrides,
+    },
+  });
 }
 
 async function registerAndClaim(name: string): Promise<TestAgentIdentity> {
@@ -164,6 +183,141 @@ describe("POST /v1/attestations/:id/events", () => {
 
     const listRes = await app().inject({ method: "GET", url: path, headers: signedRequestHeaders({ method: "GET", path, identity: attestor }) });
     expect(listRes.json().items).toHaveLength(2);
+  });
+});
+
+describe("POST /v1/attestations/:id/witness-fetch", () => {
+  it("fetches, chains off genesisHash, and the second fetch chains off the first", async () => {
+    const attestor = await registerAndClaim(`wfx_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: fakeWitnessFetch() });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+    const genesisHash = openRes.json().attestation.genesisHash;
+
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body1 = { url: "https://example.com/offer" };
+    const headers1 = signedRequestHeaders({ method: "POST", path, body: body1, identity: attestor });
+    const res1 = await server.inject({ method: "POST", url: path, headers: headers1, payload: body1 });
+    expect(res1.statusCode).toBe(201);
+    const witness1 = res1.json().witness;
+    expect(witness1.seq).toBe(1);
+    expect(witness1.prevHash).toBe(genesisHash);
+    expect(witness1.requestedBy).toBe(attestor.agentId);
+    expect(witness1.response.bodyText).toBe("hello from the other side");
+    expect(witness1.platformSignature.alg).toBe("ECDSA_P256_SHA256");
+
+    const body2 = { url: "https://example.com/accept" };
+    const headers2 = signedRequestHeaders({ method: "POST", path, body: body2, identity: attestor });
+    const res2 = await server.inject({ method: "POST", url: path, headers: headers2, payload: body2 });
+    expect(res2.statusCode).toBe(201);
+    const witness2 = res2.json().witness;
+    expect(witness2.seq).toBe(2);
+    expect(witness2.prevHash).toBe(witness1.hash);
+
+    const listRes = await server.inject({
+      method: "GET",
+      url: `/v1/attestations/${attestationId}/witnesses`,
+      headers: signedRequestHeaders({ method: "GET", path: `/v1/attestations/${attestationId}/witnesses`, identity: attestor }),
+    });
+    expect(listRes.json().items.map((w: { seq: number }) => w.seq)).toEqual([1, 2]);
+  });
+
+  it("rejects a non-https URL without attempting any fetch", async () => {
+    const attestor = await registerAndClaim(`wfx_scheme_${newId("agt").slice(-6)}`);
+    const openRes = await openAttestation(attestor);
+    const attestationId = openRes.json().attestation.id;
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "http://example.com/offer" };
+    const res = await app().inject({ method: "POST", url: path, headers: signedRequestHeaders({ method: "POST", path, body, identity: attestor }), payload: body });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("url_invalid");
+  });
+
+  it("rejects an IP-literal host", async () => {
+    const attestor = await registerAndClaim(`wfx_ip_${newId("agt").slice(-6)}`);
+    const openRes = await openAttestation(attestor);
+    const attestationId = openRes.json().attestation.id;
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "https://93.184.216.34/offer" };
+    const res = await app().inject({ method: "POST", url: path, headers: signedRequestHeaders({ method: "POST", path, body, identity: attestor }), payload: body });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("url_invalid");
+  });
+
+  it("reports url_unreachable when the fetch itself fails", async () => {
+    const attestor = await registerAndClaim(`wfx_unreach_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: async () => ({ ok: false, reason: "The request failed or timed out" }) });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "https://example.com/offer" };
+    const res = await server.inject({ method: "POST", url: path, headers: signedRequestHeaders({ method: "POST", path, body, identity: attestor }), payload: body });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("url_unreachable");
+  });
+
+  it("404s for an agent that isn't this attestation's attestor", async () => {
+    const attestor = await registerAndClaim(`wfx_owner_${newId("agt").slice(-6)}`);
+    const stranger = await registerAndClaim(`wfx_stranger_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: fakeWitnessFetch() });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "https://example.com/offer" };
+    const res = await server.inject({ method: "POST", url: path, headers: signedRequestHeaders({ method: "POST", path, body, identity: stranger }), payload: body });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("409s once the attestation is no longer active", async () => {
+    const attestor = await registerAndClaim(`wfx_closed_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: fakeWitnessFetch() });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+
+    const statement = { v: 1, type: "openglass.close", sessionId: attestationId, headSeq: 0, headHash: null, closedAt: new Date().toISOString() };
+    const closeSig = {
+      alg: "Ed25519" as const,
+      kid: attestor.kid,
+      sig: base64UrlEncode(signEd25519(sigInput("close", sha256(canonicalizeToBytes(statement))), attestor.privateKey)),
+    };
+    const closePath = `/v1/attestations/${attestationId}/close`;
+    const closeBody = { statement, signature: closeSig };
+    await server.inject({
+      method: "POST",
+      url: closePath,
+      headers: signedRequestHeaders({ method: "POST", path: closePath, body: closeBody, identity: attestor }),
+      payload: closeBody,
+    });
+
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "https://example.com/offer" };
+    const res = await server.inject({ method: "POST", url: path, headers: signedRequestHeaders({ method: "POST", path, body, identity: attestor }), payload: body });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("attestation_not_active");
+  });
+});
+
+describe("GET /v1/attestations/:id/witnesses access", () => {
+  it("is readable by the attestor's owner, and 404s for an unrelated owner", async () => {
+    const attestor = await registerAndClaim(`wfx_read_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: fakeWitnessFetch() });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "https://example.com/offer" };
+    await server.inject({ method: "POST", url: path, headers: signedRequestHeaders({ method: "POST", path, body, identity: attestor }), payload: body });
+
+    const doc = await agentsRepository(t.db).findById(attestor.agentId);
+    const ownerCookie = await createOwnerSessionCookie(t.db, doc!.ownerId!);
+    const listPath = `/v1/attestations/${attestationId}/witnesses`;
+    const okRes = await server.inject({ method: "GET", url: listPath, headers: { cookie: ownerCookie } });
+    expect(okRes.statusCode).toBe(200);
+    expect(okRes.json().items).toHaveLength(1);
+
+    const otherOwner = await insertTestOwner(t.db, `wfx_other_${newId("own").slice(-6)}@example.com`);
+    const otherCookie = await createOwnerSessionCookie(t.db, otherOwner._id);
+    const deniedRes = await server.inject({ method: "GET", url: listPath, headers: { cookie: otherCookie } });
+    expect(deniedRes.statusCode).toBe(404);
   });
 });
 

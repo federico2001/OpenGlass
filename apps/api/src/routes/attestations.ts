@@ -6,6 +6,7 @@ import {
   attestationsRepository,
   base64UrlDecode,
   canonicalizeToBytes,
+  findFetchWitnessesByAttestation,
   findMessagesBySession,
   sha256,
   verifySignature,
@@ -15,9 +16,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { canAccessAttestation } from "../domain/access.js";
 import { appendAttestationEvent } from "../domain/appendAttestationEvent.js";
+import { appendFetchWitness } from "../domain/appendFetchWitness.js";
 import { computeAttestationGenesisHash } from "../domain/attestationGenesis.js";
 import { notifyHighRiskAction } from "../domain/alerts.js";
 import { attestationView } from "../domain/attestationViews.js";
+import { fetchWitnessView } from "../domain/fetchWitnessViews.js";
 import { messageView } from "../domain/messageViews.js";
 import { withinClockSkew } from "../domain/genesis.js";
 import { Visibility, effectiveVisibility } from "../domain/visibility.js";
@@ -45,6 +48,7 @@ const AppendEventBody = z.strictObject({
   payload: z.unknown().optional(),
 });
 const CloseAttestationBody = z.strictObject({ statement: CloseStatement, signature: Signature });
+const WitnessFetchBody = z.strictObject({ url: z.string().min(1).max(2048) });
 
 export function registerAttestationsRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const attestations = attestationsRepository(deps.db);
@@ -177,6 +181,44 @@ export function registerAttestationsRoutes(app: FastifyInstance, deps: ServerDep
       const afterSeq = Math.max(Number(q.afterSeq) || 0, 0);
       const items = await findMessagesBySession(deps.db, attestation._id, { afterSeq, limit });
       return { items: items.map(messageView), nextCursor: items.length === limit ? items[items.length - 1]!.seq : null };
+    },
+  );
+
+  // The other side of an attestation is often not an OpenGlass agent at all — nothing to
+  // sign, nothing to countersign. This asks OpenGlass itself to fetch a URL and witness
+  // the raw response directly, rather than trusting the attestor's own unchecked account
+  // of what it received (the self-reported `counterparty` convention, docs/SPEC.md §12.4,
+  // stays the lighter-weight alternative for when a direct fetch isn't the right fit).
+  app.post<{ Params: { attestationId: string } }>(
+    "/v1/attestations/:attestationId/witness-fetch",
+    {
+      preHandler: [
+        verifyAgentRequest(deps.db),
+        rateLimit(deps.db, "witness_fetch_per_agent", (req) => req.agent!.doc._id),
+        rateLimit(
+          deps.db,
+          "witness_fetch_per_attestation",
+          (req) => `${req.agent!.doc._id}:${(req.params as { attestationId: string }).attestationId}`,
+        ),
+      ],
+    },
+    async (req, reply) => {
+      const body = parseOrError(WitnessFetchBody, req.body, reply);
+      if (!body) return;
+      const result = await appendFetchWitness(deps, req.agent!.doc, req.params.attestationId, body.url);
+      if (!result.ok) return sendError(reply, result.error.status, result.error.code, result.error.message);
+      return reply.code(201).send({ witness: fetchWitnessView(result.witness) });
+    },
+  );
+
+  app.get<{ Params: { attestationId: string } }>(
+    "/v1/attestations/:attestationId/witnesses",
+    { preHandler: verifyAgentOrOwner(deps.db, { webOrigin: deps.webOrigin }) },
+    async (req, reply) => {
+      const attestation = await attestations.findById(req.params.attestationId);
+      if (!attestation || !canAccessAttestation(attestation, req)) return sendError(reply, 404, "not_found", "Attestation not found");
+      const items = await findFetchWitnessesByAttestation(deps.db, attestation._id);
+      return { items: items.map(fetchWitnessView) };
     },
   );
 

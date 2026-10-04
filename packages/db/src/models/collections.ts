@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  AgentId, AttestationId, ChainSubjectId, Hash, IntegrationRequestId, IntegrationVoteId, InviteId, KeyId, MessageId,
+  AgentId, AttestationId, ChainSubjectId, FetchWitnessId, Hash, IntegrationRequestId, IntegrationVoteId, InviteId, KeyId, MessageId,
   ObjectIdSchema, OwnerId, PublicKey, RecordId, SessionId, Signature, Kid, ViewerAccessLogId, ViewerGrantId,
 } from "./common.js";
 import { Accept, AttestationOpen, CloseReason, CloseStatement, MessageEnvelope, Mode, Offer, RecordRetention, RecordStatement } from "./protocol.js";
@@ -250,11 +250,67 @@ export const attestations = defineCollection({
       .nullable(),
     closedAt: z.date().nullable(),
     recordId: RecordId.nullable(),
+    /** The `fetch_witnesses` chain's own head (independent of `head`/`eventCount` above,
+     * which only track agent-authored events) — optional, absent meaning "no witnessed
+     * fetch yet", the same legacy-compatible pattern `visibility` uses. Claimed with the
+     * same conditional-on-expected-value update `advanceHead` uses for `head`, so two
+     * concurrent witness-fetch calls on one attestation can never silently overwrite the
+     * same seq. */
+    lastWitnessSeq: z.int().min(0).optional(),
+    lastWitnessHash: Hash.nullable().optional(),
   }),
   indexes: [
     { name: "attestor_agent_createdAt", key: { "attestor.agentId": 1, createdAt: -1 } },
     { name: "attestor_owner_createdAt", key: { "attestor.ownerId": 1, createdAt: -1 } },
     { name: "status_expiresAt", key: { status: 1, expiresAt: 1 } },
+  ],
+});
+
+/**
+ * An agent asks OpenGlass itself to fetch a URL and witness the raw response — for the
+ * common case where the other side of an interaction isn't an OpenGlass agent at all (no
+ * key to sign anything, nothing to countersign). Unlike `messages`, there's no agent
+ * signature here: the platform is the direct, sole witness of the fact "I fetched this
+ * URL myself and got exactly this back", so only the platform signs it. Chained to the
+ * owning attestation's own `genesisHash` (first witness) or the previous witness's `hash`
+ * (every one after), the same `prevHash` pattern `messages` uses, so witnesses for one
+ * attestation can't be silently dropped or reordered without breaking the chain — just a
+ * second, independent chain alongside the agent-authored one, not interleaved with it.
+ * This only proves the bytes came from a TLS session with that domain at that moment; it
+ * says nothing about who operates the server beyond its certificate, if any (docs/SPEC.md
+ * §12 "Naming a counterparty" is the self-reported, platform-unverified alternative this
+ * complements, not replaces).
+ */
+export const fetchWitnesses = defineCollection({
+  name: "fetch_witnesses",
+  appendOnly: true,
+  schema: z.strictObject({
+    _id: FetchWitnessId,
+    attestationId: AttestationId,
+    requestedBy: AgentId,
+    seq: z.int().min(1),
+    prevHash: Hash,
+    url: z.string().max(2048),
+    method: z.literal("GET"),
+    requestedAt: z.date(),
+    fetchedAt: z.date(),
+    response: z.strictObject({
+      status: z.int().min(100).max(599),
+      headers: z.record(z.string(), z.string()),
+      contentType: z.string().nullable(),
+      bodySha256: Hash,
+      bodyBytes: z.int().min(0),
+      bodyTruncated: z.boolean(),
+      /** Only set for a recognized text-ish content type, and only up to the same byte
+       * cap `bodyBytes`/`bodySha256` cover — never a separate, untracked read. */
+      bodyText: z.string().nullable(),
+    }),
+    hash: Hash,
+    platformSignature: Signature,
+  }),
+  indexes: [
+    { name: "attestation_seq_unique", key: { attestationId: 1, seq: 1 }, unique: true },
+    { name: "requestedBy_requestedAt", key: { requestedBy: 1, requestedAt: -1 } },
   ],
 });
 
@@ -706,7 +762,7 @@ export const migrationLock = defineCollection({
 });
 
 export const allCollections = [
-  owners, agents, sessions, attestations, invites, messages, records, viewerGrants, viewerAccessLog,
+  owners, agents, sessions, attestations, invites, messages, records, fetchWitnesses, viewerGrants, viewerAccessLog,
   integrationStatusOverrides, integrationVotes, integrationRequests,
   loginTokens, webSessions, requestNonces, rateLimits, activitySnapshots,
   unclaimedProfiles, profileListings, checkupReports, checkupEvents,
@@ -717,6 +773,7 @@ export type OwnerDoc = z.infer<typeof owners.schema>;
 export type AgentDoc = z.infer<typeof agents.schema>;
 export type SessionDoc = z.infer<typeof sessions.schema>;
 export type AttestationDoc = z.infer<typeof attestations.schema>;
+export type FetchWitnessDoc = z.infer<typeof fetchWitnesses.schema>;
 export type InviteDoc = z.infer<typeof invites.schema>;
 export type MessageDoc = z.infer<typeof messages.schema>;
 export type RecordDoc = z.infer<typeof records.schema>;

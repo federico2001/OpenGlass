@@ -6,6 +6,7 @@ export { integrationStatusRepository, type IntegrationStatusRepository } from ".
 export { integrationVotesRepository, type IntegrationVotesRepository } from "./integrationVotes.js";
 export { invitesRepository, type InvitesRepository } from "./invites.js";
 export { loginTokensRepository, type LoginTokensRepository } from "./loginTokens.js";
+export { findFetchWitnessesByAttestation, insertFetchWitness } from "./fetchWitnesses.js";
 export { findAllMessagesBySession, findMessageByHash, findMessagesBySession, findRecentMessagesBySessions, insertMessage } from "./messages.js";
 export { ownersRepository, type OwnersRepository } from "./owners.js";
 export { rateLimitsRepository, type RateLimitsRepository } from "./rateLimits.js";
