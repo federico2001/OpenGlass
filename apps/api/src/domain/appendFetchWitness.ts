@@ -11,7 +11,7 @@ import {
   type PlatformSigner,
 } from "@openglass/db";
 import type { Db, MongoClient } from "mongodb";
-import { parseWitnessUrl, performWitnessFetch } from "./witnessFetch.js";
+import { parseWitnessUrl, performWitnessFetch as realPerformWitnessFetch, type WitnessFetcher } from "./witnessFetch.js";
 
 export interface AppendFetchWitnessError {
   status: number;
@@ -29,11 +29,12 @@ export type AppendFetchWitnessResult = { ok: true; witness: FetchWitnessDoc } | 
  * same as appendMessage.ts, so a crash between the two never leaves an orphaned witness or
  * a bumped head with nothing to match it. */
 export async function appendFetchWitness(
-  deps: { db: Db; mongoClient: MongoClient; signer: PlatformSigner },
+  deps: { db: Db; mongoClient: MongoClient; signer: PlatformSigner; performWitnessFetch?: WitnessFetcher },
   agentDoc: AgentDoc,
   attestationId: string,
   rawUrl: string,
 ): Promise<AppendFetchWitnessResult> {
+  const performWitnessFetch = deps.performWitnessFetch ?? realPerformWitnessFetch;
   const attestations = attestationsRepository(deps.db);
   const attestation = await attestations.findById(attestationId);
   if (!attestation || attestation.attestor.agentId !== agentDoc._id) {
