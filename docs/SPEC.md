@@ -998,6 +998,51 @@ Access rule: same shape as §8.1's — the attestor agent, its owner, or a viewe
 
 New error codes (extending §11's table): `409 attestation_id_taken`, `409 attestation_not_active`, `422 open_invalid`.
 
+### 12.6 Direct fetch witnessing (added Oct 4 2026)
+
+§12.4's "Naming a counterparty" convention is self-reported: the attestor's own signature backs its claim of what it sent and received, but nothing independently confirms that an unenrolled counterparty's content actually came from that server. This section adds the stronger alternative for when that matters: the attestor asks OpenGlass itself to make the request and witness the raw response directly, rather than reporting what it saw.
+
+**What this proves, and what it doesn't.** A witnessed fetch proves the response bytes came back over a TLS connection to that domain at that moment (and whatever its certificate says). It proves nothing about who operates the server beyond that certificate — the same honest limit domain verification (§14.1) already documents for a different mechanism. It's a complement to §12.4's convention, not a replacement: the self-reported convention stays the lighter-weight option when a direct platform fetch isn't the right fit (a `POST` with side effects, a URL needing the attestor's own auth, etc.) — `GET` only, no caller-supplied headers or credentials, is the only shape this section covers.
+
+**`fetch_witnesses` collection**, append-only, one per fetch:
+
+```ts
+{
+  _id: "wfx_01J…",
+  attestationId: "att_…",
+  requestedBy: "agt_…",       // the attestor; validated against the attestation, not re-authenticated per fetch
+  seq: number,                 // 1-based, this attestation's own witness chain
+  prevHash: string,            // the attestation's genesisHash (seq 1) or the previous witness's hash
+  url: string,                  // https, bare hostname, no port or embedded credentials
+  method: "GET",
+  requestedAt: Date, fetchedAt: Date,
+  response: {
+    status: number,
+    headers: Record<string, string>,   // allowlisted only: content-type, date, server, etag, last-modified, content-length — never Set-Cookie or anything else that belongs to the target server
+    contentType: string | null,
+    bodySha256: string, bodyBytes: number, bodyTruncated: boolean,
+    bodyText: string | null,            // set only for a recognized text-ish content type, and only up to the same cap bodyBytes/bodySha256 cover
+  },
+  hash: string,                 // hex(H(bytes(prevHash) || JCS(every field above except _id/hash/platformSignature)))
+  platformSignature: Signature, // the platform's own signature — no agent signature: the platform is the sole, direct witness of its own fetch, so there's nothing for the attestor to sign
+}
+```
+
+This is its own hash chain, parallel to (not interleaved with) the attestor's own event chain (§12.4) — both are rooted at the same `genesisHash`, so a witness and an event can't be reordered relative to their own kind, but the two chains don't constrain each other's ordering. Claimed with the same conditional-on-expected-value update `advanceHead` uses for events, so two concurrent witness-fetch calls on one attestation can't silently collide.
+
+**The same SSRF guard as domain verification (§14.1) and `GET /v1/lookup` (§14.2):** `https:` only, a real DNS hostname (not an IP literal, no port, no embedded credentials), every address the hostname resolves to checked public before the request is made, no redirect ever followed, and the response capped at 64 KiB (truncated, not rejected, past the cap — the hash and byte count only ever cover what was actually read).
+
+**REST API:**
+
+| Method | Path | Auth | Purpose |
+| ------ | ---- | ---- | ------- |
+| POST | `/v1/attestations/{id}/witness-fetch` | agent (must be this attestation's own attestor) | Fetch a URL and record the witnessed response |
+| GET | `/v1/attestations/{id}/witnesses` | agent, owner | List witnessed fetches, seq order |
+
+**`POST /v1/attestations/{id}/witness-fetch`** takes `{ "url": string }` and returns `201 { "witness": FetchWitness }`. Errors: `404 not_found` (no such attestation, or the caller isn't its attestor), `409 attestation_not_active`, `422 url_invalid` (not `https:`, not a bare hostname, a port, or embedded credentials), `422 url_unreachable` (DNS didn't resolve to a public address, the connection failed, or it timed out — deliberately one generic code for all of these, so the response never tells a caller which SSRF check it tripped), `409 chain_conflict` (the witness head moved between validating and inserting; retry), `429 rate_limited`.
+
+**Known limitation, stated rather than silently left out:** a witnessed fetch isn't yet folded into `Evidence`/`RecordStatement` (§7.4–7.5) or checked by `verifyBundle` (§7.6) — `POST /v1/verify` and a downloaded record bundle don't cover it. It's independently verifiable today only via its own `hash`/`platformSignature` directly against `GET /v1/attestations/{id}/witnesses`, not via the portable bundle. Folding it into the exportable record is the natural next step, deliberately deferred rather than rushed into the actively-evolving Evidence/RecordStatement shape.
+
 ## 13. Visibility, sealing and retention (realignment R1, revised Sept 30 2026)
 
 Every session and attestation carries a `visibility: "private" | "sealed" | "shared"`, chosen by the opening/offering agent as a sibling request-body field — not part of the signed offer/open object, the same pattern `idleTimeoutSec` already uses (§12.3). It's optional and absent on anything issued before this field existed, which is never reinterpreted as any of the three named values; those records keep behaving exactly as they always have (full content, no sealing). Sessions default to `shared`; attestations default to `private`. None of the three makes a record public.

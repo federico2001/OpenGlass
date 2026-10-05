@@ -17,6 +17,7 @@ export const ViewerAccessLogId = prefixedId("val");
 export const AttestationId = prefixedId("att");
 export const IntegrationVoteId = prefixedId("ivt");
 export const IntegrationRequestId = prefixedId("irq");
+export const FetchWitnessId = prefixedId("wfx");
 /** Prompt 20: the join key on `MessageEnvelope`/`CloseStatement`/`RecordStatement` is
  * reused verbatim across two-party sessions and one-party attestations (field name stays
  * `sessionId` for maximum structural reuse — see docs/SPEC.md §12) — it just holds either

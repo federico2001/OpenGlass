@@ -31,6 +31,7 @@ import type { Mailer } from "./mailer.js";
 import type { X402Deps } from "./domain/x402.js";
 import type { AgentCardFetcher } from "./domain/lookup.js";
 import type { ContentEncryptionDeps } from "./domain/contentEncryptionDeps.js";
+import type { WitnessFetcher } from "./domain/witnessFetch.js";
 import { registerSealingRoutes } from "./routes/sealing.js";
 
 export type HealthCheck = () => Promise<unknown>;
@@ -76,6 +77,11 @@ export interface ServerDeps {
    * which case `visibility: "private"` requests fall back to `shared` (same readers, content kept) (see
    * domain/visibility.ts's effectiveVisibility). See domain/contentEncryptionDeps.ts. */
   contentEncryption: ContentEncryptionDeps | null;
+  /** SSRF-safe GET fetch (domain/witnessFetch.ts's `performWitnessFetch` by default), used
+   * when an attestor asks OpenGlass to witness an external URL directly
+   * (POST /v1/attestations/{id}/witness-fetch). Injectable for the same reason as
+   * `fetchAgentCard`. */
+  performWitnessFetch?: WitnessFetcher;
 }
 
 const CHECK_TIMEOUT_MS = 2_000;

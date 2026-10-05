@@ -24,6 +24,23 @@ export function attestationsRepository(db: Db) {
         { $set: patch },
         { returnDocument: "after", session: opts?.session },
       ),
+    /** The `fetch_witnesses` chain's own head — independent of `advanceHead` above, which
+     * only tracks agent-authored events. `expectedSeq` is `lastWitnessSeq ?? 0`, matching
+     * `advanceHead`'s pattern for a field that's optional/absent on legacy documents. */
+    advanceWitnessHead: (
+      id: string,
+      expectedSeq: number,
+      patch: { lastWitnessSeq: number; lastWitnessHash: string },
+      opts?: { session?: ClientSession },
+    ) =>
+      col.findOneAndUpdate(
+        // `lastWitnessSeq` is optional (absent on an attestation with no witness yet, or
+        // issued before this field existed) — `$exists: false` reads as "the witness head
+        // is still unclaimed" rather than relying on Mongo's null/missing equivalence.
+        { _id: id, status: "active", lastWitnessSeq: expectedSeq === 0 ? { $exists: false } : expectedSeq },
+        { $set: patch },
+        { returnDocument: "after", session: opts?.session },
+      ),
     listByAttestor: (
       field: "attestor.agentId" | "attestor.ownerId",
       value: string,

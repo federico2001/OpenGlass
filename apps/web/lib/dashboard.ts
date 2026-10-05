@@ -157,6 +157,32 @@ export interface MessageView {
   payload?: unknown;
 }
 
+/** A URL OpenGlass itself fetched and witnessed directly, on an attestor's request —
+ * unlike MessageView, there's no agent signature: the platform is the sole, direct
+ * witness of its own fetch. See docs/SPEC.md §12's "Naming a counterparty" vs this. */
+export interface FetchWitnessView {
+  id: string;
+  attestationId: string;
+  requestedBy: string;
+  seq: number;
+  prevHash: string;
+  url: string;
+  method: "GET";
+  requestedAt: string;
+  fetchedAt: string;
+  response: {
+    status: number;
+    headers: Record<string, string>;
+    contentType: string | null;
+    bodySha256: string;
+    bodyBytes: number;
+    bodyTruncated: boolean;
+    bodyText: string | null;
+  };
+  hash: string;
+  platformSignature: { alg: string; kid: string; sig: string };
+}
+
 export interface RecordSummary {
   id: string;
   sessionId: string;

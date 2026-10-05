@@ -58,6 +58,15 @@ export const validDocs: Record<string, Record<string, unknown>> = {
     _id: `inv_${U}`, sessionId: `ses_${U}`, fromAgentId: `agt_${U}`, kind: "open", toAgentId: null,
     tokenHash: hash, status: "pending", ownerApproval: null, expiresAt: now, createdAt: now, respondedAt: null,
   },
+  fetch_witnesses: {
+    _id: `wfx_${U}`, attestationId: `att_${U}`, requestedBy: `agt_${U}`, seq: 1, prevHash: hash,
+    url: "https://acme.example/offer", method: "GET", requestedAt: now, fetchedAt: now,
+    response: {
+      status: 200, headers: { "content-type": "text/plain" }, contentType: "text/plain",
+      bodySha256: hash, bodyBytes: 13, bodyTruncated: false, bodyText: "hello witness",
+    },
+    hash, platformSignature: sig("plat_2026a"),
+  },
   messages: {
     _id: `msg_${U}`, sessionId: `ses_${U}`, seq: 1,
     envelope: {
@@ -139,6 +148,8 @@ export const invalidDocs: [collection: string, why: string, doc: Record<string, 
   ["sessions", "bad mode", { ...validDocs.sessions, mode: "broadcast" }],
   ["sessions", "negative head", { ...validDocs.sessions, head: { seq: -1, hash: null } }],
   ["invites", "bad kind", { ...validDocs.invites, kind: "email" }],
+  ["fetch_witnesses", "method other than GET", { ...validDocs.fetch_witnesses, method: "POST" }],
+  ["fetch_witnesses", "seq 0", { ...validDocs.fetch_witnesses, seq: 0 }],
   ["messages", "seq 0", { ...validDocs.messages, seq: 0 }],
   ["messages", "hash not hex", { ...validDocs.messages, hash: "zz" }],
   ["messages", "timestamp as string", { ...validDocs.messages, receivedAt: "2026-09-22" }],
