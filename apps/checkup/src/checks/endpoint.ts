@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { AttestedFetchResult, DirectFetcher, DirectFetchResult, FetchWitness } from "openglass-sdk";
 import { endpointsOf, type Endpoint } from "../a2a.js";
 import { NetError, safeFetch, type SafeResponse } from "../net.js";
 import { clamp, quoteData, type CheckDeps, type Finding, type Section } from "./types.js";
@@ -8,6 +9,12 @@ const MAX_RESPONSE_BYTES = 256 * 1024;
 export const PROBE_TEXT =
   "Hello. This is Agent Checkup by OpenGlass making one automated test request to confirm this agent " +
   "answers A2A messages. No action is needed; a short reply is enough.";
+
+/** How checkEndpoint reaches an attestedFetch — a narrow structural type so this module
+ * doesn't need to import AttestationRecorder itself; checkup.ts passes `recorder.attestedFetch.bind(recorder)`. */
+export interface EndpointWitness {
+  attestedFetch: (url: string, opts: { mode: CheckDeps["witnessMode"]; method?: "GET" | "POST"; body?: unknown; directFetch: DirectFetcher }) => Promise<AttestedFetchResult>;
+}
 
 export interface EndpointDetails {
   url: string | null;
@@ -21,6 +28,11 @@ export interface EndpointDetails {
   outcome: string | null;
   error: string | null;
   rpcError: { code: number | null; message: string } | null;
+  /** Whether OpenGlass itself independently witnessed this exchange (docs/SPEC.md §12.7) —
+   * never set from a self-report, since the score above already reflects what actually came
+   * back, witnessed or not. */
+  witnessed: boolean;
+  witnessReason: string | null;
 }
 
 export interface EndpointResult {
@@ -32,12 +44,12 @@ export interface EndpointResult {
 
 const empty: EndpointDetails = {
   url: null, binding: null, protocolVersion: null, method: null, httpStatus: null, latencyMs: null,
-  ok: false, outcome: null, error: null, rpcError: null,
+  ok: false, outcome: null, error: null, rpcError: null, witnessed: false, witnessReason: null,
 };
 
 /** Sends exactly one benign message to the card's preferred JSON-RPC or HTTP+JSON
  * interface, in the wire format of the protocol version it declares. */
-export async function checkEndpoint(card: Record<string, unknown> | null, deps: CheckDeps): Promise<EndpointResult> {
+export async function checkEndpoint(card: Record<string, unknown> | null, deps: CheckDeps, witness?: EndpointWitness): Promise<EndpointResult> {
   if (!card) {
     return { response: null, json: null, section: { score: null, summary: "Not tested: there was no card to find the endpoint in.", findings: [], details: empty } };
   }
@@ -62,7 +74,10 @@ export async function checkEndpoint(card: Record<string, unknown> | null, deps: 
   const details: EndpointDetails = { ...empty, url: request.url, binding: endpoint.binding, protocolVersion: endpoint.protocolVersion, method: request.method };
   let response: SafeResponse;
   try {
-    response = await safeFetch(request.url, { method: "POST", headers: request.headers, body: request.body, maxBytes: MAX_RESPONSE_BYTES }, deps.net);
+    const fetched = await runEndpointFetch(request, deps, witness);
+    response = fetched.response;
+    details.witnessed = fetched.witnessed;
+    details.witnessReason = fetched.witnessReason;
   } catch (err) {
     const message = err instanceof NetError ? err.message : "request failed";
     return {
@@ -138,6 +153,62 @@ export async function checkEndpoint(card: Record<string, unknown> | null, deps: 
     findings.push({ severity: "high", fix: "Serve the agent over HTTPS with a valid certificate." });
   }
   return { response, json, section: { score: clamp(score), summary, findings, details } };
+}
+
+/** Runs the one real probe request, witnessed per `deps.witnessMode` (docs/SPEC.md §12.7)
+ * when `witness` is given. `"primary"` scores off OpenGlass's own witnessed response;
+ * every other case — `"shadow"`, `"off"`, no `witness` at all, or `"primary"`'s own
+ * fallback — scores off the direct `safeFetch` response, unchanged from before witnessing
+ * existed. The one case this never does is fire `direct()` twice: `"primary"` mode's
+ * target-unreachable outcome (OpenGlass already tried and the target didn't answer) is
+ * surfaced as the same network-error the caller already handles, not retried. */
+async function runEndpointFetch(
+  request: BuiltRequest,
+  deps: CheckDeps,
+  witness: EndpointWitness | undefined,
+): Promise<{ response: SafeResponse; witnessed: boolean; witnessReason: string | null }> {
+  const started = performance.now();
+  const direct: DirectFetcher = async () => {
+    const r = await safeFetch(request.url, { method: "POST", headers: request.headers, body: request.body, maxBytes: MAX_RESPONSE_BYTES }, deps.net);
+    return { status: r.status, headers: r.headers, body: r.body };
+  };
+
+  if (!witness) {
+    const d = await direct();
+    return { response: toSafeResponse(d, request.url, Math.round(performance.now() - started)), witnessed: false, witnessReason: null };
+  }
+
+  const result = await witness.attestedFetch(request.url, { mode: deps.witnessMode, method: "POST", body: JSON.parse(request.body), directFetch: direct });
+
+  if (result.witnessed && deps.witnessMode === "primary" && result.witness) {
+    return { response: responseFromWitness(result.witness, request.url), witnessed: true, witnessReason: result.reason };
+  }
+  if (!result.direct) {
+    // "primary" mode, and OpenGlass already witnessed that the target itself didn't answer.
+    throw new NetError("network", result.reason);
+  }
+  return { response: toSafeResponse(result.direct, request.url, Math.round(performance.now() - started)), witnessed: result.witnessed, witnessReason: result.reason };
+}
+
+function toSafeResponse(d: DirectFetchResult, url: string, latencyMs: number): SafeResponse {
+  return { status: d.status, headers: d.headers, url, redirects: [], body: d.body, latencyMs };
+}
+
+/** Rebuilds a SafeResponse-shaped value from OpenGlass's own witness, for "primary" mode's
+ * scoring — bodyText is null only when the content type isn't text-ish (never the case for
+ * a JSON-RPC reply) or the response was truncated past the witness cap (65536 bytes vs.
+ * this probe's own 262144 — unlikely for a short probe reply, but if it happens, an empty
+ * body here degrades to the same "unrecognized response" scoring a malformed reply gets,
+ * not a crash). */
+function responseFromWitness(witness: FetchWitness, url: string): SafeResponse {
+  return {
+    status: witness.response.status,
+    headers: new Headers(witness.response.headers),
+    url,
+    redirects: [],
+    body: Buffer.from(witness.response.bodyText ?? "", "utf8"),
+    latencyMs: Math.max(0, new Date(witness.fetchedAt).getTime() - new Date(witness.requestedAt).getTime()),
+  };
 }
 
 interface BuiltRequest {

@@ -10,6 +10,8 @@ import {
   sigInput,
   signEd25519,
   type AgentIdentity,
+  type AttestedFetchOptions,
+  type AttestedFetchResult,
   type LookupResult,
   type RecordBundle,
 } from "openglass-sdk";
@@ -208,6 +210,16 @@ export class AttestationRecorder {
         this.error = errorText(err);
       }
     });
+  }
+
+  /** A fetch to a third party, witnessed per `opts.mode` (docs/SPEC.md §12.7) once the
+   * attestation is ready — or, if recording never came up (not claimed yet, OpenGlass
+   * unreachable), falls straight to `opts.directFetch`, unwitnessed, same as every other
+   * best-effort call this class makes. Doesn't wait for queued `add()` events: the fetch
+   * itself only needs the attestation to exist, not to be caught up. */
+  async attestedFetch(url: string, opts: AttestedFetchOptions = {}): Promise<AttestedFetchResult> {
+    await this.opened;
+    return this.link.client.attestedFetch(this.error ? null : this.attestationId, url, opts);
   }
 
   /** Waits for every queued event, then closes. Returns the attestation id if all of it

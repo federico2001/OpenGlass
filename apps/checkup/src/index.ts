@@ -21,6 +21,7 @@ const app = buildServer({
   adminToken: config.CHECKUP_ADMIN_TOKEN,
   registryUrl: config.A2A_REGISTRY_URL,
   allowPrivateTargets: config.CHECKUP_ALLOW_PRIVATE_TARGETS,
+  witnessMode: config.CHECKUP_WITNESS_MODE,
   logger: { level: config.LOG_LEVEL },
 });
 
