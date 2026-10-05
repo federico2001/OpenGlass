@@ -66,7 +66,7 @@ export async function runCheckup(target: Target, caller: { key: string; source: 
   const identityRun = checkIdentity(target, cardRun.then((c) => c.card), ctx.deps);
   const card = await cardRun;
   recordSection("card", card.section);
-  const endpoint = await checkEndpoint(card.card, ctx.deps);
+  const endpoint = await checkEndpoint(card.card, ctx.deps, { attestedFetch: recorder.attestedFetch.bind(recorder) });
   recordSection("endpoint", endpoint.section);
   const x402 = checkX402(card.card, endpoint);
   recordSection("x402", x402);

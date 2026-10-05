@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { createRequire } from "node:module";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import type { Db } from "mongodb";
+import type { WitnessMode } from "openglass-sdk";
 import { ownAgentCard } from "./a2a.js";
 import { runCheckup, type CheckupContext } from "./checkup.js";
 import type { OpenGlassLink } from "./openglass.js";
@@ -19,6 +20,9 @@ export interface ServerOptions {
   adminToken: string;
   registryUrl: string;
   allowPrivateTargets: boolean;
+  /** docs/SPEC.md §12.7. Defaults to "shadow" — see config.ts's CHECKUP_WITNESS_MODE for why
+   * that, not sdk-js's own "primary" recommendation, is this service's own default. */
+  witnessMode?: WitnessMode;
   logger?: boolean | { level: string };
 }
 
@@ -62,7 +66,7 @@ export function buildServer(opts: ServerOptions) {
     store,
     openglass: opts.openglass,
     publicUrl: opts.publicUrl,
-    deps: { net: { allowPrivateAddresses: opts.allowPrivateTargets, userAgent: USER_AGENT }, registryUrl: opts.registryUrl },
+    deps: { net: { allowPrivateAddresses: opts.allowPrivateTargets, userAgent: USER_AGENT }, registryUrl: opts.registryUrl, witnessMode: opts.witnessMode ?? "shadow" },
   };
   // A2A 1.0 clients may label JSON-RPC bodies with the A2A media type.
   app.addContentTypeParser("application/a2a+json", { parseAs: "string" }, app.getDefaultJsonParser("error", "error"));
