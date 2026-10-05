@@ -133,6 +133,9 @@ thin, ergonomic wrapper around exactly that same flow.
 | `sendAttestationEvent(attestationId, payload, opts?)` | Appends one hash-chained event. `seq`/`prevHash` tracked automatically. |
 | `closeAttestation(attestationId)` | Signs and submits a close statement. |
 | `waitForAttestationRecord(attestationId, opts?)` | Polls until closed and a record has been issued; returns the `recordId`. |
+| `witnessFetch(attestationId, url, { method?, body? })` | Asks OpenGlass itself to fetch `url` (GET, or POST with a JSON body) and witness the raw exchange directly — for a counterparty with no key to sign anything. |
+| `getFetchWitnesses(attestationId)` | Lists an attestation's witnessed fetches, seq order. |
+| `attestedFetch(attestationId, url, { mode?, method?, body?, directFetch? })` | Chooses how much a fetch's witnessing costs and guarantees — see below. |
 
 ### Sessions & invites
 
@@ -198,6 +201,36 @@ const send = witness(rawSendToCounterparty, { client, sessionId: session.id });
 await send({ text: "hello" }); // witnessed, then delivered exactly like rawSendToCounterparty did
 ```
 
+### `attestedFetch()`: choosing how a fetch gets witnessed
+
+For a fetch to a third party that isn't an OpenGlass agent — an A2A agent-card URL, a
+`message/send` probe — you choose how much the witnessing should cost and guarantee:
+
+```js
+const result = await client.attestedFetch(attestation.id, "https://example.com/a2a", {
+  mode: "primary", // the default: OpenGlass's own fetch is the one real request
+  method: "POST",
+  body: { jsonrpc: "2.0", id: 1, method: "SendMessage", params: { message } },
+});
+if (result.witnessed) console.log(result.witness.response.status);
+else console.log("unwitnessed:", result.reason, result.direct?.status);
+```
+
+- `"primary"` (default): OpenGlass's own fetch is the one real request. Falls back to your own
+  `directFetch` only if OpenGlass itself — not the target — can't be reached; that fallback is
+  always `result.witnessed === false`.
+- `"shadow"`: your own `directFetch` is the real request (act on `result.direct`); OpenGlass
+  separately, best-effort, witnesses the same URL afterward. A second real request to the
+  target — fine for an idempotent read, worth weighing for anything with side effects.
+- `"off"`: no independent witness; equivalent to calling `directFetch` yourself.
+
+Always check `result.witnessed` before treating a result as independently verified — it's
+`false` for `"off"`, a failed `"shadow"` witness attempt, or `"primary"`'s own fallback, and
+the plain fetch that actually ran is in `result.direct`, never silently merged with a true
+witness. Pass your own `directFetch` (`(url, { method, body }) => Promise<{ status, headers, body }>`)
+to reuse an existing HTTP client's headers, timeouts, or response caps instead of the default
+plain `fetch`.
+
 ### Low-level crypto exports
 
 For advanced use (building your own client, verifying a bundle you got from somewhere else,
@@ -212,12 +245,12 @@ this package's own test suite (`fixtures/vectors.json`) — see `CONTRIBUTING` b
 Every failed API call throws `OpenGlassApiError` (`err.status`, `err.body` with the server's
 error code/message, `err.method`/`err.path`).
 
-## Upgrading from 0.1.x
+## Upgrading
 
-0.2.0 is purely additive — every 0.1.x method keeps its existing signature and behavior
-unchanged. `offerSession`'s new `visibility` option is optional. (At 0.2.0's release the server
-defaulted sessions to `"sealed"`; since Sept 30 2026 it defaults them to `"shared"`. See the
-changelog.)
+0.3.0 and 0.2.0 are both purely additive — every earlier method keeps its existing signature
+and behavior unchanged; `offerSession`'s `visibility` option is optional. (At 0.2.0's release
+the server defaulted sessions to `"sealed"`; since Sept 30 2026 it defaults them to `"shared"`.
+See the changelog.)
 
 ## Contributing
 

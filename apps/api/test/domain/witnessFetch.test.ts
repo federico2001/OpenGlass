@@ -22,6 +22,11 @@ beforeAll(async () => {
       res.end(Buffer.from([0, 1, 2, 3]));
       return;
     }
+    if (req.url === "/402") {
+      res.writeHead(402, { "content-type": "application/json", "payment-required": "eyJhIjoxfQ==" });
+      res.end(JSON.stringify({ ok: false }));
+      return;
+    }
     if (req.url === "/echo") {
       const chunks: Buffer[] = [];
       req.on("data", (c: Buffer) => chunks.push(c));
@@ -76,6 +81,14 @@ describe("captureHttpResponse", () => {
     expect(result.response.bodyText).toBeNull();
     expect(result.response.bodyBytes).toBe(4);
     expect(result.response.bodySha256).toHaveLength(64);
+  });
+
+  it("captures the x402 payment-required header (v2's own payment-terms signal, not a credential)", async () => {
+    const result = await captureHttpResponse(new URL(`${baseUrl}/402`), { method: "GET" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.response.status).toBe(402);
+    expect(result.response.headers["payment-required"]).toBe("eyJhIjoxfQ==");
   });
 
   it("reports failure rather than throwing when the connection is refused", async () => {

@@ -162,6 +162,48 @@ export interface FetchWitness {
   platformSignature: Signature;
 }
 
+export type WitnessMode = "primary" | "shadow" | "off";
+
+export interface DirectFetchResult {
+  status: number;
+  headers: Headers;
+  body: Buffer;
+}
+
+/** Your own real HTTP call. Used as `"shadow"` mode's actual request, as `"primary"`
+ * mode's fallback when OpenGlass itself (not the target) can't be reached, and as the only
+ * request when `mode: "off"`. Defaults to a plain `fetch` with `body` sent as JSON. Pass
+ * your own to keep an existing HTTP client's headers, timeouts, or response caps — the
+ * same call site that already fetches the target directly can be reused as-is. */
+export type DirectFetcher = (url: string, opts: { method: "GET" | "POST"; body?: unknown }) => Promise<DirectFetchResult>;
+
+export interface AttestedFetchOptions {
+  method?: "GET" | "POST";
+  body?: unknown;
+  /** Default `"primary"`. See `attestedFetch`. */
+  mode?: WitnessMode;
+  directFetch?: DirectFetcher;
+}
+
+export interface AttestedFetchResult {
+  /** Whether an independent OpenGlass witness exists for this exchange. Always check this
+   * before treating a result as independently verified — it can be `false` even under
+   * `mode: "primary"` (OpenGlass itself was unreachable, so an unwitnessed direct fallback
+   * ran instead), never silently presented as if it were witnessed. */
+  witnessed: boolean;
+  /** Machine-readable: `"primary"` (OpenGlass's own fetch, as asked), `"shadow"` (witnessed
+   * successfully alongside your own request), `"off"`, `"openglass_unreachable_fallback"`,
+   * `"target_unreachable"`, or `"shadow_witness_failed"` (each of the last three followed
+   * by `: <error detail>`). */
+  reason: string;
+  /** Set exactly when `witnessed` is `true`. */
+  witness?: FetchWitness;
+  /** Set whenever a direct request actually ran: `"off"`, `"shadow"`'s real request, or
+   * `"primary"`'s fallback. Absent exactly when `"primary"` succeeded through OpenGlass
+   * alone — there was only ever the one request. */
+  direct?: DirectFetchResult;
+}
+
 export interface Invite {
   id: string;
   sessionId: string;
@@ -221,11 +263,13 @@ export class OpenGlassClient {
   private headBySession = new Map<string, { seq: number; prevHash: string }>();
   private headByAttestation = new Map<string, { seq: number; prevHash: string }>();
   private publicClient: PublicClient;
+  private fetchImpl: typeof fetch;
 
   constructor(opts: OpenGlassClientOptions = {}) {
     this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
     this.identity = opts.identity;
     this.publicClient = createPublicClient(this.baseUrl, opts.fetchImpl);
+    this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
   /** Generates a fresh Ed25519 identity. Call this once and keep the private key — it's
@@ -703,6 +747,71 @@ export class OpenGlassClient {
     return items;
   }
 
+  /**
+   * A fetch to a third party that OpenGlass can witness, with the caller choosing how much
+   * that witnessing costs and guarantees:
+   *
+   * - `"primary"` (recommended default): OpenGlass's own fetch is the one real request —
+   *   the strongest default, since there's nothing for a self-report to diverge from. Falls
+   *   back to `directFetch` only when OpenGlass itself, not the target, can't be reached;
+   *   that fallback is always reported unwitnessed (`result.witnessed === false`), never
+   *   silently treated as if it were independently verified.
+   * - `"shadow"`: runs `directFetch` as the real request (act on `result.direct`), and asks
+   *   OpenGlass to redundantly fetch the same URL afterward, best-effort, for an
+   *   independent record. Costs a second real request to the target — fine for an
+   *   idempotent read, worth weighing for anything with side effects.
+   * - `"off"`: no independent witness at all; equivalent to calling `directFetch` yourself.
+   *
+   * Either way, if OpenGlass has already tried the target and the target itself didn't
+   * answer, this never fires a second, unwitnessed request at it — that failure is already
+   * the witnessed outcome.
+   *
+   * `attestationId: null` (no attestation to chain a witness to — recording unavailable)
+   * forces `"off"` regardless of `opts.mode`, reported as `reason: "no_attestation"`, same
+   * as every other best-effort OpenGlass call: the fetch itself still happens.
+   */
+  async attestedFetch(attestationId: string | null, url: string, opts: AttestedFetchOptions = {}): Promise<AttestedFetchResult> {
+    const mode = attestationId ? opts.mode ?? "primary" : "off";
+    const method = opts.method ?? "GET";
+    const directFetch = opts.directFetch ?? this.defaultDirectFetch;
+
+    if (mode === "off") {
+      return { witnessed: false, reason: attestationId ? "off" : "no_attestation", direct: await directFetch(url, { method, body: opts.body }) };
+    }
+    const id = attestationId!;
+
+    if (mode === "shadow") {
+      const direct = await directFetch(url, { method, body: opts.body });
+      try {
+        const witness = await this.witnessFetch(id, url, { method, body: opts.body });
+        return { witnessed: true, reason: "shadow", witness, direct };
+      } catch (err) {
+        return { witnessed: false, reason: `shadow_witness_failed: ${errorMessage(err)}`, direct };
+      }
+    }
+
+    try {
+      const witness = await this.witnessFetch(id, url, { method, body: opts.body });
+      return { witnessed: true, reason: "primary", witness };
+    } catch (err) {
+      if (isTargetUnreachable(err)) {
+        return { witnessed: false, reason: `target_unreachable: ${errorMessage(err)}` };
+      }
+      const direct = await directFetch(url, { method, body: opts.body });
+      return { witnessed: false, reason: `openglass_unreachable_fallback: ${errorMessage(err)}`, direct };
+    }
+  }
+
+  private defaultDirectFetch: DirectFetcher = async (url, opts) => {
+    const res = await this.fetchImpl(url, {
+      method: opts.method,
+      headers: opts.body !== undefined ? { "content-type": "application/json" } : {},
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+    const body = Buffer.from(await res.arrayBuffer());
+    return { status: res.status, headers: res.headers, body };
+  };
+
   async closeAttestation(attestationId: string): Promise<void> {
     const identity = this.requireIdentity();
     const tracked = this.headByAttestation.get(attestationId);
@@ -845,4 +954,17 @@ function chainConflictHead(err: unknown): { seq: number; hash: string | null } |
   const error = (err.body as { error?: { code?: string; details?: { head?: { seq: number; hash: string | null } } } } | null)?.error;
   if (error?.code !== "chain_conflict") return undefined;
   return error.details?.head ?? null;
+}
+
+/** `422 url_unreachable`: OpenGlass tried the target itself and the target didn't answer —
+ * distinct from OpenGlass's own API being unreachable, which `attestedFetch`'s `"primary"`
+ * mode falls back from, this doesn't (the witnessed failure already is the outcome). */
+function isTargetUnreachable(err: unknown): boolean {
+  if (!(err instanceof OpenGlassApiError) || err.status !== 422) return false;
+  const code = (err.body as { error?: { code?: string } } | null)?.error?.code;
+  return code === "url_unreachable";
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
