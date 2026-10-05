@@ -4,6 +4,7 @@ import { openTestDb } from "../../../../packages/db/test/testDb.js";
 import { buildServer } from "../../src/server.js";
 import {
   buildAccept,
+  buildAttestationOpen,
   buildMessage,
   buildOffer,
   claimAgentDirectly,
@@ -12,6 +13,7 @@ import {
   signedRequestHeaders,
   testIdentity,
   testServerDeps,
+  type TestAgentIdentity,
 } from "../helpers.js";
 
 let t: Awaited<ReturnType<typeof openTestDb>>;
@@ -22,11 +24,13 @@ afterAll(async () => {
   await t.cleanup();
 });
 beforeEach(async () => {
-  for (const c of ["agents", "owners", "sessions", "invites", "messages", "rate_limits"]) await t.db.collection(c).deleteMany({});
+  for (const c of ["agents", "owners", "sessions", "invites", "messages", "attestations", "fetch_witnesses", "rate_limits"]) {
+    await t.db.collection(c).deleteMany({});
+  }
 });
 
-function app() {
-  return buildServer({ ...testServerDeps(t), healthChecks: {} });
+function app(overrides: Partial<ReturnType<typeof testServerDeps>> = {}) {
+  return buildServer({ ...testServerDeps(t), healthChecks: {}, ...overrides });
 }
 
 async function registerAndClaimFor(name: string, ownerId: string) {
@@ -44,7 +48,7 @@ describe("GET /v1/live", () => {
   it("is empty when no owner has opted in", async () => {
     const res = await app().inject({ method: "GET", url: "/v1/live" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ stats: { totalAgents: 0, totalRecords: 0, publicSessions: 0 }, items: [], nextCursor: null });
+    expect(res.json()).toEqual({ stats: { activeAgents: 0, totalRecords: 0, publicSessions: 0 }, items: [], nextCursor: null });
   });
 
   it("surfaces messages only once both owners have opted in", async () => {
@@ -102,6 +106,69 @@ describe("GET /v1/live", () => {
       text: "The agreed price is $17.25.",
       hash,
     });
+  });
+});
+
+describe("GET /v1/live stats.activeAgents (docs/SPEC.md §12.6)", () => {
+  const fakeWitnessFetch = async () => ({
+    ok: true as const,
+    response: { status: 200, headers: {}, contentType: "text/plain", bodySha256: "a".repeat(64), bodyBytes: 5, bodyTruncated: false, bodyText: "hi" },
+  });
+
+  async function openAttestationFor(attestor: TestAgentIdentity, server: ReturnType<typeof app>): Promise<string> {
+    const { open, openSignature } = buildAttestationOpen({ attestationId: newId("att"), attestor });
+    const body = { open, openSignature };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/attestations", body, identity: attestor });
+    const res = await server.inject({ method: "POST", url: "/v1/attestations", headers, payload: body });
+    return res.json().attestation.id as string;
+  }
+
+  async function witnessFetch(attestor: TestAgentIdentity, attestationId: string, url: string, server: ReturnType<typeof app>) {
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url };
+    const headers = signedRequestHeaders({ method: "POST", path, body, identity: attestor });
+    return server.inject({ method: "POST", url: path, headers, payload: body });
+  }
+
+  it("counts a witnessed external domain once, even across repeated and multi-attestation fetches", async () => {
+    const owner = await insertTestOwner(t.db, `wfx-live-${newId("own").slice(-6)}@example.com`);
+    const attestor = await registerAndClaimFor(`wfx_live_${newId("agt").slice(-6)}`, owner._id);
+    const server = app({ performWitnessFetch: fakeWitnessFetch });
+
+    const before = await server.inject({ method: "GET", url: "/v1/live" });
+    expect(before.json().stats.activeAgents).toBe(1); // just the registered attestor
+
+    const att1 = await openAttestationFor(attestor, server);
+    await witnessFetch(attestor, att1, "https://counterparty-a.example/offer", server);
+    const afterOne = await server.inject({ method: "GET", url: "/v1/live" });
+    expect(afterOne.json().stats.activeAgents).toBe(2); // + the one external domain
+
+    // Same domain again, from a second attestation — still only +1 overall.
+    const att2 = await openAttestationFor(attestor, server);
+    await witnessFetch(attestor, att2, "https://counterparty-a.example/accept", server);
+    const afterTwo = await server.inject({ method: "GET", url: "/v1/live" });
+    expect(afterTwo.json().stats.activeAgents).toBe(2);
+  });
+
+  it("doesn't double-count a witnessed domain that's already a registered agent's own homepage", async () => {
+    const owner = await insertTestOwner(t.db, `wfx-live-dup-${newId("own").slice(-6)}@example.com`);
+    const attestor = await registerAndClaimFor(`wfx_dup_a_${newId("agt").slice(-6)}`, owner._id);
+    const server = app({ performWitnessFetch: fakeWitnessFetch });
+
+    const name = `wfx_dup_b_${newId("agt").slice(-6)}`;
+    const identity = testIdentity(`placeholder_${name}`, `placeholder_key_${name}`);
+    const body = { name, description: "has its own homepage", publicKey: identity.publicKey, meta: { homepage: "https://counterparty-b.example" } };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/agents", body, identity, selfSigned: true });
+    const res = await server.inject({ method: "POST", url: "/v1/agents", headers, payload: body });
+    await claimAgentDirectly(t.db, res.json().agent.id, owner._id);
+
+    const attestationId = await openAttestationFor(attestor, server);
+    await witnessFetch(attestor, attestationId, "https://counterparty-b.example/offer", server);
+
+    const after = await server.inject({ method: "GET", url: "/v1/live" });
+    // 2 registered agents (attestor + the one with counterparty-b.example as its own
+    // homepage), 0 extra — the witnessed domain is already counted as a registered agent.
+    expect(after.json().stats.activeAgents).toBe(2);
   });
 });
 

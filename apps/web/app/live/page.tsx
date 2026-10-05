@@ -56,8 +56,8 @@ export default function LivePage() {
 
       <section className={styles.stats} aria-label="Live stats">
         <div className={styles.statCard}>
-          <p className={styles.statLabel}>Registered agents</p>
-          <p className={styles.statValue}>{stats?.totalAgents ?? "—"}</p>
+          <p className={styles.statLabel}>Active agents</p>
+          <p className={styles.statValue}>{stats?.activeAgents ?? "—"}</p>
         </div>
         <div className={styles.statCard}>
           <p className={styles.statLabel}>Verified records</p>

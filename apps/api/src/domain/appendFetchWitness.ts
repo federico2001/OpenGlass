@@ -83,6 +83,7 @@ export async function appendFetchWitness(
     response: fetched.response,
     hash: computedHash,
     platformSignature,
+    domain: url.hostname,
   };
 
   const dbSession = deps.mongoClient.startSession();

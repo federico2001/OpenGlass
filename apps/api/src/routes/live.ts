@@ -1,10 +1,38 @@
-import { agentsRepository, findRecentMessagesBySessions, ownersRepository, records as recordsCollection, sessionsRepository } from "@openglass/db";
+import {
+  agentsRepository,
+  fetchWitnesses as fetchWitnessesCollection,
+  findRecentMessagesBySessions,
+  ownersRepository,
+  records as recordsCollection,
+  sessionsRepository,
+} from "@openglass/db";
 import type { FastifyInstance } from "fastify";
 import { rateLimit } from "../plugins/rateLimit.js";
 import type { ServerDeps } from "../server.js";
 
 const FEED_LIMIT_MAX = 100;
 const DIRECTORY_LIMIT_MAX = 100;
+
+/**
+ * Registered (non-unclaimed) OpenGlass agents, plus every domain OpenGlass has
+ * independently fetch-witnessed (docs/SPEC.md §12.6) for an attestation that isn't
+ * already one of those agents' own domain — an external counterparty, spoken to through
+ * the API, whose response OpenGlass itself can vouch for even though it never registered.
+ * Excludes a witnessed domain that matches a known agent's `homepageDomain` or verified
+ * `domainVerification.domain` so the same real-world agent is never counted twice under
+ * two different identities.
+ */
+async function countActiveAgents(deps: ServerDeps, agents: ReturnType<typeof agentsRepository>): Promise<number> {
+  const [registeredAgents, witnessedDomains, homepageDomains, verifiedDomains] = await Promise.all([
+    agents.collection.countDocuments({ status: { $ne: "unclaimed" } }),
+    deps.db.collection(fetchWitnessesCollection.name).distinct("domain"),
+    agents.collection.distinct("homepageDomain", { homepageDomain: { $type: "string" } }),
+    agents.collection.distinct("domainVerification.domain", { "domainVerification.status": "verified" }),
+  ]);
+  const knownDomains = new Set([...homepageDomains, ...verifiedDomains]);
+  const externalWitnessedAgents = (witnessedDomains as string[]).filter((d) => !knownDomains.has(d)).length;
+  return registeredAgents + externalWitnessedAgents;
+}
 
 /**
  * Prompt 13: a public live feed of opted-in sessions, and a public agent directory.
@@ -25,15 +53,15 @@ export function registerLiveRoutes(app: FastifyInstance, deps: ServerDeps): void
       const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), FEED_LIMIT_MAX);
       const since = req.query.since ? new Date(req.query.since) : null;
 
-      const [totalAgents, totalRecords, optedInOwners] = await Promise.all([
-        agents.collection.countDocuments({ status: { $ne: "unclaimed" } }),
+      const [activeAgents, totalRecords, optedInOwners] = await Promise.all([
+        countActiveAgents(deps, agents),
         deps.db.collection(recordsCollection.name).countDocuments({}),
         owners.collection.find({ "settings.publicFeedOptIn": true }, { projection: { _id: 1 } }).toArray(),
       ]);
       const optedInOwnerIds = optedInOwners.map((d) => d._id as string);
 
       if (optedInOwnerIds.length === 0) {
-        return { stats: { totalAgents, totalRecords, publicSessions: 0 }, items: [], nextCursor: null };
+        return { stats: { activeAgents, totalRecords, publicSessions: 0 }, items: [], nextCursor: null };
       }
 
       const eligible = await sessions.collection
@@ -49,7 +77,7 @@ export function registerLiveRoutes(app: FastifyInstance, deps: ServerDeps): void
       const publicSessions = eligibleSessionIds.length;
 
       if (publicSessions === 0) {
-        return { stats: { totalAgents, totalRecords, publicSessions }, items: [], nextCursor: null };
+        return { stats: { activeAgents, totalRecords, publicSessions }, items: [], nextCursor: null };
       }
 
       const messages = await findRecentMessagesBySessions(deps.db, eligibleSessionIds, { after: since, limit });
@@ -69,7 +97,7 @@ export function registerLiveRoutes(app: FastifyInstance, deps: ServerDeps): void
       }));
 
       return {
-        stats: { totalAgents, totalRecords, publicSessions },
+        stats: { activeAgents, totalRecords, publicSessions },
         items,
         nextCursor: items.length > 0 ? items[items.length - 1]!.receivedAt : (since?.toISOString() ?? null),
       };
