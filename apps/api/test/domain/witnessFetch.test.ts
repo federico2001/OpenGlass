@@ -22,6 +22,15 @@ beforeAll(async () => {
       res.end(Buffer.from([0, 1, 2, 3]));
       return;
     }
+    if (req.url === "/echo") {
+      const chunks: Buffer[] = [];
+      req.on("data", (c: Buffer) => chunks.push(c));
+      req.on("end", () => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ receivedMethod: req.method, receivedBody: Buffer.concat(chunks).toString("utf8") }));
+      });
+      return;
+    }
     res.writeHead(404);
     res.end();
   });
@@ -38,7 +47,7 @@ afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 
 describe("captureHttpResponse", () => {
   it("captures status, an allowlisted header, and decodes a text body", async () => {
-    const result = await captureHttpResponse(new URL(`${baseUrl}/text`));
+    const result = await captureHttpResponse(new URL(`${baseUrl}/text`), { method: "GET" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.response.status).toBe(200);
@@ -52,7 +61,7 @@ describe("captureHttpResponse", () => {
   });
 
   it("caps the body at MAX_RESPONSE_BYTES and still hashes exactly what it kept", async () => {
-    const result = await captureHttpResponse(new URL(`${baseUrl}/big`));
+    const result = await captureHttpResponse(new URL(`${baseUrl}/big`), { method: "GET" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.response.bodyTruncated).toBe(true);
@@ -61,7 +70,7 @@ describe("captureHttpResponse", () => {
   });
 
   it("doesn't decode a binary content type as text, but still hashes the bytes", async () => {
-    const result = await captureHttpResponse(new URL(`${baseUrl}/binary`));
+    const result = await captureHttpResponse(new URL(`${baseUrl}/binary`), { method: "GET" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.response.bodyText).toBeNull();
@@ -70,7 +79,17 @@ describe("captureHttpResponse", () => {
   });
 
   it("reports failure rather than throwing when the connection is refused", async () => {
-    const result = await captureHttpResponse(new URL("http://127.0.0.1:1/"));
+    const result = await captureHttpResponse(new URL("http://127.0.0.1:1/"), { method: "GET" });
     expect(result.ok).toBe(false);
+  });
+
+  it("sends a POST body as application/json and captures the target's response", async () => {
+    const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "message/send" }));
+    const result = await captureHttpResponse(new URL(`${baseUrl}/echo`), { method: "POST", body });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const echoed = JSON.parse(result.response.bodyText!);
+    expect(echoed.receivedMethod).toBe("POST");
+    expect(echoed.receivedBody).toBe(body.toString("utf8"));
   });
 });

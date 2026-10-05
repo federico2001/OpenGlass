@@ -48,7 +48,11 @@ const AppendEventBody = z.strictObject({
   payload: z.unknown().optional(),
 });
 const CloseAttestationBody = z.strictObject({ statement: CloseStatement, signature: Signature });
-const WitnessFetchBody = z.strictObject({ url: z.string().min(1).max(2048) });
+const WitnessFetchBody = z.strictObject({
+  url: z.string().min(1).max(2048),
+  method: z.enum(["GET", "POST"]).optional(),
+  body: z.unknown().optional(),
+});
 
 export function registerAttestationsRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const attestations = attestationsRepository(deps.db);
@@ -205,7 +209,7 @@ export function registerAttestationsRoutes(app: FastifyInstance, deps: ServerDep
     async (req, reply) => {
       const body = parseOrError(WitnessFetchBody, req.body, reply);
       if (!body) return;
-      const result = await appendFetchWitness(deps, req.agent!.doc, req.params.attestationId, body.url);
+      const result = await appendFetchWitness(deps, req.agent!.doc, req.params.attestationId, body);
       if (!result.ok) return sendError(reply, result.error.status, result.error.code, result.error.message);
       return reply.code(201).send({ witness: fetchWitnessView(result.witness) });
     },

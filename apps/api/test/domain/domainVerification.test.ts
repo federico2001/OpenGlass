@@ -59,8 +59,14 @@ describe("isPublicIpv4", () => {
     }
   });
 
+  it("rejects CGNAT and the IETF special-purpose ranges (same blocklist apps/checkup/src/net.ts uses)", () => {
+    for (const ip of ["100.64.0.1", "100.127.255.255", "192.0.0.1", "192.0.2.1", "192.88.99.1", "198.18.0.1", "198.19.255.255", "198.51.100.1", "203.0.113.1"]) {
+      expect(isPublicIpv4(ip), ip).toBe(false);
+    }
+  });
+
   it("accepts ordinary public addresses", () => {
-    for (const ip of ["8.8.8.8", "1.1.1.1", "93.184.216.34", "172.15.255.255", "172.32.0.1"]) {
+    for (const ip of ["8.8.8.8", "1.1.1.1", "93.184.216.34", "172.15.255.255", "172.32.0.1", "100.63.255.255", "100.128.0.0"]) {
       expect(isPublicIpv4(ip), ip).toBe(true);
     }
   });
@@ -73,9 +79,16 @@ describe("isPublicIpv6", () => {
     }
   });
 
+  it("rejects the discard-only, documentation, and NAT64-wrapped-private ranges", () => {
+    for (const ip of ["100::1", "2001:db8::1", "::", "64:ff9b::10.0.0.1"]) {
+      expect(isPublicIpv6(ip), ip).toBe(false);
+    }
+  });
+
   it("accepts an ordinary public IPv6 address", () => {
     expect(isPublicIpv6("2606:4700:4700::1111")).toBe(true); // Cloudflare public resolver
     expect(isPublicIpv6("::ffff:8.8.8.8")).toBe(true); // IPv4-mapped, but a public address
+    expect(isPublicIpv6("64:ff9b::8.8.8.8")).toBe(true); // NAT64-wrapped, but a public address
   });
 });
 

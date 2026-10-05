@@ -11,6 +11,7 @@ export function fetchWitnessView(doc: FetchWitnessDoc) {
     prevHash: doc.prevHash,
     url: doc.url,
     method: doc.method,
+    request: doc.request,
     requestedAt: doc.requestedAt.toISOString(),
     fetchedAt: doc.fetchedAt.toISOString(),
     response: doc.response,

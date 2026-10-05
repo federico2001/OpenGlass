@@ -1002,7 +1002,7 @@ New error codes (extending §11's table): `409 attestation_id_taken`, `409 attes
 
 §12.4's "Naming a counterparty" convention is self-reported: the attestor's own signature backs its claim of what it sent and received, but nothing independently confirms that an unenrolled counterparty's content actually came from that server. This section adds the stronger alternative for when that matters: the attestor asks OpenGlass itself to make the request and witness the raw response directly, rather than reporting what it saw.
 
-**What this proves, and what it doesn't.** A witnessed fetch proves the response bytes came back over a TLS connection to that domain at that moment (and whatever its certificate says). It proves nothing about who operates the server beyond that certificate — the same honest limit domain verification (§14.1) already documents for a different mechanism. It's a complement to §12.4's convention, not a replacement: the self-reported convention stays the lighter-weight option when a direct platform fetch isn't the right fit (a `POST` with side effects, a URL needing the attestor's own auth, etc.) — `GET` only, no caller-supplied headers or credentials, is the only shape this section covers.
+**What this proves, and what it doesn't.** A witnessed fetch proves the response bytes came back over a TLS connection to that domain at that moment (and whatever its certificate says), and — for a `POST` — that the platform sent exactly the request body it attests to. It proves nothing about who operates the server beyond that certificate — the same honest limit domain verification (§14.1) already documents for a different mechanism. It's a complement to §12.4's convention, not a replacement: the self-reported convention stays the lighter-weight option when a direct platform fetch isn't the right fit (a URL needing the attestor's own auth, a non-JSON body, etc.). `GET` or a JSON-body `POST`, no caller-supplied headers beyond `content-type` and no credentials, is the only shape this section covers — an A2A `message/send` JSON-RPC call is the motivating case for `POST`.
 
 **`fetch_witnesses` collection**, append-only, one per fetch:
 
@@ -1014,7 +1014,11 @@ New error codes (extending §11's table): `409 attestation_id_taken`, `409 attes
   seq: number,                 // 1-based, this attestation's own witness chain
   prevHash: string,            // the attestation's genesisHash (seq 1) or the previous witness's hash
   url: string,                  // https, bare hostname, no port or embedded credentials
-  method: "GET",
+  method: "GET" | "POST",
+  request: {                    // present only for method: "POST" (null for GET)
+    contentType: "application/json",  // always JSON — never a caller-chosen content type
+    bodySha256: string, bodyBytes: number, bodyText: string,  // the JCS-canonicalized bytes actually sent
+  } | null,
   requestedAt: Date, fetchedAt: Date,
   response: {
     status: number,
@@ -1028,18 +1032,18 @@ New error codes (extending §11's table): `409 attestation_id_taken`, `409 attes
 }
 ```
 
-This is its own hash chain, parallel to (not interleaved with) the attestor's own event chain (§12.4) — both are rooted at the same `genesisHash`, so a witness and an event can't be reordered relative to their own kind, but the two chains don't constrain each other's ordering. Claimed with the same conditional-on-expected-value update `advanceHead` uses for events, so two concurrent witness-fetch calls on one attestation can't silently collide.
+This is its own hash chain, parallel to (not interleaved with) the attestor's own event chain (§12.4) — both are rooted at the same `genesisHash`, so a witness and an event can't be reordered relative to their own kind, but the two chains don't constrain each other's ordering. Claimed with the same conditional-on-expected-value update `advanceHead` uses for events, so two concurrent witness-fetch calls on one attestation can't silently collide. `request` and `response` are both part of the signed `hash`, so the platform's signature attests to the request it sent as well as the response it got back — for a `GET`, `request` is simply `null` and only the response is attested to.
 
-**The same SSRF guard as domain verification (§14.1) and `GET /v1/lookup` (§14.2):** `https:` only, a real DNS hostname (not an IP literal, no port, no embedded credentials), every address the hostname resolves to checked public before the request is made, no redirect ever followed, and the response capped at 64 KiB (truncated, not rejected, past the cap — the hash and byte count only ever cover what was actually read).
+**The same SSRF guard as domain verification (§14.1) and `GET /v1/lookup` (§14.2), upgraded (Oct 5 2026) to the broader blocklist `apps/checkup`'s own outbound guard already used for third-party agent endpoints:** `https:` only, a real DNS hostname (not an IP literal, no port, no embedded credentials), every address the hostname resolves to checked against a `node:net` `BlockList` covering RFC 1918 private ranges, loopback, link-local, CGNAT (100.64.0.0/10), multicast/reserved, and the IETF special-purpose ranges (protocol assignments, documentation, benchmarking) before the request is made, no redirect ever followed, and the response capped at 64 KiB (truncated, not rejected, past the cap — the hash and byte count only ever cover what was actually read). A `POST` body is capped at 64 KiB too, but rejected outright over that limit (`413`) rather than truncated — unlike a response, a request is something the caller chose to send in full, so sending a silently-truncated version of it would misrepresent what the platform was asked to do.
 
 **REST API:**
 
 | Method | Path | Auth | Purpose |
 | ------ | ---- | ---- | ------- |
-| POST | `/v1/attestations/{id}/witness-fetch` | agent (must be this attestation's own attestor) | Fetch a URL and record the witnessed response |
+| POST | `/v1/attestations/{id}/witness-fetch` | agent (must be this attestation's own attestor) | Fetch a URL (GET or POST) and record the witnessed exchange |
 | GET | `/v1/attestations/{id}/witnesses` | agent, owner | List witnessed fetches, seq order |
 
-**`POST /v1/attestations/{id}/witness-fetch`** takes `{ "url": string }` and returns `201 { "witness": FetchWitness }`. Errors: `404 not_found` (no such attestation, or the caller isn't its attestor), `409 attestation_not_active`, `422 url_invalid` (not `https:`, not a bare hostname, a port, or embedded credentials), `422 url_unreachable` (DNS didn't resolve to a public address, the connection failed, or it timed out — deliberately one generic code for all of these, so the response never tells a caller which SSRF check it tripped), `409 chain_conflict` (the witness head moved between validating and inserting; retry), `429 rate_limited`.
+**`POST /v1/attestations/{id}/witness-fetch`** takes `{ "url": string, "method"?: "GET" | "POST", "body"?: unknown }` (`method` defaults to `"GET"`; `body` is required for `"POST"`, forbidden otherwise) and returns `201 { "witness": FetchWitness }`. Errors: `404 not_found` (no such attestation, or the caller isn't its attestor), `409 attestation_not_active`, `422 url_invalid` (not `https:`, not a bare hostname, a port, or embedded credentials), `422 body_required_for_post`, `422 body_not_allowed_for_get`, `413 body_too_large` (over 64 KiB, JCS-canonicalized), `422 url_unreachable` (DNS didn't resolve to a public address, the connection failed, or it timed out — deliberately one generic code for all of these, so the response never tells a caller which SSRF check it tripped), `409 chain_conflict` (the witness head moved between validating and inserting; retry), `429 rate_limited`.
 
 **Known limitation, stated rather than silently left out:** a witnessed fetch isn't yet folded into `Evidence`/`RecordStatement` (§7.4–7.5) or checked by `verifyBundle` (§7.6) — `POST /v1/verify` and a downloaded record bundle don't cover it. It's independently verifiable today only via its own `hash`/`platformSignature` directly against `GET /v1/attestations/{id}/witnesses`, not via the portable bundle. Folding it into the exportable record is the natural next step, deliberately deferred rather than rushed into the actively-evolving Evidence/RecordStatement shape.
 

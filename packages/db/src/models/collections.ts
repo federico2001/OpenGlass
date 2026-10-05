@@ -291,7 +291,19 @@ export const fetchWitnesses = defineCollection({
     seq: z.int().min(1),
     prevHash: Hash,
     url: z.string().max(2048),
-    method: z.literal("GET"),
+    method: z.enum(["GET", "POST"]),
+    /** Present only for `method: "POST"` (null for GET) — what OpenGlass itself sent, so
+     * the platform's signature attests to the request as well as the response. Always
+     * JSON (never caller-controlled headers or an arbitrary content type): the caller
+     * supplies a JSON value, not raw bytes, so there's nothing to sniff or mis-decode. */
+    request: z
+      .strictObject({
+        contentType: z.literal("application/json"),
+        bodySha256: Hash,
+        bodyBytes: z.int().min(0),
+        bodyText: z.string(),
+      })
+      .nullable(),
     requestedAt: z.date(),
     fetchedAt: z.date(),
     response: z.strictObject({

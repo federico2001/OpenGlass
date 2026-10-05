@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 import { lookup as dnsLookup, resolveTxt } from "node:dns/promises";
 
 /**
@@ -60,27 +60,61 @@ export function domainFromHomepage(homepage: string | undefined): string | null 
   }
 }
 
-export function isPublicIpv4(ip: string): boolean {
-  const parts = ip.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return false;
-  const [a, b] = parts as [number, number, number, number];
-  if (a === 10) return false; // 10.0.0.0/8
-  if (a === 127) return false; // 127.0.0.0/8 loopback
-  if (a === 169 && b === 254) return false; // 169.254.0.0/16 link-local + cloud metadata
-  if (a === 172 && b >= 16 && b <= 31) return false; // 172.16.0.0/12
-  if (a === 192 && b === 168) return false; // 192.168.0.0/16
-  if (a === 0) return false; // 0.0.0.0/8
-  if (a >= 224) return false; // multicast/reserved (224.0.0.0/4 and above)
-  return true;
+/** Private/loopback/link-local/CGNAT/reserved/multicast ranges — the same list
+ * apps/checkup/src/net.ts uses to guard its own outbound requests to third-party agents,
+ * via `node:net`'s `BlockList` rather than hand-rolled octet comparisons. Covers
+ * everything the original narrower check did (RFC 1918, loopback, link-local,
+ * multicast/reserved) plus CGNAT (100.64.0.0/10) and the IETF special-purpose ranges
+ * (protocol assignments, documentation, benchmarking) a scanner could otherwise probe. */
+const BLOCKED_IPV4 = new BlockList();
+for (const [net, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+] as const) {
+  BLOCKED_IPV4.addSubnet(net, prefix, "ipv4");
 }
 
+const BLOCKED_IPV6 = new BlockList();
+for (const [net, prefix] of [
+  ["::", 128],
+  ["::1", 128],
+  ["100::", 64],
+  ["2001:db8::", 32],
+  ["fc00::", 7],
+  ["fe80::", 10],
+  ["ff00::", 8],
+] as const) {
+  BLOCKED_IPV6.addSubnet(net, prefix, "ipv6");
+}
+
+export function isPublicIpv4(ip: string): boolean {
+  if (isIP(ip) !== 4) return false;
+  return !BLOCKED_IPV4.check(ip, "ipv4");
+}
+
+/** Also unwraps an IPv4-mapped (`::ffff:a.b.c.d`) or NAT64 (`64:ff9b::a.b.c.d`) address and
+ * checks the IPv4 address it actually carries, rather than just the IPv6 wrapper — a
+ * private IPv4 address embedded this way would otherwise slip past the IPv6 blocklist,
+ * which has no entry for it at all. */
 export function isPublicIpv6(ip: string): boolean {
   const lower = ip.toLowerCase();
-  if (lower === "::1") return false; // loopback
-  if (lower.startsWith("fe80:") || lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) return false; // link-local fe80::/10
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return false; // unique local fc00::/7
-  if (lower.startsWith("::ffff:")) return isPublicIpv4(lower.slice("::ffff:".length)); // IPv4-mapped
-  return true;
+  const embedded = /^(?:::ffff:|64:ff9b::)(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
+  if (embedded) return isPublicIpv4(embedded[1]!);
+  if (isIP(lower) !== 6) return false;
+  return !BLOCKED_IPV6.check(lower, "ipv6");
 }
 
 /** Resolves every address the hostname's DNS currently answers with and requires all of
