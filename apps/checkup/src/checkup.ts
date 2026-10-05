@@ -15,6 +15,7 @@ export interface CheckupContext {
   openglass: OpenGlassLink;
   /** This service's public URL, for report links. */
   publicUrl: string;
+  log?: { warn: (obj: object, msg: string) => void };
 }
 
 export type CheckupOutcome =
@@ -68,6 +69,10 @@ export async function runCheckup(target: Target, caller: { key: string; source: 
   recordSection("card", card.section);
   const endpoint = await checkEndpoint(card.card, ctx.deps, { attestedFetch: recorder.attestedFetch.bind(recorder) });
   recordSection("endpoint", endpoint.section);
+  const probe = endpoint.section.details;
+  if (probe.url && !probe.witnessed && ctx.deps.witnessMode !== "off") {
+    ctx.log?.warn({ reportId, url: probe.url, mode: ctx.deps.witnessMode, reason: probe.witnessReason }, "endpoint probe not independently witnessed by OpenGlass");
+  }
   const x402 = checkX402(card.card, endpoint);
   recordSection("x402", x402);
   const identity = await identityRun;

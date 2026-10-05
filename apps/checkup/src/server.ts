@@ -66,6 +66,7 @@ export function buildServer(opts: ServerOptions) {
     store,
     openglass: opts.openglass,
     publicUrl: opts.publicUrl,
+    log: app.log,
     deps: { net: { allowPrivateAddresses: opts.allowPrivateTargets, userAgent: USER_AGENT }, registryUrl: opts.registryUrl, witnessMode: opts.witnessMode ?? "shadow" },
   };
   // A2A 1.0 clients may label JSON-RPC bodies with the A2A media type.

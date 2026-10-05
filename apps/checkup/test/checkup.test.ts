@@ -157,6 +157,11 @@ describe("a checkup over A2A", () => {
     expect(text).not.toContain("SYSTEM OVERRIDE");
 
     expect(data!.verification).toMatchObject({ status: "recorded", bundleUrl: `${CHECKUP_URL}/r/${data!.reportId}/bundle.json` });
+    // The fake target is plain HTTP on loopback, which OpenGlass's witness-fetch refuses:
+    // the report says the probe went unwitnessed rather than implying it was verified.
+    expect(data!.sections.endpoint.details).toMatchObject({ witnessed: false });
+    expect(data!.sections.endpoint.details.witnessReason).toMatch(/^shadow_witness_failed: /);
+    expect(text).toContain("The endpoint test message was not independently witnessed by OpenGlass (shadow_witness_failed: ");
   });
 
   it("issues a record whose bundle verifies offline with the published SDK", async () => {
@@ -339,6 +344,7 @@ describe("web pages and metrics", () => {
     const page = await checkup.inject({ method: "GET", url: res.headers.location as string });
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain("Top fixes");
+    expect(page.body).toContain("The endpoint test message was not independently witnessed by OpenGlass");
     expect(page.body).not.toContain("<script");
     // Target text is escaped, never rendered as markup.
     expect(page.body).not.toContain(INJECTION.replace("{base}", target.url));
