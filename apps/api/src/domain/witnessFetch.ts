@@ -23,8 +23,10 @@ const MAX_RESPONSE_BYTES = 65_536; // a web page or API response, not a file tra
 /** A JSON-RPC request body (e.g. an A2A message/send envelope), not a file upload. */
 export const MAX_REQUEST_BODY_BYTES = 65_536;
 /** Response headers worth keeping — never Set-Cookie or anything else that could carry a
- * credential or session detail belonging to the target server. */
-const CAPTURED_RESPONSE_HEADERS = ["content-type", "date", "server", "etag", "last-modified", "content-length"];
+ * credential or session detail belonging to the target server. `payment-required` is x402
+ * v2's own public payment-terms header (base64 JSON, same data a 402 body would carry in
+ * v1) — not a credential, and a caller like Agent Checkup relies on it to score x402. */
+const CAPTURED_RESPONSE_HEADERS = ["content-type", "date", "server", "etag", "last-modified", "content-length", "payment-required"];
 const TEXT_CONTENT_TYPE = /^(text\/|application\/(json|xml|[\w.+-]*\+(json|xml))\b)/i;
 
 export interface WitnessFetchResponse {

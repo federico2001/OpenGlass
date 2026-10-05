@@ -5,8 +5,23 @@ All notable changes to `openglass-sdk` (JS) are documented here. Format loosely 
 
 ## Unreleased
 
+## 0.3.0
+
 ### Added
 
+- `witnessFetch(attestationId, url, { method?, body? })` / `getFetchWitnesses(attestationId)`:
+  asks OpenGlass itself to fetch a URL (GET, or POST with a JSON body) and witness the raw
+  exchange directly — for when the other side isn't an OpenGlass agent at all, so there's
+  nothing for it to sign (docs/SPEC.md §12.6).
+- `attestedFetch(attestationId, url, { mode?, method?, body?, directFetch? })`: chooses how a
+  fetch to a third party gets witnessed — `"primary"` (default) makes OpenGlass's own fetch the
+  one real request, falling back to your own `directFetch` only if OpenGlass itself can't be
+  reached; `"shadow"` runs your own request as the real one and asks OpenGlass to redundantly
+  witness the same URL afterward; `"off"` just runs `directFetch` (docs/SPEC.md §12.7). Always
+  check `result.witnessed` — a `"primary"` fallback or a failed `"shadow"` witness both come
+  back `false`, never silently presented as witnessed. New exported types: `WitnessMode`,
+  `FetchWitness`, `DirectFetcher`, `DirectFetchResult`, `AttestedFetchOptions`,
+  `AttestedFetchResult`.
 - `registerCounterparty({ domain } | { agentCardUrl } | { agentCard })`: lists a counterparty
   that isn't registered on OpenGlass as an unclaimed profile (docs/SPEC.md §16), from its
   domain, its agent card URL, or the agent card itself. OpenGlass fetches the card and stores
