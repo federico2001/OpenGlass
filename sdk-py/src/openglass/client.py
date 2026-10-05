@@ -34,6 +34,15 @@ from .types import (
 
 Visibility = Literal["private", "sealed", "shared"]
 GuardAction = Literal["allow", "warn", "block"]
+WitnessMode = Literal["primary", "shadow", "off"]
+
+#: Your own real HTTP call: ``(url, method, body) -> {"status", "headers", "body"}`` (body
+#: is ``bytes``). Used as ``"shadow"`` mode's actual request, as ``"primary"`` mode's
+#: fallback when OpenGlass itself (not the target) can't be reached, and as the only
+#: request when ``mode="off"``. Defaults to a plain ``httpx`` request with ``body`` sent as
+#: JSON. Pass your own to keep an existing HTTP client's headers, timeouts, or response
+#: caps — the same call site that already fetches the target directly can be reused as-is.
+DirectFetcher = Callable[[str, str, Any], dict[str, Any]]
 
 DEFAULT_BASE_URL = "https://openglass.glass"
 
@@ -64,6 +73,14 @@ def _error_head(err: OpenGlassApiError) -> dict[str, Any] | None:
     details = _error_part(err).get("details")
     head = details.get("head") if isinstance(details, dict) else None
     return head if isinstance(head, dict) else None
+
+
+def _is_target_unreachable(err: Exception) -> bool:
+    """``422 url_unreachable``: OpenGlass tried the target itself and the target didn't
+    answer — distinct from OpenGlass's own API being unreachable, which ``attested_fetch``'s
+    ``"primary"`` mode falls back from, this doesn't (the witnessed failure already is the
+    outcome)."""
+    return isinstance(err, OpenGlassApiError) and err.status == 422 and _error_code(err) == "url_unreachable"
 
 
 class OpenGlassClient:
@@ -502,6 +519,96 @@ class OpenGlassClient:
         head = result["head"]
         self._head_by_attestation[attestation_id] = _Head(seq=head["seq"], prev_hash=head["hash"])
         return result
+
+    def witness_fetch(self, attestation_id: str, url: str, method: Literal["GET", "POST"] = "GET", body: Any = None) -> dict[str, Any]:
+        """Asks OpenGlass itself to fetch ``url`` (https only) and witness the raw response
+        directly — for when the other side of an attestation isn't an OpenGlass agent at
+        all, so there's nothing for it to sign. This proves the bytes came from a TLS
+        session with that domain at that moment; it doesn't prove who operates the server.
+        ``body`` (required for ``method="POST"``, e.g. an A2A/JSON-RPC envelope) is sent as
+        JSON — the platform attests to the request it sent as well as the response it got
+        back. Returns the ``FetchWitness`` dict (docs/SPEC.md §12.6)."""
+        # The server's `body` field is optional and must be OMITTED when absent, not sent
+        # as JSON `null` — same reasoning as `accept_invite`'s `token` above.
+        payload: dict[str, Any] = {"url": url, "method": method}
+        if body is not None:
+            payload["body"] = body
+        return self._signed("POST", f"/v1/attestations/{attestation_id}/witness-fetch", payload)["witness"]
+
+    def get_fetch_witnesses(self, attestation_id: str) -> list[dict[str, Any]]:
+        """Lists an attestation's witnessed fetches, seq order (docs/SPEC.md §12.6)."""
+        return self._signed("GET", f"/v1/attestations/{attestation_id}/witnesses")["items"]
+
+    def attested_fetch(
+        self,
+        attestation_id: str | None,
+        url: str,
+        mode: WitnessMode | None = None,
+        method: Literal["GET", "POST"] = "GET",
+        body: Any = None,
+        direct_fetch: DirectFetcher | None = None,
+    ) -> dict[str, Any]:
+        """A fetch to a third party that OpenGlass can witness, with the caller choosing
+        how much that witnessing costs and guarantees (docs/SPEC.md §12.7):
+
+        - ``"primary"`` (recommended default): OpenGlass's own fetch is the one real
+          request — the strongest default, since there's nothing for a self-report to
+          diverge from and no second request to the target at all. Falls back to
+          ``direct_fetch`` only when OpenGlass itself, not the target, can't be reached;
+          that fallback is always reported unwitnessed (``result["witnessed"] is False``),
+          never silently treated as if it were independently verified.
+        - ``"shadow"``: runs ``direct_fetch`` as the real request (act on
+          ``result["direct"]``), and asks OpenGlass to redundantly fetch the same URL
+          afterward, best-effort, for an independent record. Costs a second real request to
+          the target — fine for an idempotent read, worth weighing for anything with side
+          effects.
+        - ``"off"``: no independent witness at all; equivalent to calling ``direct_fetch``
+          yourself.
+
+        Either way, if OpenGlass has already tried the target and the target itself didn't
+        answer, this never fires a second, unwitnessed request at it — that failure is
+        already the witnessed outcome.
+
+        ``attestation_id=None`` (no attestation to chain a witness to — recording
+        unavailable) forces ``"off"`` regardless of ``mode``, reported as
+        ``reason="no_attestation"``, same as every other best-effort OpenGlass call: the
+        fetch itself still happens.
+
+        Returns ``{"witnessed": bool, "reason": str, "witness": dict | None, "direct": dict | None}``.
+        ``witness`` is set exactly when ``witnessed`` is ``True``; ``direct`` is set
+        whenever a direct request actually ran (``"off"``, ``"shadow"``'s real request, or
+        ``"primary"``'s fallback) — absent exactly when ``"primary"`` succeeded through
+        OpenGlass alone.
+        """
+        resolved_mode: WitnessMode = (mode or "primary") if attestation_id else "off"
+        fetch = direct_fetch or self._default_direct_fetch
+
+        if resolved_mode == "off":
+            return {"witnessed": False, "reason": "off" if attestation_id else "no_attestation", "witness": None, "direct": fetch(url, method, body)}
+
+        aid = attestation_id
+        assert aid is not None  # resolved_mode != "off" implies attestation_id was truthy
+
+        if resolved_mode == "shadow":
+            direct = fetch(url, method, body)
+            try:
+                witness = self.witness_fetch(aid, url, method=method, body=body)
+                return {"witnessed": True, "reason": "shadow", "witness": witness, "direct": direct}
+            except Exception as err:  # noqa: BLE001 - any witnessing failure degrades to unwitnessed, never raises
+                return {"witnessed": False, "reason": f"shadow_witness_failed: {err}", "witness": None, "direct": direct}
+
+        try:
+            witness = self.witness_fetch(aid, url, method=method, body=body)
+            return {"witnessed": True, "reason": "primary", "witness": witness, "direct": None}
+        except Exception as err:  # noqa: BLE001 - anything other than a confirmed target failure falls back
+            if _is_target_unreachable(err):
+                return {"witnessed": False, "reason": f"target_unreachable: {err}", "witness": None, "direct": None}
+            direct = fetch(url, method, body)
+            return {"witnessed": False, "reason": f"openglass_unreachable_fallback: {err}", "witness": None, "direct": direct}
+
+    def _default_direct_fetch(self, url: str, method: str, body: Any) -> dict[str, Any]:
+        res = self._http.request(method, url, json=body) if body is not None else self._http.request(method, url)
+        return {"status": res.status_code, "headers": dict(res.headers), "body": res.content}
 
     def close_attestation(self, attestation_id: str) -> None:
         identity = self._require_identity()

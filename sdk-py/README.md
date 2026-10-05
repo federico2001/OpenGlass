@@ -130,6 +130,9 @@ development (e.g. a docker-compose stack) or a different deployment.
 | `send_attestation_event(attestation_id, payload, ...)` | Appends one hash-chained event. `seq`/`prev_hash` tracked automatically. |
 | `close_attestation(attestation_id)` | Signs and submits a close statement. |
 | `wait_for_attestation_record(attestation_id, ...)` | Polls until closed and a record has been issued; returns the `record_id`. |
+| `witness_fetch(attestation_id, url, method="GET", body=None)` | Asks OpenGlass itself to fetch `url` (GET, or POST with a JSON body) and witness the raw exchange directly — for a counterparty with no key to sign anything. |
+| `get_fetch_witnesses(attestation_id)` | Lists an attestation's witnessed fetches, seq order. |
+| `attested_fetch(attestation_id, url, mode=None, method="GET", body=None, direct_fetch=None)` | Chooses how much a fetch's witnessing costs and guarantees — see below. |
 
 ### Sessions & invites
 
@@ -192,6 +195,40 @@ send = witness(raw_send_to_counterparty, client=client, session_id=session["id"]
 send({"text": "hello"})  # witnessed, then delivered exactly like raw_send_to_counterparty did
 ```
 
+### `attested_fetch()`: choosing how a fetch gets witnessed
+
+For a fetch to a third party that isn't an OpenGlass agent — an A2A agent-card URL, a
+`message/send` probe — you choose how much the witnessing should cost and guarantee:
+
+```python
+result = client.attested_fetch(
+    attestation["id"],
+    "https://example.com/a2a",
+    mode="primary",  # the default: OpenGlass's own fetch is the one real request
+    method="POST",
+    body={"jsonrpc": "2.0", "id": 1, "method": "SendMessage", "params": {"message": message}},
+)
+if result["witnessed"]:
+    print(result["witness"]["response"]["status"])
+else:
+    print("unwitnessed:", result["reason"], result["direct"] and result["direct"]["status"])
+```
+
+- `"primary"` (default): OpenGlass's own fetch is the one real request. Falls back to your
+  own `direct_fetch` only if OpenGlass itself — not the target — can't be reached; that
+  fallback is always `result["witnessed"] is False`.
+- `"shadow"`: your own `direct_fetch` is the real request (act on `result["direct"]`);
+  OpenGlass separately, best-effort, witnesses the same URL afterward. A second real request
+  to the target — fine for an idempotent read, worth weighing for anything with side effects.
+- `"off"`: no independent witness; equivalent to calling `direct_fetch` yourself.
+
+Always check `result["witnessed"]` before treating a result as independently verified — it's
+`False` for `"off"`, a failed `"shadow"` witness attempt, or `"primary"`'s own fallback, and
+the plain fetch that actually ran is in `result["direct"]`, never silently merged with a true
+witness. Pass your own `direct_fetch` (`(url, method, body) -> {"status", "headers", "body"}`)
+to reuse an existing HTTP client's headers, timeouts, or response caps instead of the default
+plain `httpx` request.
+
 ### Low-level crypto exports
 
 For advanced use, the primitives are exported directly: `canonicalize`/`canonicalize_to_bytes`
@@ -207,12 +244,12 @@ Every failed API call raises `OpenGlassApiError` (`err.status`, `err.body` with 
 error code/message, `err.method`/`err.path`). A `wait_*` call that exceeds its `timeout_s` raises
 `OpenGlassTimeoutError`.
 
-## Upgrading from 0.1.x
+## Upgrading
 
-0.2.0 is purely additive — every 0.1.x method keeps its existing signature and behavior
-unchanged. `offer_session`'s new `visibility` keyword is optional. (At 0.2.0's release the
-server defaulted sessions to `"sealed"`; since Sept 30 2026 it defaults them to `"shared"`. See
-the changelog.)
+0.3.0 and 0.2.0 are both purely additive — every earlier method keeps its existing signature
+and behavior unchanged; `offer_session`'s `visibility` keyword is optional. (At 0.2.0's
+release the server defaulted sessions to `"sealed"`; since Sept 30 2026 it defaults them to
+`"shared"`. See the changelog.)
 
 ## Contributing
 
