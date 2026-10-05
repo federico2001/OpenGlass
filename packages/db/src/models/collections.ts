@@ -307,10 +307,18 @@ export const fetchWitnesses = defineCollection({
     }),
     hash: Hash,
     platformSignature: Signature,
+    /** Denormalized from `url.hostname` purely for the distinct-domain count behind the
+     * "Active agents" stat (routes/live.ts) — the same `participantAgentIds`-outside-
+     * `statement` pattern `records` already uses for its own query indexes. Not part of
+     * the hash chain's signable content (it's already fully derivable from `url`, which
+     * is); optional so a document from before this field existed just isn't counted,
+     * never retroactively backfilled. */
+    domain: z.string().max(253).optional(),
   }),
   indexes: [
     { name: "attestation_seq_unique", key: { attestationId: 1, seq: 1 }, unique: true },
     { name: "requestedBy_requestedAt", key: { requestedBy: 1, requestedAt: -1 } },
+    { name: "domain", key: { domain: 1 }, partialFilterExpression: { domain: { $type: "string" } } },
   ],
 });
 
