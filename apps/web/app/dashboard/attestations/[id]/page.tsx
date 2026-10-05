@@ -189,7 +189,7 @@ export default function AttestationPage() {
                 <span className={styles.entryNum}>{w.seq}</span>
                 <div className={styles.entryBody}>
                   <p className={styles.entryTitle}>
-                    Fetched <code>{w.url}</code>
+                    {w.method === "POST" ? "Sent a request to" : "Fetched"} <code>{w.url}</code>
                   </p>
                   <p className={styles.entrySummary}>
                     HTTP {w.response.status} · {w.response.bodyBytes.toLocaleString()} bytes
@@ -197,6 +197,14 @@ export default function AttestationPage() {
                     {w.response.contentType ? ` · ${w.response.contentType}` : ""}
                   </p>
                   <p className={styles.entryMeta}>Witnessed directly by OpenGlass · {formatDate(w.fetchedAt)}</p>
+                  {w.request && (
+                    <details className={styles.evidence}>
+                      <summary>Request sent</summary>
+                      <div className={styles.content}>
+                        <pre className={payloadStyles.json}>{w.request.bodyText}</pre>
+                      </div>
+                    </details>
+                  )}
                   <details className={styles.evidence}>
                     <summary>Raw response</summary>
                     <div className={styles.content}>
@@ -212,8 +220,16 @@ export default function AttestationPage() {
                     <div className={ui.detailsBody}>
                       <table className={ui.table}>
                         <tbody>
+                          {w.request && (
+                            <tr>
+                              <td>Request body sha256</td>
+                              <td>
+                                <code title={w.request.bodySha256}>{shortHash(w.request.bodySha256)}</code>
+                              </td>
+                            </tr>
+                          )}
                           <tr>
-                            <td>Body sha256</td>
+                            <td>Response body sha256</td>
                             <td>
                               <code title={w.response.bodySha256}>{shortHash(w.response.bodySha256)}</code>
                             </td>

@@ -222,6 +222,65 @@ describe("POST /v1/attestations/:id/witness-fetch", () => {
     expect(listRes.json().items.map((w: { seq: number }) => w.seq)).toEqual([1, 2]);
   });
 
+  it("witnesses a POST with a JSON body, hashing both the request and the response", async () => {
+    const attestor = await registerAndClaim(`wfx_post_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: fakeWitnessFetch() });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const rpcBody = { id: 1, jsonrpc: "2.0", method: "message/send", params: { text: "hi" } };
+    const body = { url: "https://example.com/a2a", method: "POST", body: rpcBody };
+    const headers = signedRequestHeaders({ method: "POST", path, body, identity: attestor });
+    const res = await server.inject({ method: "POST", url: path, headers, payload: body });
+    expect(res.statusCode).toBe(201);
+    const witness = res.json().witness;
+    expect(witness.method).toBe("POST");
+    expect(witness.request.contentType).toBe("application/json");
+    expect(witness.request.bodyText).toBe(canonicalizeToBytes(rpcBody).toString("utf8"));
+    expect(witness.request.bodySha256).toBe(hex(sha256(canonicalizeToBytes(rpcBody))));
+    expect(witness.response.bodyText).toBe("hello from the other side");
+  });
+
+  it("rejects a POST without a body", async () => {
+    const attestor = await registerAndClaim(`wfx_post_nobody_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: fakeWitnessFetch() });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "https://example.com/a2a", method: "POST" };
+    const headers = signedRequestHeaders({ method: "POST", path, body, identity: attestor });
+    const res = await server.inject({ method: "POST", url: path, headers, payload: body });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("body_required_for_post");
+  });
+
+  it("rejects a GET with a body", async () => {
+    const attestor = await registerAndClaim(`wfx_get_body_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: fakeWitnessFetch() });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "https://example.com/offer", body: { hello: "world" } };
+    const headers = signedRequestHeaders({ method: "POST", path, body, identity: attestor });
+    const res = await server.inject({ method: "POST", url: path, headers, payload: body });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("body_not_allowed_for_get");
+  });
+
+  it("rejects a POST body over the size cap", async () => {
+    const attestor = await registerAndClaim(`wfx_post_big_${newId("agt").slice(-6)}`);
+    const server = app({ performWitnessFetch: fakeWitnessFetch() });
+    const openRes = await openAttestation(attestor, undefined, { server });
+    const attestationId = openRes.json().attestation.id;
+    const path = `/v1/attestations/${attestationId}/witness-fetch`;
+    const body = { url: "https://example.com/a2a", method: "POST", body: { text: "x".repeat(70_000) } };
+    const headers = signedRequestHeaders({ method: "POST", path, body, identity: attestor });
+    const res = await server.inject({ method: "POST", url: path, headers, payload: body });
+    expect(res.statusCode).toBe(413);
+    expect(res.json().error.code).toBe("body_too_large");
+  });
+
   it("rejects a non-https URL without attempting any fetch", async () => {
     const attestor = await registerAndClaim(`wfx_scheme_${newId("agt").slice(-6)}`);
     const openRes = await openAttestation(attestor);

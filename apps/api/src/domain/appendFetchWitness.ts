@@ -11,7 +11,7 @@ import {
   type PlatformSigner,
 } from "@openglass/db";
 import type { Db, MongoClient } from "mongodb";
-import { parseWitnessUrl, performWitnessFetch as realPerformWitnessFetch, type WitnessFetcher } from "./witnessFetch.js";
+import { MAX_REQUEST_BODY_BYTES, parseWitnessUrl, performWitnessFetch as realPerformWitnessFetch, type WitnessFetcher } from "./witnessFetch.js";
 
 export interface AppendFetchWitnessError {
   status: number;
@@ -20,6 +20,16 @@ export interface AppendFetchWitnessError {
 }
 
 export type AppendFetchWitnessResult = { ok: true; witness: FetchWitnessDoc } | { ok: false; error: AppendFetchWitnessError };
+
+export interface AppendFetchWitnessInput {
+  url: string;
+  method?: "GET" | "POST";
+  /** Required for POST (a JSON value — the A2A/JSON-RPC envelope to send, say), forbidden
+   * for GET. Serialized with the same canonical JSON the hash chain uses everywhere else,
+   * so the bytes actually sent over the wire are exactly the bytes the platform's
+   * signature attests to — never a separate, possibly-divergent `JSON.stringify`. */
+  body?: unknown;
+}
 
 /** The `fetch_witnesses` counterpart to `appendMessage`/`appendAttestationEvent` — but
  * there's no agent signature to verify here (the platform is the one making the fetch, so
@@ -32,7 +42,7 @@ export async function appendFetchWitness(
   deps: { db: Db; mongoClient: MongoClient; signer: PlatformSigner; performWitnessFetch?: WitnessFetcher },
   agentDoc: AgentDoc,
   attestationId: string,
-  rawUrl: string,
+  input: AppendFetchWitnessInput,
 ): Promise<AppendFetchWitnessResult> {
   const performWitnessFetch = deps.performWitnessFetch ?? realPerformWitnessFetch;
   const attestations = attestationsRepository(deps.db);
@@ -44,14 +54,37 @@ export async function appendFetchWitness(
     return { ok: false, error: { status: 409, code: "attestation_not_active", message: "Attestation is not active" } };
   }
 
-  const url = parseWitnessUrl(rawUrl);
+  const url = parseWitnessUrl(input.url);
   if (!url) return { ok: false, error: { status: 422, code: "url_invalid", message: "url must be an https URL on a bare hostname, with no port or credentials" } };
+
+  const method = input.method ?? "GET";
+  if (method === "POST" && input.body === undefined) {
+    return { ok: false, error: { status: 422, code: "body_required_for_post", message: "body is required when method is POST" } };
+  }
+  if (method === "GET" && input.body !== undefined) {
+    return { ok: false, error: { status: 422, code: "body_not_allowed_for_get", message: "body is not allowed when method is GET" } };
+  }
+
+  let requestBodyBytes: Buffer | undefined;
+  let requestInfo: FetchWitnessDoc["request"] = null;
+  if (method === "POST") {
+    requestBodyBytes = canonicalizeToBytes(input.body);
+    if (requestBodyBytes.byteLength > MAX_REQUEST_BODY_BYTES) {
+      return { ok: false, error: { status: 413, code: "body_too_large", message: `body exceeds ${MAX_REQUEST_BODY_BYTES} bytes` } };
+    }
+    requestInfo = {
+      contentType: "application/json",
+      bodySha256: hex(sha256(requestBodyBytes)),
+      bodyBytes: requestBodyBytes.byteLength,
+      bodyText: requestBodyBytes.toString("utf8"),
+    };
+  }
 
   const expectedSeq = (attestation.lastWitnessSeq ?? 0) + 1;
   const expectedPrevHash = attestation.lastWitnessHash ?? attestation.genesisHash;
   const requestedAt = new Date();
 
-  const fetched = await performWitnessFetch(url);
+  const fetched = await performWitnessFetch(url, { method, body: requestBodyBytes });
   if (!fetched.ok) return { ok: false, error: { status: 422, code: "url_unreachable", message: fetched.reason } };
 
   const fetchedAt = new Date();
@@ -61,7 +94,8 @@ export async function appendFetchWitness(
     seq: expectedSeq,
     prevHash: expectedPrevHash,
     url: url.href,
-    method: "GET" as const,
+    method,
+    request: requestInfo,
     requestedAt: requestedAt.toISOString(),
     fetchedAt: fetchedAt.toISOString(),
     response: fetched.response,
@@ -77,7 +111,8 @@ export async function appendFetchWitness(
     seq: expectedSeq,
     prevHash: expectedPrevHash,
     url: url.href,
-    method: "GET",
+    method,
+    request: requestInfo,
     requestedAt,
     fetchedAt,
     response: fetched.response,

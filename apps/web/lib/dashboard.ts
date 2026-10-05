@@ -167,7 +167,9 @@ export interface FetchWitnessView {
   seq: number;
   prevHash: string;
   url: string;
-  method: "GET";
+  method: "GET" | "POST";
+  /** Present only for `method: "POST"` — the JSON body OpenGlass itself sent. */
+  request: { contentType: "application/json"; bodySha256: string; bodyBytes: number; bodyText: string } | null;
   requestedAt: string;
   fetchedAt: string;
   response: {

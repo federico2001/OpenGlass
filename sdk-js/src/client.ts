@@ -144,7 +144,9 @@ export interface FetchWitness {
   seq: number;
   prevHash: string;
   url: string;
-  method: "GET";
+  method: "GET" | "POST";
+  /** Present only for `method: "POST"` — the JSON body OpenGlass itself sent. */
+  request: { contentType: "application/json"; bodySha256: string; bodyBytes: number; bodyText: string } | null;
   requestedAt: string;
   fetchedAt: string;
   response: {
@@ -672,17 +674,19 @@ export class OpenGlassClient {
     return result;
   }
 
-  /** Asks OpenGlass itself to fetch `url` (GET, https only) and witness the raw response —
-   * for when the other side of an attestation isn't an OpenGlass agent at all, so there's
+  /** Asks OpenGlass itself to fetch `url` (https only) and witness the raw response — for
+   * when the other side of an attestation isn't an OpenGlass agent at all, so there's
    * nothing for it to sign. This proves the bytes came from a TLS session with that domain
-   * at that moment; it doesn't prove who operates the server. */
-  async witnessFetch(attestationId: string, url: string): Promise<FetchWitness> {
+   * at that moment; it doesn't prove who operates the server. `opts.body` (required for
+   * `method: "POST"`, e.g. an A2A/JSON-RPC envelope) is sent as JSON — the platform
+   * attests to the request it sent as well as the response it got back. */
+  async witnessFetch(attestationId: string, url: string, opts: { method?: "GET" | "POST"; body?: unknown } = {}): Promise<FetchWitness> {
     const identity = this.requireIdentity();
     const { witness } = await signedRequest<{ witness: FetchWitness }>(
       this.baseUrl,
       "POST",
       `/v1/attestations/${attestationId}/witness-fetch`,
-      { url },
+      { url, ...(opts.method ? { method: opts.method } : {}), ...(opts.body !== undefined ? { body: opts.body } : {}) },
       identity,
     );
     return witness;
