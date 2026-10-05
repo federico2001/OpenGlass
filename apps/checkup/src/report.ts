@@ -80,6 +80,16 @@ export function topFixes(sections: Sections): Report["topFixes"] {
 
 const LABELS: Record<SectionName, string> = { card: "Card", endpoint: "Endpoint", x402: "x402", identity: "Identity" };
 
+/** Whether OpenGlass itself independently witnessed the endpoint probe (docs/SPEC.md §12.7),
+ * said plainly either way so a fallback or failed witness never reads as verified. Null
+ * when no probe ran, or for a report stored before witnessing existed. */
+export function witnessLine(report: Report): string | null {
+  const d = report.sections.endpoint.details as Partial<EndpointDetails>;
+  if (!d.url || typeof d.witnessed !== "boolean") return null;
+  if (d.witnessed) return "The endpoint test message was independently witnessed by OpenGlass.";
+  return `The endpoint test message was not independently witnessed by OpenGlass${d.witnessReason ? ` (${d.witnessReason})` : ""}.`;
+}
+
 /** The short plain-language report. */
 export function renderText(report: Report, opts: { cached?: boolean } = {}): string {
   const lines: string[] = [];
@@ -100,6 +110,8 @@ export function renderText(report: Report, opts: { cached?: boolean } = {}): str
   }
   lines.push("");
   if (report.openglass.line) lines.push(report.openglass.line);
+  const witnessed = witnessLine(report);
+  if (witnessed) lines.push(witnessed);
   lines.push(`Full report: ${report.links.report}`);
   if (report.verification.bundleUrl) lines.push(`Record of this checkup (verifiable offline): ${report.verification.bundleUrl}`);
   else lines.push(`Not recorded on OpenGlass: ${report.verification.reason ?? "unavailable"}.`);

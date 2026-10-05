@@ -24,7 +24,11 @@ const ConfigSchema = z.object({
    * "shadow", not sdk-js's own "primary" recommendation: OpenGlass's witness-fetch caps a
    * response at 64 KiB with a 5s timeout, narrower than this probe's own 256 KiB/10s budget
    * — scoring a slow-but-working agent as a failure under "primary" would be a real
-   * regression. "shadow" still gets an independent record, at the cost of a second request
+   * regression. It also sends an `a2a-version` header A2A 1.0 agents use to pick their wire
+   * format, and witness-fetch sends no header but content-type, so under "primary" a 1.0
+   * agent could be scored on a different request than the one it's meant to get. Whatever
+   * the mode, the report and the logs say when the probe wasn't independently witnessed.
+   * "shadow" still gets an independent record, at the cost of a second request
    * to the target (set "primary" once that gap no longer matters for your deployment, or
    * "off" to keep today's self-report-only behavior). */
   CHECKUP_WITNESS_MODE: z.enum(["primary", "shadow", "off"]).default("shadow"),

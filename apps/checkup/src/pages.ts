@@ -1,5 +1,5 @@
 import type { Report, SectionName } from "./report.js";
-import { SECTION_NAMES } from "./report.js";
+import { SECTION_NAMES, witnessLine } from "./report.js";
 
 /** Server-rendered pages, Clear Channel tokens (served from apps/web's tokens.css). Every
  * value that came from a target or a caller goes through `esc`. */
@@ -125,6 +125,7 @@ export function reportPage(report: Report, record: { status: "issued" | "pending
             : ". The signed record is being issued; the bundle link works once it is."
         }</p><p>${esc(v.how)}</p>`
       : `<p>Not recorded on OpenGlass: ${esc(v.reason)}.</p>`;
+  const witnessed = witnessLine(report);
   return layout(
     `Checkup: ${target}`,
     `<p class="label">Agent checkup · ${esc(report.checkedAt)}</p>
@@ -136,6 +137,7 @@ ${sections}
 ${fixes}
 <h2>OpenGlass</h2>
 ${ogLine}
+${witnessed ? `<p>${esc(witnessed)}</p>` : ""}
 ${verification}
 <h2>Full report</h2>
 <p><a href="${esc(report.links.json)}">JSON</a>. ${esc(report.note)}</p>
