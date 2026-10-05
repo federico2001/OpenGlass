@@ -174,7 +174,7 @@ async function runEndpointFetch(
   };
 
   if (!witness) {
-    const d = await direct();
+    const d = await direct(request.url, { method: "POST" });
     return { response: toSafeResponse(d, request.url, Math.round(performance.now() - started)), witnessed: false, witnessReason: null };
   }
 
