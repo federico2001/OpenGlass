@@ -75,6 +75,13 @@
   }
 }
 
+/* Clicking the cue glides down to the setup prompt instead of jumping. */
+@media (prefers-reduced-motion: no-preference) {
+  :global(html):has(.hero) {
+    scroll-behavior: smooth;
+  }
+}
+
 /* The setup prompt reads as its own section, set apart from the hero above it. */
 .setup {
   padding-top: 40px;
