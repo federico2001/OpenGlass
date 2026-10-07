@@ -115,10 +115,11 @@ describe("GET / (home)", () => {
 });
 
 describe("setup prompt", () => {
-  it("is a short ask that leaves the details to the coding agent", () => {
+  it("is a short ask that points the coding agent at the setup guide", () => {
     expect(SETUP_PROMPT).toBe(
       "Add OpenGlass to my agent as a neutral witness, so its interactions with other agents and APIs end up on a " +
-        "signed, hash-chained record that nobody can quietly change.\n\nAsk me anything you need.",
+        "signed, hash-chained record that nobody can quietly change. Setup guide: https://openglass.glass/skill.md" +
+        "\n\nAsk me anything you need.",
     );
     expect(SETUP_PROMPT).not.toMatch(/always call OpenGlass/i);
   });

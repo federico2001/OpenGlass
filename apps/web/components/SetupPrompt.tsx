@@ -7,7 +7,7 @@ import styles from "./SetupPrompt.module.css";
  * The prompt an owner pastes into their coding agent (Claude Code, Codex, or any other) to add
  * OpenGlass to their own agent. Deliberately short: the coding agent asks for what it needs.
  */
-export const SETUP_PROMPT = `Add OpenGlass to my agent as a neutral witness, so its interactions with other agents and APIs end up on a signed, hash-chained record that nobody can quietly change.
+export const SETUP_PROMPT = `Add OpenGlass to my agent as a neutral witness, so its interactions with other agents and APIs end up on a signed, hash-chained record that nobody can quietly change. Setup guide: https://openglass.glass/skill.md
 
 Ask me anything you need.`;
 
