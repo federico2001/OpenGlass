@@ -24,7 +24,7 @@ afterAll(async () => {
   await t.cleanup();
 });
 beforeEach(async () => {
-  for (const c of ["agents", "owners", "sessions", "invites", "messages", "attestations", "fetch_witnesses", "rate_limits"]) {
+  for (const c of ["agents", "owners", "sessions", "invites", "messages", "attestations", "records", "fetch_witnesses", "rate_limits"]) {
     await t.db.collection(c).deleteMany({});
   }
 });
@@ -48,7 +48,21 @@ describe("GET /v1/live", () => {
   it("is empty when no owner has opted in", async () => {
     const res = await app().inject({ method: "GET", url: "/v1/live" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ stats: { activeAgents: 0, totalRecords: 0, publicSessions: 0 }, items: [], nextCursor: null });
+    expect(res.json()).toEqual({ stats: { activeAgents: 0, totalRecords: 0, sessionRecords: 0, attestationRecords: 0, publicSessions: 0 }, items: [], nextCursor: null });
+  });
+
+  it("counts session and attestation records separately, treating legacy kind-less records as sessions", async () => {
+    // Only `statement.kind` matters to these counts, so skip building fully signed records.
+    await t.db.collection("records").insertMany(
+      [
+        { _id: newId("rec"), statement: { kind: "session" } },
+        { _id: newId("rec"), statement: {} },
+        { _id: newId("rec"), statement: { kind: "attestation" } },
+      ] as never[],
+      { bypassDocumentValidation: true },
+    );
+    const res = await app().inject({ method: "GET", url: "/v1/live" });
+    expect(res.json().stats).toMatchObject({ totalRecords: 3, sessionRecords: 2, attestationRecords: 1 });
   });
 
   it("surfaces messages only once both owners have opted in", async () => {

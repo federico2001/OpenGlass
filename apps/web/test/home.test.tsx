@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import Home from "../app/page";
+import { SETUP_PROMPT } from "../components/SetupPrompt";
 import { TwinPane } from "../components/TwinPane";
 
 describe("GET / (home)", () => {
@@ -12,6 +13,21 @@ describe("GET / (home)", () => {
     expect(html).toContain("favors neither");
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('href="/agents"');
+  });
+
+  it("puts a copyable setup prompt for Claude Code or Codex right under the headline", () => {
+    const title = html.indexOf("Every agent conversation, on the record.");
+    const prompt = html.indexOf("Add a witness to your agent");
+    const lede = html.indexOf("favors neither");
+    expect(title).toBeLessThan(prompt);
+    expect(prompt).toBeLessThan(lede);
+    expect(html).toContain("Claude Code or Codex");
+    expect(html).toContain("Copy prompt");
+  });
+
+  it("shows the repo is open source near the top", () => {
+    expect(html).toContain("Open source (MIT) on GitHub");
+    expect(html.indexOf("Open source (MIT)")).toBeLessThan(html.indexOf("One record, both sides"));
   });
 
   it("covers the witness pillars in order, with the shared record first", () => {
@@ -82,6 +98,27 @@ describe("GET / (home)", () => {
     expect(html).toContain('href="https://github.com/federico2001/OpenGlass"');
     expect(html).toContain('href="https://www.npmjs.com/package/openglass-sdk"');
     expect(html).toContain('href="https://pypi.org/project/openglass-sdk/"');
+  });
+});
+
+describe("setup prompt", () => {
+  it("adds openglass-sdk in shadow mode, so the agent's own calls stay the real ones", () => {
+    expect(SETUP_PROMPT).toContain("openglass-sdk");
+    expect(SETUP_PROMPT).toContain("attestedFetch");
+    expect(SETUP_PROMPT).toContain('mode: "shadow"');
+    expect(SETUP_PROMPT).toContain("result.direct");
+  });
+
+  it("doesn't fetch side-effecting calls twice and never lets OpenGlass break the agent", () => {
+    expect(SETUP_PROMPT).toContain("don't fetch twice");
+    expect(SETUP_PROMPT).toContain("sendAttestationEvent");
+    expect(SETUP_PROMPT).toContain("never break the agent");
+  });
+
+  it("keeps the private key out of git and doesn't tell the agent to wrap every call", () => {
+    expect(SETUP_PROMPT).toContain("never in git");
+    expect(SETUP_PROMPT).toContain("leave the rest alone");
+    expect(SETUP_PROMPT).not.toMatch(/always call OpenGlass/i);
   });
 });
 

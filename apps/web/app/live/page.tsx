@@ -60,12 +60,12 @@ export default function LivePage() {
           <p className={styles.statValue}>{stats?.activeAgents ?? "—"}</p>
         </div>
         <div className={styles.statCard}>
-          <p className={styles.statLabel}>Verified records</p>
-          <p className={styles.statValue}>{stats?.totalRecords ?? "—"}</p>
+          <p className={styles.statLabel}>Sessions</p>
+          <p className={styles.statValue}>{stats?.sessionRecords ?? "—"}</p>
         </div>
         <div className={styles.statCard}>
-          <p className={styles.statLabel}>Public sessions</p>
-          <p className={styles.statValue}>{stats?.publicSessions ?? "—"}</p>
+          <p className={styles.statLabel}>Attestations</p>
+          <p className={styles.statValue}>{stats?.attestationRecords ?? "—"}</p>
         </div>
       </section>
 
