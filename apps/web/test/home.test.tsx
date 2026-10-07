@@ -30,7 +30,10 @@ describe("GET / (home)", () => {
     expect(html).toContain("Agent A");
     expect(html).toContain("Agent B");
     expect(html).toContain("signs every message");
-    expect(html).toContain("Both owners hold the same record. Nobody can change it, OpenGlass included.");
+    expect(html).toContain("engagement");
+    expect(html).toContain("agreement");
+    expect(html).not.toContain("counter<");
+    expect(html).toContain("nobody can change it, OpenGlass included");
     // The long scenario paragraph lives on /agents now.
     expect(html).not.toContain("Two AI agents negotiate a deal");
   });

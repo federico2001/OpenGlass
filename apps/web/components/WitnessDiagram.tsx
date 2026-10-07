@@ -2,15 +2,16 @@ import { TwinPane } from "./TwinPane";
 import styles from "./WitnessDiagram.module.css";
 
 /**
- * The landing page's one-glance explanation: two agents talk through OpenGlass, which signs
- * every message and takes neither side, and both owners end up holding the same locked record.
+ * The landing page's one-glance explanation: OpenGlass is a thin witness layer on each agent,
+ * signing every message as it passes and taking neither side, and both owners end up holding the
+ * same locked record.
  * Plain HTML + inline SVG icons so it themes from the tokens and reflows on narrow screens.
  */
 
 const RECORD = [
-  { from: "A", what: "offer" },
-  { from: "B", what: "counter" },
-  { from: "A", what: "accept" },
+  { from: "A", what: "engagement" },
+  { from: "B", what: "proposal" },
+  { from: "A", what: "agreement" },
 ];
 
 function AgentIcon() {
@@ -37,6 +38,26 @@ function LockIcon() {
       <rect x="5" y="11" width="14" height="10" rx="2" />
       <path d="M8 11V8a4 4 0 0 1 8 0v3" />
     </svg>
+  );
+}
+
+function Agent({ name, note }: { name: string; note: string }) {
+  return (
+    <div className={styles.agent}>
+      <AgentIcon />
+      <span className={styles.name}>{name}</span>
+      <span className={styles.note}>{note}</span>
+    </div>
+  );
+}
+
+/** The witness: a thin layer on the outside of each agent that every message passes through. */
+function Layer() {
+  return (
+    <div className={styles.layer}>
+      <TwinPane size={18} />
+      <span className={styles.layerName}>OpenGlass</span>
+    </div>
   );
 }
 
@@ -70,37 +91,26 @@ export function WitnessDiagram() {
   return (
     <figure className={styles.figure} aria-label="How OpenGlass witnesses a conversation between two agents">
       <div className={styles.talk}>
-        <div className={styles.agent}>
-          <AgentIcon />
-          <span className={styles.name}>Agent A</span>
-          <span className={styles.note}>yours</span>
+        <div className={styles.side}>
+          <Agent name="Agent A" note="yours" />
+          <Layer />
         </div>
 
         <div className={styles.wire} aria-hidden="true">
-          <span className={styles.chip}>offer</span>
           <span className={`${styles.pulse} ${styles.toRight}`} />
-        </div>
-
-        <div className={styles.witness}>
-          <TwinPane size={40} />
-          <span className={styles.name}>OpenGlass</span>
-          <span className={styles.note}>signs every message</span>
-          <span className={styles.note}>favors neither</span>
-        </div>
-
-        <div className={styles.wire} aria-hidden="true">
-          <span className={styles.chip}>counter</span>
           <span className={`${styles.pulse} ${styles.toLeft}`} />
         </div>
 
-        <div className={styles.agent}>
-          <AgentIcon />
-          <span className={styles.name}>Agent B</span>
-          <span className={styles.note}>theirs</span>
+        <div className={styles.side}>
+          <Layer />
+          <Agent name="Agent B" note="theirs" />
         </div>
       </div>
 
-      <div className={styles.branch} aria-hidden="true" />
+      <div className={styles.branch} aria-hidden="true">
+        <span />
+        <span />
+      </div>
 
       <div className={styles.records}>
         <Record owner="A's owner" />
@@ -111,7 +121,8 @@ export function WitnessDiagram() {
       </div>
 
       <figcaption className={styles.caption}>
-        Both owners hold the same record. Nobody can change it, OpenGlass included.
+        OpenGlass signs every message on both sides and favors neither. Both owners hold the same record,
+        and nobody can change it, OpenGlass included.
       </figcaption>
     </figure>
   );

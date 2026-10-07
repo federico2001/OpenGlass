@@ -1,5 +1,6 @@
 .figure {
-  --mid: 48px;
+  --mid: 72px;
+  --layer: 26px;
   margin: 0 0 28px;
   max-width: 720px;
   padding: 24px 20px 18px;
@@ -8,40 +9,74 @@
   border-radius: var(--radius);
 }
 
-/* ---- Top row: agent — OpenGlass — agent ---- */
+/* ---- Top row: each agent wrapped by a thin OpenGlass layer, talking across the gap ---- */
+
+.talk,
+.branch,
+.records {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--mid) minmax(0, 1fr);
+}
 
 .talk {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(24px, 1fr) auto minmax(24px, 1fr) minmax(0, 1fr);
   align-items: center;
 }
 
-.agent,
-.witness {
+.side {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.agent {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 2px;
-}
-
-.agent {
-  padding: 12px 6px;
+  padding: 14px 6px;
   background: var(--bg-panel);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
 }
 
-.witness {
-  padding: 10px 14px 12px;
+/* The witness layer: narrow, outside the agent, every message passes through it. */
+.layer {
+  position: relative;
+  flex: 0 0 var(--layer);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
   background: var(--bg-panel);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
   color: var(--ink);
+  overflow: hidden;
 }
 
-.witness svg {
-  margin-bottom: 4px;
+.layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--glass);
+  opacity: 0.18;
+}
+
+.layer > * {
+  position: relative;
+}
+
+.layerName {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--accent-text);
 }
 
 .icon,
@@ -88,7 +123,7 @@
   color: var(--ink-soft);
 }
 
-/* The wire between an agent and OpenGlass, with a message travelling along it. */
+/* The wire between the two layers, with messages travelling both ways. */
 .wire {
   position: relative;
   height: 32px;
@@ -104,17 +139,6 @@
   right: 0;
   top: 50%;
   border-top: 1.5px dashed var(--rule-strong);
-}
-
-.chip {
-  position: relative;
-  font-family: var(--font-data);
-  font-size: 11px;
-  line-height: 1;
-  color: var(--accent-text);
-  background: var(--bg-subtle);
-  padding: 0 4px;
-  transform: translateY(-4px);
 }
 
 .pulse {
@@ -155,36 +179,37 @@
   }
 }
 
-/* ---- OpenGlass hands the record to both owners ---- */
+/* ---- Each layer writes the record its owner holds ---- */
 
 .branch {
-  position: relative;
-  height: 40px;
+  height: 28px;
 }
 
-.branch::before {
+.branch span {
+  position: relative;
+}
+
+.branch span:last-child {
+  grid-column: 3;
+}
+
+.branch span::after {
   content: "";
   position: absolute;
-  left: 50%;
   top: 0;
-  height: 50%;
+  bottom: 0;
   border-left: 1.5px solid var(--accent);
 }
 
-.branch::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  bottom: 0;
-  left: calc((100% - var(--mid)) / 4);
-  right: calc((100% - var(--mid)) / 4);
-  border: 1.5px solid var(--accent);
-  border-bottom: 0;
+.branch span:first-child::after {
+  right: calc(var(--layer) / 2);
+}
+
+.branch span:last-child::after {
+  left: calc(var(--layer) / 2);
 }
 
 .records {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--mid) minmax(0, 1fr);
   align-items: center;
 }
 
@@ -262,20 +287,13 @@
 
 @media (max-width: 560px) {
   .figure {
-    --mid: 26px;
+    --mid: 28px;
+    --layer: 22px;
     padding: 18px 12px 14px;
-  }
-
-  .talk {
-    grid-template-columns: minmax(0, 1fr) 12px auto 12px minmax(0, 1fr);
   }
 
   .agent {
     padding: 10px 4px;
-  }
-
-  .witness {
-    padding: 8px 8px 10px;
   }
 
   .name {
@@ -294,10 +312,6 @@
 
   .note {
     font-size: 10.5px;
-  }
-
-  .chip {
-    display: none;
   }
 
   .record {
