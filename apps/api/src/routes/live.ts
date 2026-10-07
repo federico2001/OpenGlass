@@ -53,15 +53,20 @@ export function registerLiveRoutes(app: FastifyInstance, deps: ServerDeps): void
       const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), FEED_LIMIT_MAX);
       const since = req.query.since ? new Date(req.query.since) : null;
 
-      const [activeAgents, totalRecords, optedInOwners] = await Promise.all([
+      // Records issued before `statement.kind` existed are all session records.
+      const recordsCol = deps.db.collection(recordsCollection.name);
+      const [activeAgents, sessionRecords, attestationRecords, optedInOwners] = await Promise.all([
         countActiveAgents(deps, agents),
-        deps.db.collection(recordsCollection.name).countDocuments({}),
+        recordsCol.countDocuments({ "statement.kind": { $ne: "attestation" } }),
+        recordsCol.countDocuments({ "statement.kind": "attestation" }),
         owners.collection.find({ "settings.publicFeedOptIn": true }, { projection: { _id: 1 } }).toArray(),
       ]);
+      const totalRecords = sessionRecords + attestationRecords;
+      const counts = { activeAgents, totalRecords, sessionRecords, attestationRecords };
       const optedInOwnerIds = optedInOwners.map((d) => d._id as string);
 
       if (optedInOwnerIds.length === 0) {
-        return { stats: { activeAgents, totalRecords, publicSessions: 0 }, items: [], nextCursor: null };
+        return { stats: { ...counts, publicSessions: 0 }, items: [], nextCursor: null };
       }
 
       const eligible = await sessions.collection
@@ -77,7 +82,7 @@ export function registerLiveRoutes(app: FastifyInstance, deps: ServerDeps): void
       const publicSessions = eligibleSessionIds.length;
 
       if (publicSessions === 0) {
-        return { stats: { activeAgents, totalRecords, publicSessions }, items: [], nextCursor: null };
+        return { stats: { ...counts, publicSessions }, items: [], nextCursor: null };
       }
 
       const messages = await findRecentMessagesBySessions(deps.db, eligibleSessionIds, { after: since, limit });
@@ -97,7 +102,7 @@ export function registerLiveRoutes(app: FastifyInstance, deps: ServerDeps): void
       }));
 
       return {
-        stats: { activeAgents, totalRecords, publicSessions },
+        stats: { ...counts, publicSessions },
         items,
         nextCursor: items.length > 0 ? items[items.length - 1]!.receivedAt : (since?.toISOString() ?? null),
       };

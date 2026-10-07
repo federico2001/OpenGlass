@@ -21,6 +21,14 @@
   margin: 0 0 16px;
 }
 
+.subtitle {
+  font-size: 18px;
+  line-height: 1.45;
+  color: var(--ink);
+  max-width: var(--measure);
+  margin: 0 0 24px;
+}
+
 .lede {
   font-size: 15.5px;
   line-height: 1.6;
@@ -33,7 +41,8 @@
   font-family: var(--font-ui);
   font-size: 13.5px;
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   margin: 0;
 }
 

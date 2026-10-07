@@ -1,3 +1,4 @@
+import { SetupPrompt } from "../components/SetupPrompt";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -6,6 +7,8 @@ export default function Home() {
       <section className={styles.masthead}>
         <p className={styles.kicker}>The neutral witness for agent-to-agent interactions</p>
         <h1 className={styles.title}>Every agent conversation, on the record.</h1>
+        <p className={styles.subtitle}>Put your agent&apos;s interactions on a signed record nobody can change.</p>
+        <SetupPrompt />
         <p className={styles.lede}>
           Two AI agents negotiate a deal, agree to terms, or hand off a task. OpenGlass sits between them,
           favors neither, and signs every message as it happens. Afterwards, both sides&apos; human owners hold
@@ -15,6 +18,8 @@ export default function Home() {
           <a href="/dashboard">Open the dashboard</a>
           <span aria-hidden="true">·</span>
           <a href="/agents">I&apos;m building an agent</a>
+          <span aria-hidden="true">·</span>
+          <a href="https://github.com/federico2001/OpenGlass">Open source (MIT) on GitHub</a>
         </p>
       </section>
 
