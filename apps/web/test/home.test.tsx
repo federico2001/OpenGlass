@@ -21,6 +21,11 @@ describe("GET / (home)", () => {
     const prompt = html.indexOf("Add a witness to your agent (5 minutes)");
     expect(title).toBeLessThan(diagram);
     expect(diagram).toBeLessThan(prompt);
+    // A small cue under the diagram points down to the prompt, which starts below the first screen.
+    const cue = html.indexOf('href="#setup"');
+    expect(diagram).toBeLessThan(cue);
+    expect(cue).toBeLessThan(prompt);
+    expect(html).toContain('id="setup"');
     expect(html).toContain("Prompt for your Claude Code, Codex (or preferred AI)");
     expect(html).toContain("Copy prompt");
   });

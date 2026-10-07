@@ -29,11 +29,57 @@
   margin: 0 0 24px;
 }
 
-/* The setup prompt reads as its own section, set apart from the diagram above it. */
+/*
+ * The hero fills the first screen (viewport minus the 64px header and the page's top padding),
+ * ending in a small cue, so the setup prompt starts below the fold as its own section.
+ */
+.hero {
+  min-height: calc(100vh - 121px);
+  min-height: calc(100svh - 121px);
+  display: flex;
+  flex-direction: column;
+}
+
+.scrollCue {
+  margin: auto auto 0;
+  padding: 24px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.scrollCue:hover {
+  color: var(--accent-text);
+}
+
+.scrollCue svg {
+  color: var(--accent-text);
+  animation: nudge 2.4s ease-in-out infinite;
+}
+
+@keyframes nudge {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrollCue svg {
+    animation: none;
+  }
+}
+
+/* The setup prompt reads as its own section, set apart from the hero above it. */
 .setup {
-  margin-top: 36px;
   padding-top: 40px;
   border-top: 1px solid var(--rule);
+  scroll-margin-top: 24px;
 }
 
 .heroLinks {
