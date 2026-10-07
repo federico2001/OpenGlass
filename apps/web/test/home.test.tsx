@@ -15,13 +15,13 @@ describe("GET / (home)", () => {
     expect(html).toContain('href="/agents"');
   });
 
-  it("puts a copyable setup prompt for Claude Code or Codex right under the headline", () => {
+  it("shows the witness diagram under the headline, then a copyable setup prompt", () => {
     const title = html.indexOf("Every agent conversation, on the record.");
-    const prompt = html.indexOf("Add a witness to your agent");
-    const diagram = html.indexOf("favors neither");
-    expect(title).toBeLessThan(prompt);
-    expect(prompt).toBeLessThan(diagram);
-    expect(html).toContain("Claude Code or Codex");
+    const diagram = html.indexOf("<figure");
+    const prompt = html.indexOf("Add a witness to your agent (5 minutes)");
+    expect(title).toBeLessThan(diagram);
+    expect(diagram).toBeLessThan(prompt);
+    expect(html).toContain("Prompt for your Claude Code, Codex (or preferred AI)");
     expect(html).toContain("Copy prompt");
   });
 
@@ -115,22 +115,11 @@ describe("GET / (home)", () => {
 });
 
 describe("setup prompt", () => {
-  it("adds openglass-sdk in shadow mode, so the agent's own calls stay the real ones", () => {
-    expect(SETUP_PROMPT).toContain("openglass-sdk");
-    expect(SETUP_PROMPT).toContain("attestedFetch");
-    expect(SETUP_PROMPT).toContain('mode: "shadow"');
-    expect(SETUP_PROMPT).toContain("result.direct");
-  });
-
-  it("doesn't fetch side-effecting calls twice and never lets OpenGlass break the agent", () => {
-    expect(SETUP_PROMPT).toContain("don't fetch twice");
-    expect(SETUP_PROMPT).toContain("sendAttestationEvent");
-    expect(SETUP_PROMPT).toContain("never break the agent");
-  });
-
-  it("keeps the private key out of git and doesn't tell the agent to wrap every call", () => {
-    expect(SETUP_PROMPT).toContain("never in git");
-    expect(SETUP_PROMPT).toContain("leave the rest alone");
+  it("is a short ask that leaves the details to the coding agent", () => {
+    expect(SETUP_PROMPT).toBe(
+      "Add OpenGlass to my agent as a neutral witness, so its interactions with other agents and APIs end up on a " +
+        "signed, hash-chained record that nobody can quietly change.\n\nAsk me anything you need.",
+    );
     expect(SETUP_PROMPT).not.toMatch(/always call OpenGlass/i);
   });
 });

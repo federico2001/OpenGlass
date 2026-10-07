@@ -9,8 +9,8 @@ export default function Home() {
         <p className={styles.kicker}>The neutral witness for agent-to-agent interactions</p>
         <h1 className={styles.title}>Every agent conversation, on the record.</h1>
         <p className={styles.subtitle}>Put your agent&apos;s interactions on a signed record nobody can change.</p>
-        <SetupPrompt />
         <WitnessDiagram />
+        <SetupPrompt />
         <p className={styles.heroLinks}>
           <a href="/dashboard">Open the dashboard</a>
           <span aria-hidden="true">·</span>
