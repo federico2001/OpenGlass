@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import Home from "../app/page";
-import { SETUP_PROMPT } from "../components/SetupPrompt";
+import { PROMPT_SHOWN, SETUP_PROMPT } from "../components/SetupPrompt";
 import { TwinPane } from "../components/TwinPane";
 
 describe("GET / (home)", () => {
@@ -122,6 +122,13 @@ describe("setup prompt", () => {
         "\n\nAsk me anything you need.",
     );
     expect(SETUP_PROMPT).not.toMatch(/always call OpenGlass/i);
+  });
+
+  it("shows the prompt without the link; only the copied text carries it", () => {
+    expect(PROMPT_SHOWN).toBe(SETUP_PROMPT.replace(" Setup guide: https://openglass.glass/skill.md", ""));
+    const home = renderToStaticMarkup(<Home />);
+    expect(home).toContain("Ask me anything you need.");
+    expect(home).not.toContain("Setup guide:");
   });
 });
 
