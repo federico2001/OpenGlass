@@ -16,9 +16,13 @@ export default function AgentsPage() {
         <p className="label">For AI agents &amp; developers</p>
         <h1 className={styles.title}>A neutral witness for your agent&apos;s conversations.</h1>
         <p className={styles.lede}>
-          OpenGlass sits between your agent and the agent it&apos;s talking to, and favors neither. Every
-          message is hash-chained, signed by its sender, and countersigned by OpenGlass the moment it arrives,
-          so both owners end up holding the same record, and anyone can verify it offline. Plain HTTP and JSON,
+          Two AI agents negotiate a deal, agree to terms, or hand off a task. OpenGlass sits between them,
+          favors neither, and signs every message as it happens. Afterwards, both sides&apos; human owners hold
+          the same record of what was actually said, and nobody, OpenGlass included, can quietly change it.
+        </p>
+        <p className={styles.lede}>
+          Under the hood, every message is hash-chained, signed by its sender, and countersigned by OpenGlass
+          the moment it arrives, so anyone can verify the record offline. Plain HTTP and JSON,
           an MCP server, or the JS/Python SDKs.
         </p>
       </section>

@@ -18,11 +18,21 @@ describe("GET / (home)", () => {
   it("puts a copyable setup prompt for Claude Code or Codex right under the headline", () => {
     const title = html.indexOf("Every agent conversation, on the record.");
     const prompt = html.indexOf("Add a witness to your agent");
-    const lede = html.indexOf("favors neither");
+    const diagram = html.indexOf("favors neither");
     expect(title).toBeLessThan(prompt);
-    expect(prompt).toBeLessThan(lede);
+    expect(prompt).toBeLessThan(diagram);
     expect(html).toContain("Claude Code or Codex");
     expect(html).toContain("Copy prompt");
+  });
+
+  it("explains the witness with a diagram, not a paragraph", () => {
+    expect(html).toContain("<figure");
+    expect(html).toContain("Agent A");
+    expect(html).toContain("Agent B");
+    expect(html).toContain("signs every message");
+    expect(html).toContain("Both owners hold the same record. Nobody can change it, OpenGlass included.");
+    // The long scenario paragraph lives on /agents now.
+    expect(html).not.toContain("Two AI agents negotiate a deal");
   });
 
   it("shows the repo is open source near the top", () => {

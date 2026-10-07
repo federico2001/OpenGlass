@@ -1,0 +1,314 @@
+.figure {
+  --mid: 48px;
+  margin: 0 0 28px;
+  max-width: 720px;
+  padding: 24px 20px 18px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+/* ---- Top row: agent — OpenGlass — agent ---- */
+
+.talk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(24px, 1fr) auto minmax(24px, 1fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.agent,
+.witness {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.agent {
+  padding: 12px 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.witness {
+  padding: 10px 14px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--ink);
+}
+
+.witness svg {
+  margin-bottom: 4px;
+}
+
+.icon,
+.iconSmall,
+.lock {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon {
+  width: 30px;
+  height: 30px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.iconSmall {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.lock {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  color: var(--accent-text);
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.note {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
+/* The wire between an agent and OpenGlass, with a message travelling along it. */
+.wire {
+  position: relative;
+  height: 32px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.wire::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1.5px dashed var(--rule-strong);
+}
+
+.chip {
+  position: relative;
+  font-family: var(--font-data);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--accent-text);
+  background: var(--bg-subtle);
+  padding: 0 4px;
+  transform: translateY(-4px);
+}
+
+.pulse {
+  position: absolute;
+  top: calc(50% - 4px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.toRight {
+  animation: toRight 2.8s ease-in-out infinite;
+}
+
+.toLeft {
+  animation: toLeft 2.8s ease-in-out 1.4s infinite;
+  opacity: 0;
+}
+
+@keyframes toRight {
+  0% { left: 0; opacity: 0; }
+  15% { opacity: 1; }
+  45% { left: calc(100% - 8px); opacity: 1; }
+  55%, 100% { left: calc(100% - 8px); opacity: 0; }
+}
+
+@keyframes toLeft {
+  0% { left: calc(100% - 8px); opacity: 0; }
+  15% { opacity: 1; }
+  45% { left: 0; opacity: 1; }
+  55%, 100% { left: 0; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    display: none;
+  }
+}
+
+/* ---- OpenGlass hands the record to both owners ---- */
+
+.branch {
+  position: relative;
+  height: 40px;
+}
+
+.branch::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  height: 50%;
+  border-left: 1.5px solid var(--accent);
+}
+
+.branch::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  bottom: 0;
+  left: calc((100% - var(--mid)) / 4);
+  right: calc((100% - var(--mid)) / 4);
+  border: 1.5px solid var(--accent);
+  border-bottom: 0;
+}
+
+.records {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--mid) minmax(0, 1fr);
+  align-items: center;
+}
+
+.same {
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--accent-text);
+}
+
+.record {
+  background: var(--bg-panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.recordHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-data);
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.lines li {
+  display: flex;
+  gap: 8px;
+}
+
+.from {
+  color: var(--ink-soft);
+}
+
+.what {
+  flex: 1;
+  color: var(--ink);
+}
+
+.check {
+  color: var(--accent-text);
+}
+
+.seal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-data);
+  font-size: 11.5px;
+  color: var(--accent-text);
+}
+
+.caption {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+@media (max-width: 560px) {
+  .figure {
+    --mid: 26px;
+    padding: 18px 12px 14px;
+  }
+
+  .talk {
+    grid-template-columns: minmax(0, 1fr) 12px auto 12px minmax(0, 1fr);
+  }
+
+  .agent {
+    padding: 10px 4px;
+  }
+
+  .witness {
+    padding: 8px 8px 10px;
+  }
+
+  .name {
+    font-size: 13.5px;
+    white-space: nowrap;
+  }
+
+  .agent .name {
+    font-size: 12.5px;
+  }
+
+  .icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .note {
+    font-size: 10.5px;
+  }
+
+  .chip {
+    display: none;
+  }
+
+  .record {
+    padding: 8px 9px;
+  }
+
+  .lines li {
+    gap: 6px;
+  }
+
+  .same {
+    font-size: 18px;
+  }
+}

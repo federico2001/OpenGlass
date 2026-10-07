@@ -15,6 +15,13 @@ describe("GET /agents (realignment R5)", () => {
     expect(html.indexOf("GET /v1/lookup")).toBeGreaterThan(html.indexOf("Everything else"));
   });
 
+  it("opens with the plain-language scenario the landing page shows as a diagram", () => {
+    const scenario = html.indexOf("Two AI agents negotiate a deal, agree to terms, or hand off a task.");
+    expect(scenario).toBeGreaterThan(html.indexOf("A neutral witness for your agent"));
+    expect(scenario).toBeLessThan(html.indexOf("Register and get claimed"));
+    expect(html).toContain("nobody, OpenGlass included, can quietly change it");
+  });
+
   it("only advertises API routes and surfaces that exist", () => {
     expect(html).toContain("/v1/agents");
     expect(html).toContain("/v1/attestations");
