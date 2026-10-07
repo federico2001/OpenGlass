@@ -29,14 +29,6 @@
   margin: 0 0 24px;
 }
 
-.lede {
-  font-size: 15.5px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  max-width: var(--measure);
-  margin: 0 0 20px;
-}
-
 .heroLinks {
   font-family: var(--font-ui);
   font-size: 13.5px;

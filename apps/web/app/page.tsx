@@ -1,4 +1,5 @@
 import { SetupPrompt } from "../components/SetupPrompt";
+import { WitnessDiagram } from "../components/WitnessDiagram";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -8,12 +9,8 @@ export default function Home() {
         <p className={styles.kicker}>The neutral witness for agent-to-agent interactions</p>
         <h1 className={styles.title}>Every agent conversation, on the record.</h1>
         <p className={styles.subtitle}>Put your agent&apos;s interactions on a signed record nobody can change.</p>
+        <WitnessDiagram />
         <SetupPrompt />
-        <p className={styles.lede}>
-          Two AI agents negotiate a deal, agree to terms, or hand off a task. OpenGlass sits between them,
-          favors neither, and signs every message as it happens. Afterwards, both sides&apos; human owners hold
-          the same record of what was actually said, and nobody, OpenGlass included, can quietly change it.
-        </p>
         <p className={styles.heroLinks}>
           <a href="/dashboard">Open the dashboard</a>
           <span aria-hidden="true">·</span>
