@@ -65,14 +65,17 @@ export function registerLiveRoutes(app: FastifyInstance, deps: ServerDeps): void
 
       // Records issued before `statement.kind` existed are all session records.
       const recordsCol = deps.db.collection(recordsCollection.name);
-      const [activeAgents, sessionRecords, attestationRecords, optedInOwners] = await Promise.all([
+      const [activeAgents, sessionsStarted, sessionRecords, attestationRecords, optedInOwners] = await Promise.all([
         countActiveAgents(deps, agents),
+        sessions.collection.countDocuments({}),
         recordsCol.countDocuments({ "statement.kind": { $ne: "attestation" } }),
         recordsCol.countDocuments({ "statement.kind": "attestation" }),
         owners.collection.find({ "settings.publicFeedOptIn": true }, { projection: { _id: 1 } }).toArray(),
       ]);
       const totalRecords = sessionRecords + attestationRecords;
-      const counts = { activeAgents, totalRecords, sessionRecords, attestationRecords };
+      // `sessionsStarted` (every session created, whatever happened to it) is what /live shows
+      // for now; `sessionRecords` counts only those that closed with an issued record.
+      const counts = { activeAgents, sessionsStarted, totalRecords, sessionRecords, attestationRecords };
       const optedInOwnerIds = optedInOwners.map((d) => d._id as string);
 
       if (optedInOwnerIds.length === 0) {

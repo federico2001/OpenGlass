@@ -237,7 +237,7 @@ export interface LiveFeedItem {
 export interface LiveFeedResponse {
   /** Registered agents, plus every domain OpenGlass has independently fetch-witnessed
    * (docs/SPEC.md §12.6) that isn't already one of those agents' own domain. */
-  stats: { activeAgents: number; totalRecords: number; sessionRecords: number; attestationRecords: number; publicSessions: number };
+  stats: { activeAgents: number; sessionsStarted: number; totalRecords: number; sessionRecords: number; attestationRecords: number; publicSessions: number };
   items: LiveFeedItem[];
   nextCursor: string | null;
 }

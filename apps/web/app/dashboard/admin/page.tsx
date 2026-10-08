@@ -14,7 +14,7 @@ interface Named {
 
 interface AdminStats {
   generatedAt: string;
-  live: { activeAgents: number; registeredAgents: number; witnessedDomains: number; sessionRecords: number; attestationRecords: number };
+  live: { activeAgents: number; registeredAgents: number; witnessedDomains: number; sessionsStarted: number; sessionRecords: number; attestationRecords: number };
   agents: {
     id: string;
     name: string;
@@ -100,7 +100,7 @@ export default function AdminPage() {
           <section className={ui.section} aria-label="Live numbers">
             <div className={styles.stats}>
               <Stat label="Active agents" value={stats.live.activeAgents} note={`${stats.live.registeredAgents} claimed agents + ${stats.live.witnessedDomains} witnessed domains`} />
-              <Stat label="Sessions" value={stats.live.sessionRecords} note={`records issued; ${stats.sessions.length} sessions started`} />
+              <Stat label="Sessions" value={stats.live.sessionsStarted} note={`sessions started; ${stats.live.sessionRecords} with a record issued`} />
               <Stat label="Attestations" value={stats.live.attestationRecords} note={`records issued; ${Object.entries(stats.attestations.byStatus).map(([k, v]) => `${v} ${k}`).join(", ") || "none started"}`} />
             </div>
           </section>
@@ -163,7 +163,7 @@ export default function AdminPage() {
             <div className={ui.sectionHead}>
               <h2 className={ui.h2}>Sessions ({stats.sessions.length})</h2>
             </div>
-            <p className={ui.hint}>Live counts only sessions that closed with an issued record.</p>
+            <p className={ui.hint}>Live counts every session started, whatever its status.</p>
             <Table head={["Started", "Between", "Status", "Messages", "Record"]}>
               {stats.sessions.map((s) => (
                 <tr key={s.id}>

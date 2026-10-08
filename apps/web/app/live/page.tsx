@@ -61,7 +61,7 @@ export default function LivePage() {
         </div>
         <div className={styles.statCard}>
           <p className={styles.statLabel}>Sessions</p>
-          <p className={styles.statValue}>{stats?.sessionRecords ?? "—"}</p>
+          <p className={styles.statValue}>{stats?.sessionsStarted ?? "—"}</p>
         </div>
         <div className={styles.statCard}>
           <p className={styles.statLabel}>Attestations</p>
