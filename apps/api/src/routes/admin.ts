@@ -28,8 +28,9 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
 
   app.get("/v1/admin/stats", { preHandler: adminAuth }, async () => {
     const records = col(recordsCollection.name);
-    const [parts, sessionRecords, attestationRecords] = await Promise.all([
+    const [parts, sessionsStarted, sessionRecords, attestationRecords] = await Promise.all([
       activeAgentParts(deps, agents),
+      col(sessionsCollection.name).countDocuments({}),
       records.countDocuments({ "statement.kind": { $ne: "attestation" } }),
       records.countDocuments({ "statement.kind": "attestation" }),
     ]);
@@ -104,6 +105,7 @@ export function registerAdminRoutes(app: FastifyInstance, deps: ServerDeps): voi
         activeAgents: parts.registeredAgents + parts.externalWitnessedDomains.length,
         registeredAgents: parts.registeredAgents,
         witnessedDomains: parts.externalWitnessedDomains.length,
+        sessionsStarted,
         sessionRecords,
         attestationRecords,
       },

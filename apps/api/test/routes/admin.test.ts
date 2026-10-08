@@ -83,6 +83,7 @@ describe("GET /v1/admin/stats", () => {
       activeAgents: live.activeAgents,
       registeredAgents: 1,
       witnessedDomains: 1,
+      sessionsStarted: live.sessionsStarted,
       sessionRecords: live.sessionRecords,
       attestationRecords: live.attestationRecords,
     });

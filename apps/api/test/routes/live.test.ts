@@ -48,7 +48,7 @@ describe("GET /v1/live", () => {
   it("is empty when no owner has opted in", async () => {
     const res = await app().inject({ method: "GET", url: "/v1/live" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ stats: { activeAgents: 0, totalRecords: 0, sessionRecords: 0, attestationRecords: 0, publicSessions: 0 }, items: [], nextCursor: null });
+    expect(res.json()).toEqual({ stats: { activeAgents: 0, sessionsStarted: 0, totalRecords: 0, sessionRecords: 0, attestationRecords: 0, publicSessions: 0 }, items: [], nextCursor: null });
   });
 
   it("counts session and attestation records separately, treating legacy kind-less records as sessions", async () => {
@@ -63,6 +63,21 @@ describe("GET /v1/live", () => {
     );
     const res = await app().inject({ method: "GET", url: "/v1/live" });
     expect(res.json().stats).toMatchObject({ totalRecords: 3, sessionRecords: 2, attestationRecords: 1 });
+  });
+
+  it("counts every session started, with or without an issued record", async () => {
+    // Only the count matters here, so skip building fully signed sessions.
+    await t.db.collection("sessions").insertMany(
+      [
+        { _id: newId("ses"), status: "pending" },
+        { _id: newId("ses"), status: "active" },
+        { _id: newId("ses"), status: "closed" },
+      ] as never[],
+      { bypassDocumentValidation: true },
+    );
+    await t.db.collection("records").insertOne({ _id: newId("rec"), statement: { kind: "session" } } as never, { bypassDocumentValidation: true });
+    const res = await app().inject({ method: "GET", url: "/v1/live" });
+    expect(res.json().stats).toMatchObject({ sessionsStarted: 3, sessionRecords: 1 });
   });
 
   it("surfaces messages only once both owners have opted in", async () => {
