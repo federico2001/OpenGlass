@@ -71,6 +71,11 @@ pnpm exec cdk deploy                # prints the outputs used below
    ```
    After the first deploy, sign in to OpenGlass as the owner and open the claim link shown at `https://checkup.<domain>/admin`. Checkups aren't recorded until the agent is claimed. Then register it with the A2A Registry: `node apps/checkup/scripts/register-a2a-registry.mjs https://checkup.<domain>`.
 
+8. **Admin pages (optional)**: `ADMIN_EMAILS` (comma-separated owner emails) unlocks `/dashboard/admin` (what the Live numbers count) and `/integrations/admin`. Nobody is an admin until it's set; the next deploy picks it up:
+   ```sh
+   aws ssm put-parameter --name /openglass/prod/ADMIN_EMAILS --type String --value 'you@example.com'
+   ```
+
 ## Checks that don't need AWS
 
 ```sh

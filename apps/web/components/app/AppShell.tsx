@@ -35,14 +35,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/dashboard";
   const router = useRouter();
   const [owner, setOwner] = useState<Owner | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<{ owner: Owner }>("/v1/owner/me")
+    apiFetch<{ owner: Owner; isAdmin?: boolean }>("/v1/owner/me")
       .then((r) => {
-        if (!cancelled) setOwner(r.owner);
+        if (cancelled) return;
+        setOwner(r.owner);
+        setIsAdmin(r.isAdmin === true);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -97,6 +100,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <a role="menuitem" href="/dashboard/settings">
                     Settings
                   </a>
+                  {isAdmin && (
+                    <a role="menuitem" href="/dashboard/admin">
+                      Admin
+                    </a>
+                  )}
                   <a role="menuitem" href="/">
                     Public site
                   </a>

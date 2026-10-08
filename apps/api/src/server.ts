@@ -8,6 +8,7 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastif
 import fp from "fastify-plugin";
 import type { Db, MongoClient } from "mongodb";
 import { registerRawBodyCapture } from "./plugins/rawBody.js";
+import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAgentsRoutes } from "./routes/agents.js";
 import { registerAttestationsRoutes } from "./routes/attestations.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -149,6 +150,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerProfilesRoutes(app, deps);
   registerLiveRoutes(app, deps);
   registerIntegrationsRoutes(app, deps);
+  registerAdminRoutes(app, deps);
 
   const wsHub = createWsHub(deps.db);
   app.register(registerWs, { deps, hub: wsHub });
