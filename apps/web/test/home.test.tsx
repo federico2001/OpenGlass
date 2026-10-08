@@ -26,7 +26,7 @@ describe("GET / (home)", () => {
     expect(diagram).toBeLessThan(cue);
     expect(cue).toBeLessThan(prompt);
     expect(html).toContain('id="setup"');
-    expect(html).toContain("Prompt for your Claude Code, Codex (or preferred AI)");
+    expect(html).toContain("Prompt for your Claude Code, Codex or preferred AI (It&#x27;ll know what to do)");
     expect(html).toContain("Copy prompt");
   });
 

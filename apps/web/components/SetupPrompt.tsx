@@ -34,7 +34,7 @@ export function SetupPrompt() {
     <section className={styles.card} aria-label="Add OpenGlass to your agent">
       <div className={styles.header}>
         <p className={styles.heading}>Add a witness to your agent (5 minutes)</p>
-        <p className={styles.sub}>Prompt for your Claude Code, Codex (or preferred AI)</p>
+        <p className={styles.sub}>Prompt for your Claude Code, Codex or preferred AI (It&apos;ll know what to do)</p>
       </div>
       <div className={styles.promptBox}>
         <button type="button" className={styles.copy} onClick={copy} aria-label="Copy prompt">
