@@ -113,7 +113,12 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
   const viewerAccessLog = viewerAccessLogRepository(deps.db);
   const ownerAuth = verifyOwnerSession(deps.db, { webOrigin: deps.webOrigin });
 
-  app.get("/v1/owner/me", { preHandler: ownerAuth }, async (req) => ({ owner: ownerView(req.owner!) }));
+  // `isAdmin` only decides whether the web app shows its Admin link; /v1/admin/* checks
+  // ADMIN_EMAILS again on every request.
+  app.get("/v1/owner/me", { preHandler: ownerAuth }, async (req) => ({
+    owner: ownerView(req.owner!),
+    isAdmin: deps.adminEmails.includes(req.owner!.email),
+  }));
 
   app.patch("/v1/owner/me", { preHandler: ownerAuth }, async (req, reply) => {
     const body = parseOrError(PatchOwnerBody, req.body, reply);

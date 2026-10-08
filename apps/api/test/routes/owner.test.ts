@@ -51,6 +51,7 @@ describe("GET/PATCH /v1/owner/me", () => {
     const getRes = await app().inject({ method: "GET", url: "/v1/owner/me", headers: { cookie } });
     expect(getRes.statusCode).toBe(200);
     expect(getRes.json().owner.email).toBe("profile@example.com");
+    expect(getRes.json().isAdmin).toBe(false);
 
     const patchRes = await app().inject({
       method: "PATCH",
@@ -61,6 +62,13 @@ describe("GET/PATCH /v1/owner/me", () => {
     expect(patchRes.statusCode).toBe(200);
     expect(patchRes.json().owner.displayName).toBe("Alice");
     expect(patchRes.json().owner.settings).toEqual({ requireInviteApproval: true, emailOnRecord: true });
+  });
+
+  it("reports isAdmin for an owner listed in ADMIN_EMAILS", async () => {
+    const owner = await insertTestOwner(t.db, "admin@example.com");
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const res = await app().inject({ method: "GET", url: "/v1/owner/me", headers: { cookie } });
+    expect(res.json().isAdmin).toBe(true);
   });
 });
 

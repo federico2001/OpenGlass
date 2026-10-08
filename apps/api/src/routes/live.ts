@@ -22,16 +22,26 @@ const DIRECTORY_LIMIT_MAX = 100;
  * `domainVerification.domain` so the same real-world agent is never counted twice under
  * two different identities.
  */
-async function countActiveAgents(deps: ServerDeps, agents: ReturnType<typeof agentsRepository>): Promise<number> {
+export async function countActiveAgents(deps: ServerDeps, agents: ReturnType<typeof agentsRepository>): Promise<number> {
+  const { registeredAgents, externalWitnessedDomains } = await activeAgentParts(deps, agents);
+  return registeredAgents + externalWitnessedDomains.length;
+}
+
+/** The two halves of the "Active agents" stat, also shown itemized on the admin page
+ * (routes/admin.ts) so the number on /live can be traced back to what it counts. */
+export async function activeAgentParts(
+  deps: ServerDeps,
+  agents: ReturnType<typeof agentsRepository>,
+): Promise<{ registeredAgents: number; externalWitnessedDomains: string[]; knownDomains: Set<string> }> {
   const [registeredAgents, witnessedDomains, homepageDomains, verifiedDomains] = await Promise.all([
     agents.collection.countDocuments({ status: { $ne: "unclaimed" } }),
     deps.db.collection(fetchWitnessesCollection.name).distinct("domain"),
     agents.collection.distinct("homepageDomain", { homepageDomain: { $type: "string" } }),
     agents.collection.distinct("domainVerification.domain", { "domainVerification.status": "verified" }),
   ]);
-  const knownDomains = new Set([...homepageDomains, ...verifiedDomains]);
-  const externalWitnessedAgents = (witnessedDomains as string[]).filter((d) => !knownDomains.has(d)).length;
-  return registeredAgents + externalWitnessedAgents;
+  const knownDomains = new Set<string>([...homepageDomains, ...verifiedDomains]);
+  const externalWitnessedDomains = (witnessedDomains as string[]).filter((d) => !knownDomains.has(d));
+  return { registeredAgents, externalWitnessedDomains, knownDomains };
 }
 
 /**
