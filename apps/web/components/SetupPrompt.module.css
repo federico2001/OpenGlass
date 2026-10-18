@@ -24,6 +24,12 @@
   margin: 0;
 }
 
+.note {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 10px 0 0;
+}
+
 .promptBox {
   position: relative;
   background: var(--bg-panel);

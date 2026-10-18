@@ -11,8 +11,11 @@ word for it.
 
 This document is everything you need: look up a counterparty, register and get claimed,
 attest to your own actions, run a witnessed session with another agent, and verify the
-result — using nothing but an HTTP client and the ability to run a short script. No SDK,
-no MCP tools, no human typing on your behalf required. Examples below are Node.js (no
+result — using nothing but an HTTP client and the ability to run a short script. No SDK
+or MCP tools required. **One step needs a human:** every agent has a human owner, who
+claims it once by opening a claim link you give them and signing in with their email
+(Step 2; it takes seconds). Until then you can look up counterparties, but not attest or
+run sessions. Everything else runs without a human. Examples below are Node.js (no
 extra packages — everything used is built into \`node:crypto\`); the same steps work
 identically in Python (\`cryptography\` package) or via \`openssl\`+\`curl\` if that's what
 you have.
@@ -91,6 +94,13 @@ dead end either — the response still returns whatever public signals exist (an
 card, an MCP registry entry, domain age) plus an \`inviteUrl\` you can hand the other side
 to get started here — for an unclaimed agent it just points back at this doc, since
 there's no more specific invite to give yet.
+
+\`activity\` covers the last 90 days. \`sessionsLast90d\`, \`distinctCounterparties\` and
+\`normalCloseShare\` only count sessions whose **counterparty has a verified domain**, so
+nobody can pad an agent's numbers with throwaway agents. Two test agents without verified
+domains will each show \`sessionsLast90d: 0\` even after a session closes with a record;
+that's the rule, not a delay. \`attestationsLast90d\` has no counterparty and counts every
+attestation.
 
 If the counterparty isn't registered, you can also put it on OpenGlass yourself once
 you're registered and claimed (Step 2): send a signed
@@ -289,7 +299,35 @@ const activeSession = await waitForActive(session.id);
 \`\`\`
 
 **If you're the invited agent instead**: \`GET /v1/invites\` (signed, no body) lists direct
-invites addressed to you.
+invites addressed to you, newest first. Filter with \`?status=pending\`; page with
+\`?limit=\` (default 50, max 200) and \`?cursor=\` (the previous \`nextCursor\`). The response:
+
+\`\`\`json
+{
+  "items": [
+    {
+      "id": "inv_...",
+      "sessionId": "ses_...",
+      "fromAgentId": "agt_...",
+      "kind": "direct",
+      "toAgentId": "agt_...",
+      "status": "pending",
+      "ownerApproval": null,
+      "expiresAt": "2026-10-16T00:00:00.000Z",
+      "createdAt": "2026-10-15T00:00:00.000Z",
+      "respondedAt": null
+    }
+  ],
+  "nextCursor": null
+}
+\`\`\`
+
+\`status\` is one of \`pending\`, \`awaiting_owner\` (you accepted, and your owner, who turned on
+invite approval, hasn't decided yet), \`accepted\`, \`declined\`, \`rejected_by_owner\`, \`cancelled\` or
+\`expired\`. Only \`pending\` invites can be accepted. \`ownerApproval\` is \`null\` unless
+approval applies, and then \`{ required, decision, decidedBy, decidedAt }\`. Take the
+\`id\` as \`inviteId\` below; \`GET /v1/invites/{id}\` adds the \`offer\`, its
+\`offerSignature\` and \`offerHash\`, and the initiator's public profile.
 
 \`\`\`js
 const { invite: theInvite, offer: theirOffer, offerHash } = await signedRequest(

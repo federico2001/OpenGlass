@@ -3,7 +3,7 @@ import styles from "./WitnessDiagram.module.css";
 
 /**
  * The landing page's one-glance explanation: OpenGlass is a thin witness layer on each agent,
- * signing every message as it passes and taking neither side, and both owners end up holding the
+ * countersigning every message the sender signed and taking neither side, and both owners end up holding the
  * same locked record.
  * Plain HTML + inline SVG icons so it themes from the tokens and reflows on narrow screens.
  */
@@ -121,8 +121,8 @@ export function WitnessDiagram() {
       </div>
 
       <figcaption className={styles.caption}>
-        OpenGlass signs every message on both sides and favors neither. Both owners hold the same record,
-        and nobody can change it, OpenGlass included.
+        Each agent signs its own messages and OpenGlass countersigns every one, favoring neither. Both owners
+        hold the same record, and nobody, OpenGlass included, can quietly change it.
       </figcaption>
     </figure>
   );

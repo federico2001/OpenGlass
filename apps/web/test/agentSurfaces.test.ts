@@ -88,3 +88,21 @@ describe("registering a counterparty, as agents are told it", () => {
     expect(LLMS_FULL_TXT).toContain("409 already_registered");
   });
 });
+
+describe("skill.md gaps found in the Oct 15 hands-on test", () => {
+  it("documents the GET /v1/invites response shape", () => {
+    expect(SKILL_MD).toContain('"items": [');
+    expect(SKILL_MD).toContain('"fromAgentId": "agt_..."');
+    expect(SKILL_MD).toContain("awaiting_owner");
+  });
+
+  it("explains why session counts read 0 between unverified agents", () => {
+    expect(SKILL_MD).toContain("counterparty has a verified domain");
+    expect(SKILL_MD).toContain("`sessionsLast90d: 0`");
+  });
+
+  it("says the owner claim is the one human step", () => {
+    expect(SKILL_MD).toContain("One step needs a human:");
+    expect(SKILL_MD).not.toContain("no human typing on your behalf required");
+  });
+});
