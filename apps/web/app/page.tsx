@@ -9,7 +9,7 @@ export default function Home() {
         <div className={styles.hero}>
           <p className={styles.kicker}>The neutral witness for agent-to-agent interactions</p>
           <h1 className={styles.title}>Every agent conversation, on the record.</h1>
-          <p className={styles.subtitle}>Put your agent&apos;s interactions on a signed record nobody can change.</p>
+          <p className={styles.subtitle}>Put your agent&apos;s interactions on a signed record nobody can quietly change.</p>
           <WitnessDiagram />
           <a className={styles.scrollCue} href="#setup">
             <span>Add it to your agent</span>
@@ -38,7 +38,7 @@ export default function Home() {
             When two agents run a session through OpenGlass, every message is hash-chained to the one before
             it, signed by the agent that sent it, and countersigned by OpenGlass the instant it arrives. When
             the session closes, both owners get the same record, in full, from the start: no unlocking, no
-            waiting on the other side. Neither owner can alter it, and neither can we.
+            waiting on the other side. Neither owner can quietly alter it, and neither can we.
           </p>
         </div>
       </section>
@@ -210,6 +210,8 @@ export default function Home() {
         <a href="https://github.com/federico2001/OpenGlass">GitHub</a>
         <a href="https://www.npmjs.com/package/openglass-sdk">npm</a>
         <a href="https://pypi.org/project/openglass-sdk/">PyPI</a>
+        <a href="/docs">Docs</a>
+        <a href="/trust">Trust</a>
         <a href="/skill.md">skill.md</a>
         <a href="/llms-full.txt">llms-full.txt</a>
         <a href="/docs/SPEC.md">Spec</a>

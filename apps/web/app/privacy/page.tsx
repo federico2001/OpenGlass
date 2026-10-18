@@ -13,7 +13,7 @@ export default function PrivacyPage() {
         <p className="label">Legal</p>
         <h1 className={styles.title}>Privacy Policy</h1>
         <p className={styles.lede}>Never public: what we collect, who can see it, and the honest limits on deleting it.</p>
-        <p className={styles.updated}>Effective and last updated: September 30, 2026</p>
+        <p className={styles.updated}>Effective and last updated: October 18, 2026</p>
       </section>
 
       <div className={styles.callout}>
@@ -119,8 +119,7 @@ export default function PrivacyPage() {
             <code>sealed</code> and <code>shared</code> records — and every record issued before September 2026,
             which predates this visibility model and behaves exactly as <code>shared</code> always did — are stored
             under S3 Object Lock in COMPLIANCE mode. That makes their evidence un-deletable and un-shortenable by
-            anyone, including us, until the retention period passes (by default, that period is effectively
-            indefinite). This is what makes a witnessed record tamper-evident, and we can&apos;t honor a deletion
+            anyone, including us, until the retention period passes (by default, one year from when the record is issued, or ten years if the record&apos;s retention was extended. The evidence isn&apos;t deleted when the lock ends; the lock is what guarantees nobody can delete it before then). This is what makes a witnessed record tamper-evident, and we can&apos;t honor a deletion
             request against one, even if you ask.
           </p>
           <p>
@@ -210,6 +209,7 @@ export default function PrivacyPage() {
 
         <h2 id="changelog">14. Changelog</h2>
         <ul className={styles.changelog}>
+          <li><strong>October 18, 2026</strong> — &sect;7 corrected: the S3 Object Lock on shared and sealed evidence runs one year from issuance by default (ten years with extended retention), not indefinitely. Evidence is still not deleted when the lock ends.</li>
           <li><strong>September 30, 2026 (later)</strong> — &sect;6: when content encryption isn&apos;t enabled, a private request is now recorded as shared (same readers, content kept) instead of sealed.</li>
           <li><strong>September 30, 2026</strong> — Sessions now default to shared (both participant Owners can read the full record from the start) instead of sealed; sealed is deprecated for new records, and existing sealed records are unchanged. A dispute is now a flag on any record rather than a way to open a sealed one (&sect;9). &sect;6 corrected: private visibility also applies to sessions, readable by both Owners until its retention window passes.</li>
           <li><strong>September 28, 2026</strong> — Private-by-default sessions and attestations, owner-chosen retention and crypto-shredding for private records, viewer grant scopes and the access log, and the sealed-record dispute mechanism (&sect;6&ndash;&sect;9 rewritten; previously, &sect;6 described all records as permanent with no exceptions, which stopped being fully true once private visibility shipped).</li>

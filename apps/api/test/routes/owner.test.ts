@@ -129,6 +129,70 @@ describe("agent suspend/unsuspend", () => {
   });
 });
 
+describe("DELETE /v1/owner/agents/:agentId", () => {
+  const ownerHeaders = (cookie: string) => ({ cookie, origin: "https://localhost", "content-type": "application/json" });
+
+  it("deletes an owned agent with no history, along with its viewer grants", async () => {
+    const owner = await insertTestOwner(t.db, "deleter@example.com");
+    const agent = await registerAndClaimFor(`del_${newId("agt").slice(-6)}`, owner._id);
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const grant = await app().inject({
+      method: "POST",
+      url: `/v1/owner/agents/${agent.agentId}/viewers`,
+      headers: ownerHeaders(cookie),
+      payload: { email: "viewer@example.com" },
+    });
+    expect(grant.statusCode).toBe(201);
+    expect(await t.db.collection("viewer_grants").countDocuments({ agentId: agent.agentId })).toBe(1);
+
+    const res = await app().inject({ method: "DELETE", url: `/v1/owner/agents/${agent.agentId}`, headers: ownerHeaders(cookie) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ deleted: true, agentId: agent.agentId });
+    expect(await t.db.collection("agents").findOne({ _id: agent.agentId as never })).toBeNull();
+    expect(await t.db.collection("viewer_grants").countDocuments({ agentId: agent.agentId })).toBe(0);
+  });
+
+  it("refuses an agent that has taken part in a session", async () => {
+    const owner = await insertTestOwner(t.db, "del_hist@example.com");
+    const other = await insertTestOwner(t.db, "del_hist_other@example.com");
+    const agentA = await registerAndClaimFor(`delh_a_${newId("agt").slice(-6)}`, owner._id);
+    const agentB = await registerAndClaimFor(`delh_b_${newId("agt").slice(-6)}`, other._id);
+    const { offer, offerSignature } = buildOffer({ sessionId: newId("ses"), initiator: agentB, counterpartyAgentId: agentA.agentId });
+    const body = { offer, offerSignature };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/sessions", body, identity: agentB });
+    expect((await app().inject({ method: "POST", url: "/v1/sessions", headers, payload: body })).statusCode).toBe(201);
+
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const res = await app().inject({ method: "DELETE", url: `/v1/owner/agents/${agentA.agentId}`, headers: ownerHeaders(cookie) });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("agent_has_history");
+    expect(await t.db.collection("agents").findOne({ _id: agentA.agentId as never })).not.toBeNull();
+  });
+
+  it("refuses an agent that has an attestation", async () => {
+    const owner = await insertTestOwner(t.db, "del_att@example.com");
+    const agent = await registerAndClaimFor(`dela_${newId("agt").slice(-6)}`, owner._id);
+    const { open, openSignature } = buildAttestationOpen({ attestationId: newId("att"), attestor: agent });
+    const body = { open, openSignature };
+    const headers = signedRequestHeaders({ method: "POST", path: "/v1/attestations", body, identity: agent });
+    expect((await app().inject({ method: "POST", url: "/v1/attestations", headers, payload: body })).statusCode).toBe(201);
+
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const res = await app().inject({ method: "DELETE", url: `/v1/owner/agents/${agent.agentId}`, headers: ownerHeaders(cookie) });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it("returns 404 for another owner's agent", async () => {
+    const owner = await insertTestOwner(t.db, "del_notmine@example.com");
+    const actual = await insertTestOwner(t.db, "del_actual@example.com");
+    const agent = await registerAndClaimFor(`deln_${newId("agt").slice(-6)}`, actual._id);
+    const cookie = await createOwnerSessionCookie(t.db, owner._id);
+    const res = await app().inject({ method: "DELETE", url: `/v1/owner/agents/${agent.agentId}`, headers: ownerHeaders(cookie) });
+    expect(res.statusCode).toBe(404);
+    expect(await t.db.collection("agents").findOne({ _id: agent.agentId as never })).not.toBeNull();
+  });
+});
+
 describe("owner invite approval (D5)", () => {
   it("approving an awaiting invite activates the session", async () => {
     const initOwner = await insertTestOwner(t.db, "appr_init_owner@example.com");

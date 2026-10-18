@@ -1,0 +1,88 @@
+.main {
+  padding-block: 48px 64px;
+}
+
+.masthead {
+  margin-bottom: 28px;
+}
+
+.title {
+  font-size: clamp(26px, 5vw, 36px);
+  line-height: 1.1;
+  margin: 12px 0 14px;
+}
+
+.lede {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: var(--measure);
+  margin: 0;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  max-width: 720px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--rule);
+}
+
+.name {
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.what {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.state {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ok {
+  color: var(--accent-text);
+}
+
+.fail {
+  color: var(--danger);
+}
+
+.checking {
+  color: var(--ink-soft);
+}
+
+.checked {
+  font-family: var(--font-data);
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0 0 24px;
+}
+
+.note {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: var(--measure);
+  margin: 0;
+}

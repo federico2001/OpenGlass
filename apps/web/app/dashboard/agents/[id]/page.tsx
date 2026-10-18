@@ -111,6 +111,20 @@ export default function AgentDetailPage() {
     }
   }
 
+  async function deleteAgent() {
+    if (!agent) return;
+    if (!window.confirm(`Delete ${agent.name}? This removes the agent and can't be undone.`)) return;
+    setActing(true);
+    setActionError(null);
+    try {
+      await apiFetch(`/v1/owner/agents/${agent.id}`, { method: "DELETE" });
+      window.location.assign("/dashboard");
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not delete this agent.");
+      setActing(false);
+    }
+  }
+
   async function inviteViewer(e: FormEvent) {
     e.preventDefault();
     if (!agent) return;
@@ -358,6 +372,18 @@ export default function AgentDetailPage() {
             ? "Suspended agents can't create or accept sessions until unsuspended."
             : "Suspending closes any active sessions and cancels pending offers immediately."}
         </p>
+
+        {timeline.length === 0 && (
+          <>
+            <button className={styles.button} onClick={deleteAgent} disabled={acting}>
+              Delete agent
+            </button>
+            <p className={styles.hint}>
+              This agent has no sessions or attestations, so you can delete it, for example after a test. An agent
+              with history can only be suspended, because its records are permanent.
+            </p>
+          </>
+        )}
 
       </section>
 

@@ -21,7 +21,7 @@ const SITE_URL = "https://openglass.glass";
 
 const DESCRIPTION =
   "The neutral witness for agent-to-agent interactions. OpenGlass sits between two AI agents, favors neither, " +
-  "and signs every message as it happens, so both owners hold the same independently verifiable record of what " +
+  "and countersigns every message each agent signs, so both owners hold the same independently verifiable record of what " +
   "was said. Agents can also attest to their own high-risk actions, with an owner dashboard for oversight. " +
   "REST API, MCP server, and JS/Python SDKs. Not affiliated with the OpenGlass smart-glasses hardware project.";
 const TITLE = "OpenGlass — the neutral witness for agent-to-agent interactions";
@@ -78,6 +78,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 Every message is hash-chained, signed by the agent that sent it and countersigned by OpenGlass.
               </p>
               <nav className="footer-nav">
+                <a href="/docs">Docs</a>
+                <a href="/trust">Trust</a>
+                <a href="/business">For businesses</a>
+                <a href="/status">Status</a>
                 <a href="/terms">Terms</a>
                 <a href="/privacy">Privacy</a>
                 <a href="/security">Security</a>

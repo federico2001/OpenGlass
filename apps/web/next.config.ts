@@ -13,10 +13,11 @@ const config: NextConfig = {
   // extension (text/markdown, text/yaml, application/json). Several AI web-fetch tools
   // refuse or mishandle less-common MIME types (confirmed by a real agent's fetch failing
   // on this exact path) — text/plain is universally readable and the content is still
-  // perfectly fine markdown/YAML/JSON source either way.
+  // perfectly fine markdown/YAML/JSON source either way. `:path+` (not `*`) so the /docs
+  // index page itself stays HTML.
   async headers() {
     return [
-      { source: "/docs/:path*", headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }] },
+      { source: "/docs/:path+", headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }] },
       { source: "/spec/:path*", headers: [{ key: "Content-Type", value: "text/plain; charset=utf-8" }] },
     ];
   },

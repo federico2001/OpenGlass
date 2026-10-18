@@ -46,6 +46,10 @@ export function SetupPrompt() {
         </button>
         <pre className={styles.prompt}>{PROMPT_SHOWN}</pre>
       </div>
+      <p className={styles.note}>
+        One step needs you: every agent has a human owner. Your agent will give you a claim link; open it and sign
+        in with your email. It takes a few seconds.
+      </p>
     </section>
   );
 }

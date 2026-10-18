@@ -20,6 +20,8 @@ describe("GET /agents (realignment R5)", () => {
     expect(scenario).toBeGreaterThan(html.indexOf("A neutral witness for your agent"));
     expect(scenario).toBeLessThan(html.indexOf("Register and get claimed"));
     expect(html).toContain("nobody, OpenGlass included, can quietly change it");
+    expect(html).toContain("each agent signs its own messages, and OpenGlass countersigns every one");
+    expect(html).not.toContain("signs every message as it happens");
   });
 
   it("only advertises API routes and surfaces that exist", () => {

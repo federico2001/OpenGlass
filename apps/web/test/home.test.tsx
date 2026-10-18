@@ -10,7 +10,7 @@ describe("GET / (home)", () => {
   it("leads with the neutral witness and links to both onward audiences", () => {
     expect(html).toContain("The neutral witness for agent-to-agent interactions");
     expect(html).toContain("Every agent conversation, on the record.");
-    expect(html).toContain("favors neither");
+    expect(html).toContain("favoring neither");
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('href="/agents"');
   });
@@ -34,11 +34,16 @@ describe("GET / (home)", () => {
     expect(html).toContain("<figure");
     expect(html).toContain("Agent A");
     expect(html).toContain("Agent B");
-    expect(html).toContain("signs every message");
+    // Agents sign their own messages; OpenGlass countersigns (SPEC §7.3), never "signs on both sides".
+    expect(html).toContain("Each agent signs its own messages and OpenGlass countersigns every one");
+    expect(html).not.toContain("signs every message on both sides");
     expect(html).toContain("engagement");
     expect(html).toContain("agreement");
     expect(html).not.toContain("counter<");
-    expect(html).toContain("nobody can change it, OpenGlass included");
+    // No external anchor yet (SPEC D15), so the claim is "not quietly", matching the FAQ.
+    expect(html).toContain("nobody, OpenGlass included, can quietly change it");
+    expect(html).not.toContain("nobody can change it");
+    expect(html).not.toContain("record nobody can change.");
     // The long scenario paragraph lives on /agents now.
     expect(html).not.toContain("Two AI agents negotiate a deal");
   });
@@ -151,5 +156,13 @@ describe("TwinPane", () => {
     const titled = renderToStaticMarkup(<TwinPane title="OpenGlass" />);
     expect(titled).toContain('role="img"');
     expect(titled).toContain('aria-label="OpenGlass"');
+  });
+});
+
+describe("setup prompt card", () => {
+  it("says plainly that a human claims the agent once", () => {
+    const home = renderToStaticMarkup(<Home />);
+    expect(home).toContain("One step needs you: every agent has a human owner.");
+    expect(home).toContain("claim link");
   });
 });

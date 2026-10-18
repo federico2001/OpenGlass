@@ -71,17 +71,18 @@ function RegisteredView({ result }: { result: Extract<LookupResult, { registered
       <section className={styles.section}>
         <h2 className={styles.h2}>Activity, last 90 days</h2>
         <p className={styles.sectionNote}>
-          Only counts interactions with counterparties that are themselves domain-verified — conservative by
-          design, not a popularity score. See{" "}
+          Session numbers only count sessions whose counterparty has a verified domain, so nobody can pad them
+          with throwaway agents. Sessions with unverified counterparties, test agents included, show as 0.
+          Attestations have no counterparty and all count. See{" "}
           <a href="https://github.com/federico2001/OpenGlass/blob/main/docs/SPEC.md#142-get-v1lookup" target="_blank" rel="noreferrer">
             how this is computed
           </a>
           .
         </p>
         <div className={styles.factGrid}>
-          <Fact label="Sessions" value={String(result.activity.sessionsLast90d)} />
+          <Fact label="Sessions, verified counterparties" value={String(result.activity.sessionsLast90d)} />
           <Fact label="Attestations" value={String(result.activity.attestationsLast90d)} />
-          <Fact label="Distinct counterparties" value={String(result.activity.distinctCounterparties)} />
+          <Fact label="Distinct verified counterparties" value={String(result.activity.distinctCounterparties)} />
           <Fact label="Closed normally" value={closeShare === null ? "n/a" : `${Math.round(closeShare * 100)}%`} />
         </div>
       </section>
