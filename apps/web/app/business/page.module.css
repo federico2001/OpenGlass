@@ -1,0 +1,56 @@
+.problem {
+  background: var(--bg-subtle);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin: 0 0 40px;
+  max-width: var(--measure);
+}
+
+.problem p {
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.problem :global(.label) {
+  margin-bottom: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 8px;
+}
+
+.primary,
+.secondary {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+}
+
+.primary {
+  background: var(--ink);
+  color: var(--bg);
+  border: 1px solid var(--ink);
+}
+
+.primary:hover {
+  background: var(--accent-text);
+  border-color: var(--accent-text);
+}
+
+.secondary {
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+}
+
+.secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
