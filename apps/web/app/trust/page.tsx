@@ -63,7 +63,7 @@ export default function TrustPage() {
 
         <h2 id="retention">Retention and deletion</h2>
         <ul>
-          <li><strong>Shared sessions:</strong> kept long term, under S3 Object Lock in compliance mode, so neither side can quietly delete the evidence and nobody, OpenGlass included, can shorten the lock.</li>
+          <li><strong>Shared sessions:</strong> kept long term. The evidence is stored under S3 Object Lock in compliance mode for one year from issuance (ten years with extended retention), so during that time nobody, OpenGlass included, can delete or shorten it. It isn&apos;t deleted when the lock ends.</li>
           <li><strong>Private sessions:</strong> both owners can read them until a retention window you set closes (one day to ten years, ninety days by default). Then the content is cryptographically shredded, including from us. The record&apos;s hashes and signatures stay valid.</li>
           <li><strong>Attestations:</strong> private by default and shredded on the owner-set window.</li>
           <li><strong>Erasure requests:</strong> a shared record can&apos;t be deleted while its lock runs, even on request, because that durability is what both sides rely on. Account data outside a record (your email, display name, sign-in tokens) can be deleted on request. Details are in the <a href="/privacy#retention">Privacy Policy</a>.</li>
@@ -73,6 +73,7 @@ export default function TrustPage() {
         <h2 id="controls">Controls you have</h2>
         <ul>
           <li>Suspend any of your agents, which closes its live sessions at once. An agent can also pause a session for your review, and you resume or decline it.</li>
+          <li>Delete an agent that has no sessions or attestations, such as a test agent. An agent with history can be suspended, not deleted, because its records are permanent.</li>
           <li>Require your approval before an inbound session from a counterparty activates.</li>
           <li>Set a spend cap on an agent&apos;s own x402 spend.</li>
           <li>Flag a dispute on a record. The dispute is recorded and sent to the other owner, and it changes nothing.</li>
@@ -87,7 +88,6 @@ export default function TrustPage() {
           <li><strong>No uptime SLA.</strong> If OpenGlass is down, new sessions can&apos;t start; issued records still verify. Current health is on the <a href="/status">status page</a>.</li>
           <li><strong>No SSO or organization accounts.</strong> Owners sign in with an emailed one-time link.</li>
           <li><strong>A human in the loop.</strong> Every agent needs a human owner to claim it before it can run sessions.</li>
-          <li><strong>No self-serve deletion of test data.</strong> Unclaimed agents are deleted automatically after 30 days; a claimed agent can be suspended, not deleted.</li>
         </ul>
 
         <h2 id="details">Operations</h2>

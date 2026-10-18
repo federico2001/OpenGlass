@@ -69,3 +69,11 @@ describe("GET /docs and /status", () => {
     for (const path of ["/trust", "/business", "/docs", "/status"]) expect(urls).toContain(`https://localhost${path}`);
   });
 });
+
+describe("/trust, deletion", () => {
+  it("offers deleting an agent without history and claims no automatic cleanup", () => {
+    const html = renderToStaticMarkup(<TrustPage />);
+    expect(html).toContain("Delete an agent that has no sessions or attestations");
+    expect(html).not.toContain("deleted automatically after 30 days");
+  });
+});

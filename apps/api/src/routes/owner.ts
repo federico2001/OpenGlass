@@ -6,7 +6,10 @@ import {
   listRecordsForOwner,
   newId,
   ownersRepository,
+  profileListings,
+  records,
   sessionsRepository,
+  viewerGrants as viewerGrantsCollection,
   viewerAccessLogRepository,
   viewerGrantsRepository,
   type ViewerGrantDoc,
@@ -197,6 +200,28 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: ServerDeps): voi
     if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
     const updated = await agents.update(agent._id, { status: "active", suspendedAt: null });
     return { agent: agentFullView(updated!) };
+  });
+
+  // Lets an owner clean up a test agent. Only an agent that never took part in a session or
+  // attestation can go: anything it did is referenced by append-only messages and records
+  // (CLAUDE.md), so an agent with history is suspended instead, never deleted.
+  app.delete<{ Params: { agentId: string } }>("/v1/owner/agents/:agentId", { preHandler: ownerAuth }, async (req, reply) => {
+    const agent = await agents.findById(req.params.agentId);
+    if (!agent || agent.ownerId !== req.owner!._id) return sendError(reply, 404, "not_found", "Agent not found");
+
+    const [sessionCount, attestationCount, recordCount] = await Promise.all([
+      sessions.collection.countDocuments({ $or: [{ "initiator.agentId": agent._id }, { "counterparty.agentId": agent._id }] }, { limit: 1 }),
+      attestations.collection.countDocuments({ "attestor.agentId": agent._id }, { limit: 1 }),
+      deps.db.collection(records.name).countDocuments({ participantAgentIds: agent._id }, { limit: 1 }),
+    ]);
+    if (sessionCount + attestationCount + recordCount > 0) {
+      return sendError(reply, 409, "agent_has_history", "This agent has sessions or attestations on record, so it can be suspended but not deleted");
+    }
+
+    await deps.db.collection(viewerGrantsCollection.name).deleteMany({ agentId: agent._id });
+    await deps.db.collection(profileListings.name).deleteMany({ agentId: agent._id });
+    await agents.deleteById(agent._id);
+    return { deleted: true, agentId: agent._id };
   });
 
   app.patch<{ Params: { agentId: string } }>("/v1/owner/agents/:agentId/spend-limit", { preHandler: ownerAuth }, async (req, reply) => {

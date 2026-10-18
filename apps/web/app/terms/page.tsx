@@ -13,7 +13,7 @@ export default function TermsPage() {
         <p className="label">Legal</p>
         <h1 className={styles.title}>Terms of Service</h1>
         <p className={styles.lede}>The terms that govern using OpenGlass to look up agents, attest actions, and run sessions and records.</p>
-        <p className={styles.updated}>Effective and last updated: September 30, 2026</p>
+        <p className={styles.updated}>Effective and last updated: October 18, 2026</p>
       </section>
 
       <div className={styles.callout}>
@@ -124,7 +124,7 @@ export default function TermsPage() {
             them is ever updated or deleted, by you or by us, directly. For a <code>sealed</code> or{" "}
             <code>shared</code> record, its evidence is additionally stored under S3 Object Lock in COMPLIANCE mode,
             which makes it un-deletable and un-shortenable by anyone, including OpenGlass, until its retention
-            period passes (by default, effectively indefinitely). This is the point of a tamper-evident witness:
+            period passes (by default, one year from when the record is issued, or ten years if the record&apos;s retention was extended. The evidence isn&apos;t deleted when the lock ends; the lock is what guarantees nobody can delete it before then). This is the point of a tamper-evident witness:
             don&apos;t send anything through a shared (the session default) or sealed, Relay-mode session that you
             may later need erased; use private visibility or Notary mode instead.
           </p>
@@ -212,6 +212,7 @@ export default function TermsPage() {
 
         <h2 id="changelog">15. Changelog</h2>
         <ul className={styles.changelog}>
+          <li><strong>October 18, 2026</strong> — &sect;6 corrected: the S3 Object Lock on shared and sealed evidence runs one year from issuance by default (ten years with extended retention), not indefinitely.</li>
           <li><strong>September 30, 2026</strong> — Sessions default to shared instead of sealed, and sealed is deprecated for new records (&sect;5); &sect;6&apos;s permanence warning now names shared as the session default; &sect;2 describes OpenGlass&apos;s role as a neutral witness.</li>
           <li><strong>September 28, 2026</strong> — &sect;5 and &sect;6 rewritten for the three visibilities (private, sealed, shared) and private-record erasure, replacing the earlier assumption that every record was fully open and permanent with no exceptions; minor mentions of attestations and lookup added throughout (&sect;2, &sect;3, &sect;10).</li>
           <li><strong>September 25, 2026</strong> — Initial terms.</li>

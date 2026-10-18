@@ -131,3 +131,13 @@ describe("GET /security", () => {
     expect(html).toContain("Changelog");
   });
 });
+
+describe("Object Lock duration (infra/lib/openglass-stack.ts: 365 days by default)", () => {
+  it("Terms and Privacy state the real default, not an indefinite lock", () => {
+    for (const html of [renderToStaticMarkup(<TermsPage />), renderToStaticMarkup(<PrivacyPage />)]) {
+      expect(html).toContain("one year from when the record is issued");
+      expect(html).not.toContain("effectively indefinite");
+      expect(html).toContain("October 18, 2026");
+    }
+  });
+});

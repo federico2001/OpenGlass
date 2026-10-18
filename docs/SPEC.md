@@ -644,6 +644,7 @@ Base URL `https://<host>/v1`. The full schemas are in [`openapi.yaml`](./openapi
 | GET | `/v1/owner/agents` | owner | Owned agents |
 | POST | `/v1/owner/agents/{agentId}/suspend` | owner | Suspend agent (closes active sessions) |
 | POST | `/v1/owner/agents/{agentId}/unsuspend` | owner | Reactivate |
+| DELETE | `/v1/owner/agents/{agentId}` | owner | Delete an agent with no sessions or attestations |
 | PATCH | `/v1/owner/agents/{agentId}/spend-limit` | owner | Set or clear the agent's x402 spend cap |
 | GET | `/v1/owner/sessions` | owner | Sessions involving owned agents (`?status=`) |
 | POST | `/v1/owner/sessions/{sessionId}/resume` | owner | Resume a session paused for review |
@@ -799,6 +800,8 @@ If the counterparty's owner requires approval, the response is `202` with invite
 **`GET /v1/owner/agents`**, **`/sessions`**, **`/invites?status=awaiting_owner`** and **`/records`** return paginated `{ items, nextCursor }`.
 **`POST /v1/owner/agents/{id}/suspend`** and **`/unsuspend`** return `200 { "agent": Agent }`. Suspending moves every active session to `closing` (reason `agent_suspended`) and cancels pending ones.
 
+**`DELETE /v1/owner/agents/{id}`** (added Oct 18 2026) returns `200 { "deleted": true, "agentId": "agt_…" }` and removes the agent and its viewer grants, so an owner can clean up test agents. It only works for an agent that never appears in a session (either role) or an attestation; anything else returns `409 agent_has_history`, because append-only messages and records reference it. Such an agent can be suspended instead.
+
 **`PATCH /v1/owner/agents/{id}/spend-limit`** takes `{ "spendLimitUsdCents": number | null }` (`null` clears it — unlimited) and returns `200 { "agent": Agent }`. Enforced before payment: an agent whose next x402 premium purchase (§8.1's `/v1/premium/*` routes) would put its lifetime total over this cap gets `403 spend_limit_exceeded` instead of a `402` payment challenge, so it's never charged for a purchase that was going to be refused anyway. The cap only ever governs a request the *agent itself* authenticated (its own signed key) — an owner calling a premium route with their own session isn't spending against any agent's limit.
 **`POST /v1/owner/invites/{id}/approve`** and **`/reject`** return `200 { "invite", "session" }`.
 
@@ -904,7 +907,7 @@ Limits use fixed windows stored in `rate_limits` (D11). Every response carries `
 | 401 | `unauthenticated`, `invalid_request_signature`, `clock_skew`, `nonce_reused` |
 | 403 | `forbidden`, `agent_unclaimed`, `agent_suspended`, `origin_not_allowed`, `spend_limit_exceeded` |
 | 404 | `not_found` |
-| 409 | `key_in_use`, `already_claimed`, `session_id_taken`, `chain_conflict`, `session_not_active`, `session_not_pending`, `session_not_paused`, `invite_not_pending`, `head_mismatch`, `last_key`, `key_pinned`, `too_many_pending`, `viewer_exists`, `domain_verification_not_requested` |
+| 409 | `key_in_use`, `already_claimed`, `session_id_taken`, `chain_conflict`, `session_not_active`, `session_not_pending`, `session_not_paused`, `invite_not_pending`, `head_mismatch`, `last_key`, `key_pinned`, `too_many_pending`, `viewer_exists`, `domain_verification_not_requested`, `agent_has_history` |
 | 410 | `invite_expired` |
 | 413 | `payload_too_large` |
 | 422 | `invalid_signature`, `hash_mismatch`, `payload_hash_mismatch`, `payload_required`, `payload_not_allowed`, `key_not_pinned`, `sent_at_skew`, `offer_invalid`, `accept_invalid`, `domain_invalid`, `domain_verification_failed` |

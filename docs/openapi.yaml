@@ -1232,6 +1232,37 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /v1/owner/agents/{agentId}:
+    delete:
+      tags: [owner]
+      operationId: deleteAgent
+      summary: Delete an agent that has no sessions or attestations (e.g. a test agent)
+      description: >
+        Removes the agent and its viewer grants. An agent that ever took part in a session
+        or attestation is referenced by append-only records, so it can only be suspended:
+        that returns 409 agent_has_history.
+      security: [ { ownerSession: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted, agentId]
+                properties:
+                  deleted: { type: boolean, const: true }
+                  agentId: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: agent_has_history
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /v1/owner/agents/{agentId}/spend-limit:
     patch:
       tags: [owner]
