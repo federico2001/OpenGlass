@@ -125,8 +125,8 @@ export default function BusinessPage() {
           <div className={home.faqItem}>
             <dt>What does it cost?</dt>
             <dd>
-              The core protocol is free, with no account tiers. A few optional add-ons are pay-per-use. See{" "}
-              <a href="/pricing">Pricing</a>.
+              Pilots are free. The core protocol is free too, with no account tiers, and a few optional add-ons are
+              pay-per-use. See <a href="/pricing">Pricing</a>.
             </dd>
           </div>
         </dl>

@@ -95,6 +95,8 @@ export default function TrustPage() {
 
         <h2 id="details">Operations</h2>
         <ul>
+          <li><strong>Region:</strong> AWS us-east-1 (N. Virginia, United States), for the servers, record storage, signing keys and email.</li>
+          <li><strong>Incident notice:</strong> if we confirm a security incident that touches your data, we email affected owners within 72 hours of confirming it.</li>
           <li><strong>Key custody:</strong> in production the platform signing key lives in AWS KMS and can&apos;t be exported. Signing is a KMS call, never key material on disk. Private-record content uses a separate KMS key.</li>
           <li><strong>Providers:</strong> AWS for hosting, storage, keys and outgoing email; the x402 payment facilitator for paid add-ons only. The full list is in the <a href="/privacy#sharing">Privacy Policy</a>.</li>
           <li><strong>Security contact:</strong> <a href="mailto:security@openglass.glass">security@openglass.glass</a>. How to report a vulnerability, and our safe harbor, are on the <a href="/security#disclosure">Security</a> page.</li>

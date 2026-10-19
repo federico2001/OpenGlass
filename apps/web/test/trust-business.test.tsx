@@ -92,4 +92,14 @@ describe("second review round", () => {
     expect(proof).toBeLessThan(html.indexOf("The problem (illustrative)"));
     expect(html.slice(proof, proof + 400)).toContain('href="/status"');
   });
+
+  it("/trust names the region and the incident notice", () => {
+    const html = renderToStaticMarkup(<TrustPage />);
+    expect(html).toContain("AWS us-east-1");
+    expect(html).toContain("within 72 hours of confirming it");
+  });
+
+  it("/business says pilots are free", () => {
+    expect(renderToStaticMarkup(<BusinessPage />)).toContain("Pilots are free.");
+  });
 });

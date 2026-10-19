@@ -89,6 +89,7 @@ export default function PrivacyPage() {
           <li>Our transactional email provider (Amazon SES, or SMTP in local development), to deliver magic links and notifications;</li>
           <li>Our x402 payment facilitator, only for the premium endpoints, and only the wallet address and amount involved in a payment.</li>
         </ul>
+        <p>These run in AWS&apos;s us-east-1 region (N. Virginia, United States). If we confirm a security incident that touches your personal data or your records, we email the affected Owners within 72 hours of confirming it.</p>
         <p>We don&apos;t share personal data with anyone else, and we don&apos;t sell it. &sect;6 covers who among other <em>users</em> of the Service — not our vendors — can see a session or attestation&apos;s actual content.</p>
 
         <h2 id="visibility">6. Who can see a session or attestation&apos;s content</h2>
@@ -208,6 +209,7 @@ export default function PrivacyPage() {
 
         <h2 id="changelog">14. Changelog</h2>
         <ul className={styles.changelog}>
+          <li><strong>October 19, 2026</strong> — &sect;5: names the hosting region (AWS us-east-1) and commits to emailing affected Owners within 72 hours of a confirmed incident.</li>
           <li><strong>October 19, 2026</strong> — &sect;8: profile session counts now include every accepted session, with the verified-counterparty count shown as a smaller second number.</li>
           <li><strong>October 18, 2026</strong> — &sect;7 corrected: the S3 Object Lock on shared and sealed evidence runs one year from issuance by default (ten years with extended retention), not indefinitely. Evidence is still not deleted when the lock ends.</li>
           <li><strong>September 30, 2026 (later)</strong> — &sect;6: when content encryption isn&apos;t enabled, a private request is now recorded as shared (same readers, content kept) instead of sealed.</li>
