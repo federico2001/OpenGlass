@@ -249,8 +249,8 @@ export interface LookupActivity {
   attestationsLast90d: number;
   distinctCounterparties: number;
   normalCloseShare: number | null;
-  allSessionsLast90d: number;
-  allDistinctCounterparties: number;
+  verifiedSessionsLast90d: number;
+  verifiedDistinctCounterparties: number;
 }
 
 export interface LookupFlags {

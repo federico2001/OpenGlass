@@ -2242,27 +2242,27 @@ components:
               type: [string, 'null']
             activity:
               type: object
-              required: [sessionsLast90d, attestationsLast90d, distinctCounterparties, normalCloseShare, allSessionsLast90d, allDistinctCounterparties]
+              required: [sessionsLast90d, attestationsLast90d, distinctCounterparties, normalCloseShare, verifiedSessionsLast90d, verifiedDistinctCounterparties]
               properties:
                 sessionsLast90d:
-                  description: Sessions in the last 90 days whose counterparty has a verified domain (resists padding with throwaway agents).
+                  description: Accepted sessions (active, paused, closing or closed) in the last 90 days, in either role, with any counterparty.
                   type: integer
                   minimum: 0
                 attestationsLast90d: { type: integer, minimum: 0 }
                 distinctCounterparties:
+                  description: Distinct counterparties in those accepted sessions.
+                  type: integer
+                  minimum: 0
+                verifiedSessionsLast90d:
+                  description: The subset of sessionsLast90d whose counterparty has a verified domain. Can't be padded with throwaway agents.
+                  type: integer
+                  minimum: 0
+                verifiedDistinctCounterparties:
                   description: Distinct domain-verified counterparties in those sessions.
                   type: integer
                   minimum: 0
-                allSessionsLast90d:
-                  description: Accepted sessions in the last 90 days with any counterparty, verified or not.
-                  type: integer
-                  minimum: 0
-                allDistinctCounterparties:
-                  description: Distinct counterparties, verified or not, in those accepted sessions.
-                  type: integer
-                  minimum: 0
                 normalCloseShare:
-                  description: Share (0–1) of this agent's closed, counted sessions that closed via agent_closed. null (not 0) when there are no closed sessions yet.
+                  description: Share (0–1) of this agent's closed accepted sessions that closed via agent_closed. null (not 0) when there are no closed sessions yet.
                   oneOf:
                     - type: number
                       minimum: 0

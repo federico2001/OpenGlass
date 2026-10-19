@@ -17,9 +17,9 @@ const NEW_AGENT_WINDOW_MS = 7 * 24 * 3_600_000;
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_RESPONSE_BYTES = 65_536; // an agent card or MCP registry entry, not a file transfer
 const CACHE_TTL_MS = 60_000;
-/** A session counts toward the all-counterparty totals once it was accepted; an offer that
- * was never accepted (pending, declined, cancelled, expired) costs nothing to create. */
-const ACTIVATED_STATUSES = new Set(["active", "paused", "closing", "closed"]);
+/** A session counts once it was accepted; an offer that was never accepted (pending,
+ * declined, cancelled, expired) costs nothing to create, so it isn't activity. */
+const ACCEPTED_STATUSES = new Set(["active", "paused", "closing", "closed"]);
 
 export interface LookupQuery {
   agentId?: string;
@@ -29,23 +29,20 @@ export interface LookupQuery {
 }
 
 export interface ActivityFacts {
-  /** Sessions AND attestations in the last 90 days. Session counts (and everything
-   * derived from them below) only include sessions whose counterparty is itself a
-   * domain-verified agent — see the module doc comment on why. */
+  /** Accepted sessions (active, paused, closing or closed) in the last 90 days, in either
+   * role, with any counterparty; and how many distinct counterparties they had. */
   sessionsLast90d: number;
   attestationsLast90d: number;
   distinctCounterparties: number;
-  /** Of this agent's *closed* sessions (within the counted set above), the share that
+  /** Of this agent's *closed* sessions in the window, the share that
    * closed via `agent_closed` (a normal, agent-initiated close) rather than a timeout,
    * suspension, message-limit cutoff, or a declined pause. `null` when there are no
    * closed sessions yet to compute a share from — not the same as 0%. */
   normalCloseShare: number | null;
-  /** Sessions that activated (accepted, whatever happened after) in the last 90 days with
-   * any counterparty, verified or not, and how many distinct counterparties they had. Shown
-   * next to the verified counts so a new or test agent's real activity is visible; only
-   * the verified counts above resist padding with throwaway agents. */
-  allSessionsLast90d: number;
-  allDistinctCounterparties: number;
+  /** The subset of the sessions above whose counterparty has a verified domain, and how
+   * many distinct verified counterparties — see the module doc comment on why. */
+  verifiedSessionsLast90d: number;
+  verifiedDistinctCounterparties: number;
 }
 
 export interface LookupFlags {
@@ -135,21 +132,14 @@ export type LookupResult = RegisteredLookupResult | UnregisteredLookupResult;
  * rating, review, or anything from session *content*, which stays private regardless of
  * visibility (§13).
  *
- * **Anti-gaming (documented per R2's own instruction):** every count in `ActivityFacts`
- * that involves a counterparty (sessions, distinct counterparties, normal-close share)
- * only counts interactions where that counterparty agent's OWN `domainVerification.status
- * === "verified"` — real, DNS/HTTP-proven control of a domain. This is deliberately the
- * *strong* verification tier (not merely "claimed by some owner"): every session
- * counterparty is already claimed by construction (SPEC D3 — an unclaimed agent can't
- * accept a session), so "claimed" alone would filter out nothing and provide zero
- * protection against an attacker padding a target's numbers with disposable sham
- * counterparty agents. Domain verification, by contrast, requires controlling a real DNS
- * zone or web server per counterparty — genuinely costly to fake at scale. The honest
- * cost of this choice: today, while domain verification adoption is still low, most
- * agents' real activity numbers will read as 0 or near it. That's an intentional
- * trade-off — a metric that's low but ungameable beats one that's inflated and
- * meaningless. Attestation counts have no counterparty at all, so this filter doesn't
- * apply to them.
+ * **Two session counts (revised Oct 19 2026):** the headline `sessionsLast90d`,
+ * `distinctCounterparties` and `normalCloseShare` count every accepted session, whoever the
+ * counterparty was, so a new or test agent's real activity shows. The `verified*` counts are
+ * the subset whose counterparty agent's OWN `domainVerification.status === "verified"`:
+ * real, DNS/HTTP-proven control of a domain, which is costly to fake at scale, so those
+ * resist padding with disposable sham counterparties. Every counterparty is already claimed
+ * by construction (SPEC D3), so "claimed" alone would filter out nothing. Attestation counts
+ * have no counterparty, so neither split applies to them.
  */
 export function createLookupService(db: Db) {
   const cache = new Map<string, { expiresAt: number; result: LookupResult }>();
@@ -262,13 +252,9 @@ async function computeActivityFacts(db: Db, agentId: string, now: Date): Promise
     ])
     .toArray();
 
-  const activated = sessionAgg.filter((s) => ACTIVATED_STATUSES.has(s.status));
-  const allSessionsLast90d = activated.length;
-  const allDistinctCounterparties = new Set(activated.map((s) => s.counterpartyAgentId)).size;
-
-  const verifiedAgg = sessionAgg.filter((s) => s.counterpartyVerified);
-  const distinctCounterparties = new Set(verifiedAgg.map((s) => s.counterpartyAgentId)).size;
-  const closed = verifiedAgg.filter((s) => s.status === "closed");
+  const accepted = sessionAgg.filter((s) => ACCEPTED_STATUSES.has(s.status));
+  const verified = accepted.filter((s) => s.counterpartyVerified);
+  const closed = accepted.filter((s) => s.status === "closed");
   const closedNormally = closed.filter((s) => s.closeReason === "agent_closed");
 
   const attestationsLast90d = await attestationsRepository(db).collection.countDocuments({
@@ -277,12 +263,12 @@ async function computeActivityFacts(db: Db, agentId: string, now: Date): Promise
   });
 
   return {
-    sessionsLast90d: verifiedAgg.length,
+    sessionsLast90d: accepted.length,
     attestationsLast90d,
-    distinctCounterparties,
+    distinctCounterparties: new Set(accepted.map((s) => s.counterpartyAgentId)).size,
     normalCloseShare: closed.length > 0 ? closedNormally.length / closed.length : null,
-    allSessionsLast90d,
-    allDistinctCounterparties,
+    verifiedSessionsLast90d: verified.length,
+    verifiedDistinctCounterparties: new Set(verified.map((s) => s.counterpartyAgentId)).size,
   };
 }
 

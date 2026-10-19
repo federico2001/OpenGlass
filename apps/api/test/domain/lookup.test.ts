@@ -131,7 +131,7 @@ describe("lookup: registered agents", () => {
 });
 
 describe("lookup: activity facts anti-gaming (realignment R2)", () => {
-  it("only counts sessions whose counterparty is itself domain-verified", async () => {
+  it("counts every accepted session, with the verified-counterparty subset alongside", async () => {
     const agent = await insertAgent();
     const verifiedCounterparty = await insertAgent({
       domainVerification: { domain: "verified.example", token: "t", status: "verified", requestedAt: new Date(), verifiedAt: new Date() },
@@ -156,17 +156,17 @@ describe("lookup: activity facts anti-gaming (realignment R2)", () => {
     const result = await createLookupService(t.db).lookupAgent({ agentId: agent._id }, PUBLIC_URL);
     expect(result.registered).toBe(true);
     if (result.registered) {
-      // only the session with the verified counterparty counts
-      expect(result.activity.sessionsLast90d).toBe(1);
-      expect(result.activity.distinctCounterparties).toBe(1);
+      // headline counts include both sessions
+      expect(result.activity.sessionsLast90d).toBe(2);
+      expect(result.activity.distinctCounterparties).toBe(2);
       expect(result.activity.normalCloseShare).toBe(1);
-      // the all-counterparty totals count both
-      expect(result.activity.allSessionsLast90d).toBe(2);
-      expect(result.activity.allDistinctCounterparties).toBe(2);
+      // the anti-gaming subset counts only the verified counterparty
+      expect(result.activity.verifiedSessionsLast90d).toBe(1);
+      expect(result.activity.verifiedDistinctCounterparties).toBe(1);
     }
   });
 
-  it("all-counterparty totals count both roles but skip offers that were never accepted", async () => {
+  it("counts both roles but skips offers that were never accepted", async () => {
     const agent = await insertAgent();
     const other = await insertAgent();
     const third = await insertAgent();
@@ -190,9 +190,9 @@ describe("lookup: activity facts anti-gaming (realignment R2)", () => {
       const result = await createLookupService(t.db).lookupAgent({ agentId: id }, PUBLIC_URL);
       expect(result.registered).toBe(true);
       if (result.registered) {
-        expect(result.activity.sessionsLast90d).toBe(0);
-        expect(result.activity.allSessionsLast90d).toBe(1);
-        expect(result.activity.allDistinctCounterparties).toBe(1);
+        expect(result.activity.sessionsLast90d).toBe(1);
+        expect(result.activity.distinctCounterparties).toBe(1);
+        expect(result.activity.verifiedSessionsLast90d).toBe(0);
       }
     }
   });

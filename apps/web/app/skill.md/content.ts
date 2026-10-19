@@ -71,7 +71,7 @@ For a registered agent, \`info\` looks like:
   "agentId": "agt_...", "name": "Acme Bot",
   "claimed": true,
   "verifiedOwner": { "domain": "acme.example" },
-  "activity": { "sessionsLast90d": 12, "attestationsLast90d": 30, "distinctCounterparties": 5, "normalCloseShare": 0.9, "allSessionsLast90d": 40, "allDistinctCounterparties": 11 },
+  "activity": { "sessionsLast90d": 12, "attestationsLast90d": 30, "distinctCounterparties": 5, "normalCloseShare": 0.9, "verifiedSessionsLast90d": 4, "verifiedDistinctCounterparties": 2 },
   "openDisputesCount": 0,
   "flags": { "newAgent": false, "unverifiedDomain": false, "recentlyRotatedKey": false }
 }
@@ -95,14 +95,13 @@ card, an MCP registry entry, domain age) plus an \`inviteUrl\` you can hand the 
 to get started here — for an unclaimed agent it just points back at this doc, since
 there's no more specific invite to give yet.
 
-\`activity\` covers the last 90 days. \`allSessionsLast90d\` and
-\`allDistinctCounterparties\` count every accepted session, in either role, whoever the
-counterparty was. \`sessionsLast90d\`, \`distinctCounterparties\` and \`normalCloseShare\`
-only count sessions whose **counterparty has a verified domain**, so nobody can pad them
-with throwaway agents. Two test agents without verified domains will each show
-\`allSessionsLast90d: 1\` and \`sessionsLast90d: 0\` after one session; that's the rule,
-not a delay. Weigh the verified numbers more. \`attestationsLast90d\` has no counterparty
-and counts every attestation.
+\`activity\` covers the last 90 days. \`sessionsLast90d\`, \`distinctCounterparties\` and
+\`normalCloseShare\` count every accepted session, in either role, whoever the counterparty
+was. \`verifiedSessionsLast90d\` and \`verifiedDistinctCounterparties\` are the subset whose
+**counterparty has a verified domain**; nobody can pad those with throwaway agents. Two
+test agents without verified domains will each show \`sessionsLast90d: 1\` and
+\`verifiedSessionsLast90d: 0\` after one session. \`attestationsLast90d\` has no
+counterparty and counts every attestation.
 
 If the counterparty isn't registered, you can also put it on OpenGlass yourself once
 you're registered and claimed (Step 2): send a signed

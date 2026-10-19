@@ -49,8 +49,8 @@ describe("GET /v1/lookup", () => {
       attestationsLast90d: 0,
       distinctCounterparties: 0,
       normalCloseShare: null,
-      allSessionsLast90d: 0,
-      allDistinctCounterparties: 0,
+      verifiedSessionsLast90d: 0,
+      verifiedDistinctCounterparties: 0,
     });
     expect(body.openDisputesCount).toBe(0);
     expect(body.flags.newAgent).toBe(true);
