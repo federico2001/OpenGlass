@@ -99,6 +99,7 @@ describe("skill.md gaps found in the Oct 15 hands-on test", () => {
   it("explains why session counts read 0 between unverified agents", () => {
     expect(SKILL_MD).toContain("counterparty has a verified domain");
     expect(SKILL_MD).toContain("`sessionsLast90d: 0`");
+    expect(SKILL_MD).toContain("`allSessionsLast90d: 1`");
   });
 
   it("says the owner claim is the one human step", () => {

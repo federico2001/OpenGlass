@@ -17,6 +17,9 @@ const NEW_AGENT_WINDOW_MS = 7 * 24 * 3_600_000;
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_RESPONSE_BYTES = 65_536; // an agent card or MCP registry entry, not a file transfer
 const CACHE_TTL_MS = 60_000;
+/** A session counts toward the all-counterparty totals once it was accepted; an offer that
+ * was never accepted (pending, declined, cancelled, expired) costs nothing to create. */
+const ACTIVATED_STATUSES = new Set(["active", "paused", "closing", "closed"]);
 
 export interface LookupQuery {
   agentId?: string;
@@ -37,6 +40,12 @@ export interface ActivityFacts {
    * suspension, message-limit cutoff, or a declined pause. `null` when there are no
    * closed sessions yet to compute a share from — not the same as 0%. */
   normalCloseShare: number | null;
+  /** Sessions that activated (accepted, whatever happened after) in the last 90 days with
+   * any counterparty, verified or not, and how many distinct counterparties they had. Shown
+   * next to the verified counts so a new or test agent's real activity is visible; only
+   * the verified counts above resist padding with throwaway agents. */
+  allSessionsLast90d: number;
+  allDistinctCounterparties: number;
 }
 
 export interface LookupFlags {
@@ -226,7 +235,7 @@ async function computeActivityFacts(db: Db, agentId: string, now: Date): Promise
 
   const sessionAgg = await db
     .collection(sessions.name)
-    .aggregate<{ status: string; closeReason: string | null; counterpartyAgentId: string }>([
+    .aggregate<{ status: string; closeReason: string | null; counterpartyAgentId: string; counterpartyVerified: boolean }>([
       {
         $match: {
           $or: [{ "initiator.agentId": agentId }, { "counterparty.agentId": agentId }],
@@ -241,20 +250,25 @@ async function computeActivityFacts(db: Db, agentId: string, now: Date): Promise
       { $match: { counterpartyAgentId: { $ne: null } } },
       { $lookup: { from: "agents", localField: "counterpartyAgentId", foreignField: "_id", as: "counterpartyAgent" } },
       { $unwind: "$counterpartyAgent" },
-      { $match: { "counterpartyAgent.domainVerification.status": "verified" } },
       {
         $project: {
           _id: 0,
           status: 1,
           closeReason: { $ifNull: ["$closing.reason", null] },
           counterpartyAgentId: 1,
+          counterpartyVerified: { $eq: ["$counterpartyAgent.domainVerification.status", "verified"] },
         },
       },
     ])
     .toArray();
 
-  const distinctCounterparties = new Set(sessionAgg.map((s) => s.counterpartyAgentId)).size;
-  const closed = sessionAgg.filter((s) => s.status === "closed");
+  const activated = sessionAgg.filter((s) => ACTIVATED_STATUSES.has(s.status));
+  const allSessionsLast90d = activated.length;
+  const allDistinctCounterparties = new Set(activated.map((s) => s.counterpartyAgentId)).size;
+
+  const verifiedAgg = sessionAgg.filter((s) => s.counterpartyVerified);
+  const distinctCounterparties = new Set(verifiedAgg.map((s) => s.counterpartyAgentId)).size;
+  const closed = verifiedAgg.filter((s) => s.status === "closed");
   const closedNormally = closed.filter((s) => s.closeReason === "agent_closed");
 
   const attestationsLast90d = await attestationsRepository(db).collection.countDocuments({
@@ -263,10 +277,12 @@ async function computeActivityFacts(db: Db, agentId: string, now: Date): Promise
   });
 
   return {
-    sessionsLast90d: sessionAgg.length,
+    sessionsLast90d: verifiedAgg.length,
     attestationsLast90d,
     distinctCounterparties,
     normalCloseShare: closed.length > 0 ? closedNormally.length / closed.length : null,
+    allSessionsLast90d,
+    allDistinctCounterparties,
   };
 }
 

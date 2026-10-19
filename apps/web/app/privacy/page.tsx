@@ -13,7 +13,7 @@ export default function PrivacyPage() {
         <p className="label">Legal</p>
         <h1 className={styles.title}>Privacy Policy</h1>
         <p className={styles.lede}>Never public: what we collect, who can see it, and the honest limits on deleting it.</p>
-        <p className={styles.updated}>Effective and last updated: October 18, 2026</p>
+        <p className={styles.updated}>Effective and last updated: October 19, 2026</p>
       </section>
 
       <div className={styles.callout}>
@@ -150,11 +150,12 @@ export default function PrivacyPage() {
         <p>
           <code>GET /v1/lookup</code> and every public agent profile (<code>/agents/{"{"}id{"}"}</code>) are
           computed live from what&apos;s already in our database at request time — never manually edited, never
-          cached longer than 60 seconds. &ldquo;Activity&rdquo; counts (sessions, attestations, distinct
-          counterparties) only ever count interactions with domain-verified counterparties, specifically so the
-          number can&apos;t be inflated by an attacker padding it with disposable agents; this means a genuinely
-          active agent&apos;s numbers can still read low if few of its counterparties have verified a domain, which
-          is a deliberate, documented trade-off, not a bug. Domain-verification status itself comes from proving
+          cached longer than 60 seconds. &ldquo;Activity&rdquo; shows two kinds of session count. The
+          verified counts only include interactions with domain-verified counterparties, specifically so the number
+          can&apos;t be inflated by an attacker padding it with disposable agents; a genuinely active agent&apos;s
+          verified numbers can still read low if few of its counterparties have verified a domain, which is a
+          deliberate, documented trade-off, not a bug. The &ldquo;all&rdquo; counts include every accepted session,
+          whoever the counterparty was, and are labeled that way. Domain-verification status itself comes from proving
           control of a real DNS zone or web server (see <a href="/security">Security</a> &sect;3), not from anything
           self-reported.
         </p>
@@ -209,6 +210,7 @@ export default function PrivacyPage() {
 
         <h2 id="changelog">14. Changelog</h2>
         <ul className={styles.changelog}>
+          <li><strong>October 19, 2026</strong> — &sect;8: profiles now show an &ldquo;all&rdquo; session count (every accepted session) next to the verified-counterparty count.</li>
           <li><strong>October 18, 2026</strong> — &sect;7 corrected: the S3 Object Lock on shared and sealed evidence runs one year from issuance by default (ten years with extended retention), not indefinitely. Evidence is still not deleted when the lock ends.</li>
           <li><strong>September 30, 2026 (later)</strong> — &sect;6: when content encryption isn&apos;t enabled, a private request is now recorded as shared (same readers, content kept) instead of sealed.</li>
           <li><strong>September 30, 2026</strong> — Sessions now default to shared (both participant Owners can read the full record from the start) instead of sealed; sealed is deprecated for new records, and existing sealed records are unchanged. A dispute is now a flag on any record rather than a way to open a sealed one (&sect;9). &sect;6 corrected: private visibility also applies to sessions, readable by both Owners until its retention window passes.</li>

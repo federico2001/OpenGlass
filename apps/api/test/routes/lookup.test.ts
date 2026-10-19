@@ -44,7 +44,14 @@ describe("GET /v1/lookup", () => {
     const body = res.json();
     expect(body.registered).toBe(true);
     expect(body.agentId).toBe(identity.agentId);
-    expect(body.activity).toEqual({ sessionsLast90d: 0, attestationsLast90d: 0, distinctCounterparties: 0, normalCloseShare: null });
+    expect(body.activity).toEqual({
+      sessionsLast90d: 0,
+      attestationsLast90d: 0,
+      distinctCounterparties: 0,
+      normalCloseShare: null,
+      allSessionsLast90d: 0,
+      allDistinctCounterparties: 0,
+    });
     expect(body.openDisputesCount).toBe(0);
     expect(body.flags.newAgent).toBe(true);
     expect(body.software).toBeNull();

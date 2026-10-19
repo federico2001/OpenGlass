@@ -71,8 +71,8 @@ function RegisteredView({ result }: { result: Extract<LookupResult, { registered
       <section className={styles.section}>
         <h2 className={styles.h2}>Activity, last 90 days</h2>
         <p className={styles.sectionNote}>
-          Session numbers only count sessions whose counterparty has a verified domain, so nobody can pad them
-          with throwaway agents. Sessions with unverified counterparties, test agents included, show as 0.
+          &ldquo;All&rdquo; counts every accepted session, whoever the counterparty was. The verified numbers only
+          count counterparties that proved control of a domain, so they can&apos;t be padded with throwaway agents.
           Attestations have no counterparty and all count. See{" "}
           <a href="https://github.com/federico2001/OpenGlass/blob/main/docs/SPEC.md#142-get-v1lookup" target="_blank" rel="noreferrer">
             how this is computed
@@ -80,9 +80,11 @@ function RegisteredView({ result }: { result: Extract<LookupResult, { registered
           .
         </p>
         <div className={styles.factGrid}>
+          <Fact label="Sessions, all" value={String(result.activity.allSessionsLast90d)} />
           <Fact label="Sessions, verified counterparties" value={String(result.activity.sessionsLast90d)} />
+          <Fact label="Counterparties, all" value={String(result.activity.allDistinctCounterparties)} />
+          <Fact label="Verified counterparties" value={String(result.activity.distinctCounterparties)} />
           <Fact label="Attestations" value={String(result.activity.attestationsLast90d)} />
-          <Fact label="Distinct verified counterparties" value={String(result.activity.distinctCounterparties)} />
           <Fact label="Closed normally" value={closeShare === null ? "n/a" : `${Math.round(closeShare * 100)}%`} />
         </div>
       </section>

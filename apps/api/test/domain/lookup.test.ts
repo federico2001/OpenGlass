@@ -160,6 +160,40 @@ describe("lookup: activity facts anti-gaming (realignment R2)", () => {
       expect(result.activity.sessionsLast90d).toBe(1);
       expect(result.activity.distinctCounterparties).toBe(1);
       expect(result.activity.normalCloseShare).toBe(1);
+      // the all-counterparty totals count both
+      expect(result.activity.allSessionsLast90d).toBe(2);
+      expect(result.activity.allDistinctCounterparties).toBe(2);
+    }
+  });
+
+  it("all-counterparty totals count both roles but skip offers that were never accepted", async () => {
+    const agent = await insertAgent();
+    const other = await insertAgent();
+    const third = await insertAgent();
+    // agent is the counterparty here, of an accepted session
+    await insertSession({
+      initiator: { agentId: other._id, ownerId: other.ownerId, kid: other.keys[0]!.kid },
+      counterparty: { agentId: agent._id, ownerId: agent.ownerId, kid: agent.keys[0]!.kid },
+      createdAt: new Date(),
+      status: "closed",
+      closing: { reason: "agent_closed", requestedBy: other._id, statement: null, signature: null, requestedAt: new Date() },
+    } as Partial<SessionDoc>);
+    // an offer from agent that was never accepted
+    await insertSession({
+      initiator: { agentId: agent._id, ownerId: agent.ownerId, kid: agent.keys[0]!.kid },
+      counterparty: { agentId: third._id, ownerId: third.ownerId, kid: third.keys[0]!.kid },
+      createdAt: new Date(),
+      status: "cancelled",
+    } as Partial<SessionDoc>);
+
+    for (const id of [agent._id, other._id]) {
+      const result = await createLookupService(t.db).lookupAgent({ agentId: id }, PUBLIC_URL);
+      expect(result.registered).toBe(true);
+      if (result.registered) {
+        expect(result.activity.sessionsLast90d).toBe(0);
+        expect(result.activity.allSessionsLast90d).toBe(1);
+        expect(result.activity.allDistinctCounterparties).toBe(1);
+      }
     }
   });
 
