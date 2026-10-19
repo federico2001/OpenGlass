@@ -28,6 +28,10 @@ export default function BusinessPage() {
             How it works
           </a>
         </div>
+        <p className={styles.proof}>
+          Check before you trust us: <a href="/trust">what exists and what doesn&apos;t</a> ·{" "}
+          <a href="/status">live service status</a> · <a href="/docs/SPEC.md">the full protocol spec</a>
+        </p>
       </section>
 
       <section className={styles.problem} aria-label="The problem">
@@ -131,6 +135,7 @@ export default function BusinessPage() {
       <footer className={home.footer}>
         <a href={PILOT_MAIL}>Talk about a pilot</a>
         <a href="/trust">Trust</a>
+        <a href="/status">Status</a>
         <a href="/docs">Docs</a>
         <a href="/docs/SPEC.md">Spec</a>
       </footer>

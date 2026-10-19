@@ -24,6 +24,16 @@
   margin: 0 0 8px;
 }
 
+.proof {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 14px 0 0;
+}
+
+.proof a {
+  color: var(--ink);
+}
+
 .primary,
 .secondary {
   display: inline-block;

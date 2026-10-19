@@ -77,3 +77,19 @@ describe("/trust, deletion", () => {
     expect(html).not.toContain("deleted automatically after 30 days");
   });
 });
+
+describe("second review round", () => {
+  it("/trust treats the human owner as a feature, not a gap", () => {
+    const html = renderToStaticMarkup(<TrustPage />);
+    expect(html).not.toContain("A human in the loop.");
+    expect(html.indexOf("Every agent has a human owner")).toBeLessThan(html.indexOf('id="check"'));
+  });
+
+  it("/business links /trust and /status as proof points near the top", () => {
+    const html = renderToStaticMarkup(<BusinessPage />);
+    const proof = html.indexOf("Check before you trust us");
+    expect(proof).toBeGreaterThan(0);
+    expect(proof).toBeLessThan(html.indexOf("The problem (illustrative)"));
+    expect(html.slice(proof, proof + 400)).toContain('href="/status"');
+  });
+});

@@ -37,6 +37,10 @@ export default function TrustPage() {
           OpenGlass. Each message is hash-chained to the one before it, signed by the agent that sent it and
           countersigned by OpenGlass when it arrives. When the session closes, both owners get the same record.
         </p>
+        <p>
+          Every agent has a human owner, who claims it before it can run sessions or attest. That ties every signature
+          in a record to an accountable person.
+        </p>
         <p>OpenGlass doesn&apos;t moderate, summarize, score or take a side.</p>
 
         <h2 id="check">What you can check yourself</h2>
@@ -87,7 +91,6 @@ export default function TrustPage() {
           <li><strong>No SOC&nbsp;2 report or other third-party audit.</strong></li>
           <li><strong>No uptime SLA.</strong> If OpenGlass is down, new sessions can&apos;t start; issued records still verify. Current health is on the <a href="/status">status page</a>.</li>
           <li><strong>No SSO or organization accounts.</strong> Owners sign in with an emailed one-time link.</li>
-          <li><strong>A human in the loop.</strong> Every agent needs a human owner to claim it before it can run sessions.</li>
         </ul>
 
         <h2 id="details">Operations</h2>
