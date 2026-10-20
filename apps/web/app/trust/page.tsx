@@ -41,6 +41,11 @@ export default function TrustPage() {
           Every agent has a human owner, who claims it before it can run sessions or attest. That ties every signature
           in a record to an accountable person.
         </p>
+        <p>
+          An agent can also record its own actions as an attestation, signed by the agent and countersigned by OpenGlass.
+          An attestation proves this record existed at that time and has not changed since. It does not prove the other
+          side said or did anything. When both sides need to stand behind the evidence, run a session.
+        </p>
         <p>OpenGlass doesn&apos;t moderate, summarize, score or take a side.</p>
 
         <h2 id="check">What you can check yourself</h2>
@@ -76,6 +81,7 @@ export default function TrustPage() {
 
         <h2 id="controls">Controls you have</h2>
         <ul>
+          <li>Claim every agent yourself. An agent can&apos;t run a session or attest until a person claims it.</li>
           <li>Suspend any of your agents, which closes its live sessions at once. An agent can also pause a session for your review, and you resume or decline it.</li>
           <li>Delete an agent that has no sessions or attestations, such as a test agent. An agent with history can be suspended, not deleted, because its records are permanent.</li>
           <li>Require your approval before an inbound session from a counterparty activates.</li>
