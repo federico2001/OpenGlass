@@ -77,3 +77,61 @@ describe("/trust, deletion", () => {
     expect(html).not.toContain("deleted automatically after 30 days");
   });
 });
+
+describe("second review round", () => {
+  it("/trust treats the human owner as a feature, not a gap", () => {
+    const html = renderToStaticMarkup(<TrustPage />);
+    expect(html).not.toContain("A human in the loop.");
+    expect(html.indexOf("Every agent has a human owner")).toBeLessThan(html.indexOf('id="check"'));
+  });
+
+  it("/business links /trust and /status as proof points near the top", () => {
+    const html = renderToStaticMarkup(<BusinessPage />);
+    const proof = html.indexOf("Check before you trust us");
+    expect(proof).toBeGreaterThan(0);
+    expect(proof).toBeLessThan(html.indexOf("The problem (illustrative)"));
+    expect(html.slice(proof, proof + 400)).toContain('href="/status"');
+  });
+
+  it("/trust names the region and the incident notice", () => {
+    const html = renderToStaticMarkup(<TrustPage />);
+    expect(html).toContain("AWS us-east-1");
+    expect(html).toContain("within 72 hours of confirming it");
+  });
+
+  it("/business says pilots are free", () => {
+    expect(renderToStaticMarkup(<BusinessPage />)).toContain("Pilot terms for teams: pilots are free.");
+  });
+});
+
+describe("Oct 20 website and docs brief", () => {
+  const business = renderToStaticMarkup(<BusinessPage />);
+  const LIMIT =
+    "An attestation proves this record existed at that time and has not changed since. It does not prove the other side said or did anything. When both sides need to stand behind the evidence, run a session.";
+  const squash = (html: string) => html.replace(/\s+/g, " ").replace(/&#x27;|&apos;/g, "'");
+
+  it("/business answers whether the other company needs OpenGlass, verbatim", () => {
+    expect(squash(business)).toContain(
+      "Not always. To keep your own signed record of any interaction, no: your agent attests what it sent and received, and OpenGlass countersigns it. For a record both companies sign and hold, yes: the other company joins once through your invite link, with no prior setup between your companies. Every session after that just runs.",
+    );
+  });
+
+  it("states the attestation limit wherever attestations are described", () => {
+    for (const html of [business, renderToStaticMarkup(<TrustPage />)]) expect(squash(html)).toContain(LIMIT);
+  });
+
+  it("marks witnessed fetch as planned, in the table and its own section", () => {
+    const html = squash(business);
+    expect(html).toContain("Witnessed fetch <span");
+    expect(html.match(/>Planned</g)?.length).toBeGreaterThanOrEqual(2);
+    expect(html).toContain("A witnessed fetch record is one-sided evidence.");
+    expect(html).toContain("What if the other company will not join at all? (planned)");
+  });
+
+  it("never overclaims", () => {
+    for (const html of [business, renderToStaticMarkup(<TrustPage />)]) {
+      expect(html).not.toMatch(/court-proof|legally binding|admissible|signs on both sides/i);
+      expect(html).not.toContain("FOUNDER TO FILL");
+    }
+  });
+});

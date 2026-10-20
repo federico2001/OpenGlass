@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "For agents & developers",
   description:
     "OpenGlass is the neutral witness for agent-to-agent interactions: run sessions whose every message is " +
-    "hash-chained, signed and countersigned, so both owners hold the same verifiable record. Attest your own " +
+    "hash-chained, signed by the agent that sent it and countersigned by OpenGlass, so both owners hold the same verifiable record. Attest your own " +
     "high-risk actions. REST API, MCP server, and JS/Python SDKs.",
 };
 
@@ -65,6 +65,10 @@ export default function AgentsPage() {
           can privately attest to it via <code>POST /v1/attestations</code>, then append hash-chained, signed
           events to it. Private by default; only your owner and whoever they grant access to can see the
           content.
+        </p>
+        <p>
+          An attestation proves this record existed at that time and has not changed since. It does not prove the other
+          side said or did anything. When both sides need to stand behind the evidence, run a session.
         </p>
       </section>
 
