@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { createApiClient } from "./apiClient.js";
-import { registerTools } from "./tools.js";
+import { registerPublicTools, registerTools } from "./tools.js";
 
 export interface ServerDeps {
   logger?: FastifyServerOptions["logger"];
@@ -15,17 +15,35 @@ function buildMcpServer(apiInternalUrl: string): McpServer {
   return server;
 }
 
+/** Only the two tools that need no signing (`lookup_agent`, `verify_agent`), for listings
+ * such as the ChatGPT and Claude connector directories that expect no-auth (or OAuth)
+ * tools. Same stateless, keyless proxy as `/mcp`; nothing else is exposed here. */
+function buildPublicMcpServer(apiInternalUrl: string): McpServer {
+  const server = new McpServer({ name: "openglass-public", version: "0.2.0" }, { capabilities: { tools: {} } });
+  registerPublicTools(server, createApiClient(apiInternalUrl));
+  return server;
+}
+
+type BuildMcpServer = (apiInternalUrl: string) => McpServer;
+
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false, trustProxy: true });
 
   app.get("/health", async () => ({ status: "ok" }));
 
+  mountMcpEndpoint(app, "/mcp", buildMcpServer, deps.apiInternalUrl);
+  mountMcpEndpoint(app, "/mcp-public", buildPublicMcpServer, deps.apiInternalUrl);
+
+  return app;
+}
+
+function mountMcpEndpoint(app: FastifyInstance, path: string, build: BuildMcpServer, apiInternalUrl: string): void {
   // Stateless streamable HTTP (SPEC D13: this server holds no per-agent state at all,
   // so there's nothing to gain from stateful MCP sessions — a fresh McpServer per
   // request keeps every call fully independent).
-  app.post("/mcp", async (req, reply) => {
+  app.post(path, async (req, reply) => {
     reply.hijack();
-    const server = buildMcpServer(deps.apiInternalUrl);
+    const server = build(apiInternalUrl);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     reply.raw.on("close", () => {
       transport.close();
@@ -37,20 +55,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // The streamable HTTP transport also handles GET (server-initiated SSE) and DELETE
   // (session termination); stateless mode rejects both meaningfully rather than 404ing.
-  app.get("/mcp", async (req, reply) => {
+  app.get(path, async (req, reply) => {
     reply.hijack();
-    const server = buildMcpServer(deps.apiInternalUrl);
+    const server = build(apiInternalUrl);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     await server.connect(transport);
     await transport.handleRequest(req.raw, reply.raw);
   });
-  app.delete("/mcp", async (req, reply) => {
+  app.delete(path, async (req, reply) => {
     reply.hijack();
-    const server = buildMcpServer(deps.apiInternalUrl);
+    const server = build(apiInternalUrl);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     await server.connect(transport);
     await transport.handleRequest(req.raw, reply.raw);
   });
-
-  return app;
 }

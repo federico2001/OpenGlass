@@ -28,6 +28,7 @@ let t: Awaited<ReturnType<typeof openTestDb>>;
 let apiApp: ReturnType<typeof buildApiServer>;
 let mcpApp: ReturnType<typeof buildMcpServer>;
 let client: Client;
+let publicClient: Client;
 
 beforeAll(async () => {
   t = await openTestDb();
@@ -45,10 +46,14 @@ beforeAll(async () => {
   client = new Client({ name: "test-client", version: "0.0.0" });
   const transport = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${mcpAddr.port}/mcp`));
   await client.connect(transport);
+
+  publicClient = new Client({ name: "test-public-client", version: "0.0.0" });
+  await publicClient.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${mcpAddr.port}/mcp-public`)));
 });
 
 afterAll(async () => {
   await client.close();
+  await publicClient.close();
   await mcpApp.close();
   await apiApp.close();
   await t.cleanup();
@@ -94,7 +99,7 @@ async function registerAndClaim(name: string): Promise<TestAgentIdentity> {
 }
 
 describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
-  it("lists all 13 tools", async () => {
+  it("lists all 14 tools", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
       [
@@ -395,5 +400,41 @@ describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
   it("verify_agent rejects when both or neither of agentId/bundle are given", async () => {
     const neither = await client.callTool({ name: "verify_agent", arguments: {} });
     expect(neither.isError).toBe(true);
+  });
+});
+
+describe("/mcp-public: only the two tools that need no signing", () => {
+  it("lists exactly lookup_agent and verify_agent, each read-only with a title", async () => {
+    const { tools } = await publicClient.listTools();
+    expect(tools.map((t) => t.name).sort()).toEqual(["lookup_agent", "verify_agent"]);
+    for (const tool of tools) {
+      expect(tool.title).toBeTruthy();
+      expect(tool.annotations?.readOnlyHint).toBe(true);
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"auth"');
+    }
+  });
+
+  it("is defined once: the same two tool definitions /mcp lists", async () => {
+    const { tools: full } = await client.listTools();
+    const { tools: pub } = await publicClient.listTools();
+    for (const tool of pub) expect(full.find((t) => t.name === tool.name)).toEqual(tool);
+  });
+
+  it("calls both tools with no auth object", async () => {
+    const gina = await registerAndClaim("gina");
+    const lookup = await publicClient.callTool({ name: "lookup_agent", arguments: { agentId: gina.agentId } });
+    expect(lookup.isError).toBeFalsy();
+    expect(toolJson(lookup).registered).toBe(true);
+
+    const verify = await publicClient.callTool({ name: "verify_agent", arguments: { agentId: gina.agentId } });
+    expect(verify.isError).toBeFalsy();
+    expect(toolJson(verify).agent.id).toBe(gina.agentId);
+  });
+
+  it("refuses a tool that only /mcp has", async () => {
+    const result = await publicClient.callTool({ name: "register_agent", arguments: {} }).catch((err: Error) => err);
+    const text = result instanceof Error ? result.message : JSON.stringify(result);
+    expect(text).toMatch(/not found|register_agent/i);
+    if (!(result instanceof Error)) expect(result.isError).toBe(true);
   });
 });

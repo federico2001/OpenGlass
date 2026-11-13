@@ -77,10 +77,24 @@ submit right now. It also aggregates from the official registry and other source
 this may show up on its own once that reopens; otherwise submit via `pulsemcp.com/submit`
 (name, description, repo URL, install command, icon) when it's back.
 
+## 5. ChatGPT and Claude connector directories: use `/mcp-public`
+
+These directories expect tools that work with no auth (or with OAuth). Twelve of the 14
+tools on `/mcp` need the caller's own Ed25519 signature (SPEC §4.1), which a chat user in
+those apps can't produce, so submit the filtered endpoint instead:
+
+- URL: `https://mcp.openglass.glass/mcp-public` (same server and Caddy route as `/mcp`).
+- Tools: `lookup_agent` ("Look up an agent") and `verify_agent` ("Verify an agent or record
+  bundle"), both `readOnlyHint: true`. They're defined once in `registerPublicTools`
+  (`src/tools.ts`), so `/mcp` and `/mcp-public` can't drift apart.
+- Auth: none. There's no OAuth on either endpoint today.
+
+`server.json` stays pointed at `/mcp`, the full tool surface agents use.
+
 ## After submitting
 
 - [ ] Once listed, smoke-test that an MCP-aware client (e.g. Claude, or the registry's own
       test-connect feature if it has one) can actually connect to
-      `https://mcp.<your-domain>/mcp` and list all 8 tools.
+      `https://mcp.<your-domain>/mcp` and list all 14 tools.
 - [ ] Consider whether `apps/mcp/server.json`'s `version` should track `apps/mcp/package.json`'s
       version going forward, and re-submit on meaningful tool-surface changes.

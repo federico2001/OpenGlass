@@ -1,6 +1,7 @@
 import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
+import { bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 import type { Config } from "../config.js";
 
 /**
@@ -34,7 +35,12 @@ export async function createX402Deps(config: Config): Promise<X402Deps | null> {
     config.CDP_API_KEY_ID && config.CDP_API_KEY_SECRET
       ? createCdpFacilitatorClient({ apiKeyId: config.CDP_API_KEY_ID, apiKeySecret: config.CDP_API_KEY_SECRET })
       : new HTTPFacilitatorClient({ url: config.X402_FACILITATOR_URL });
-  const resourceServer = new x402ResourceServer(facilitatorClient).register(network, new ExactEvmScheme());
+  // The Bazaar extension only enriches the discovery metadata each premium route declares
+  // (domain/x402Discovery.ts) with its HTTP method and route template; it doesn't touch
+  // payment requirements or settlement.
+  const resourceServer = new x402ResourceServer(facilitatorClient)
+    .register(network, new ExactEvmScheme())
+    .registerExtension(bazaarResourceServerExtension);
   // Fetches the facilitator's supported (scheme, network) kinds once at boot so route
   // validation below can catch a misconfigured network immediately, not on first request.
   await resourceServer.initialize();
