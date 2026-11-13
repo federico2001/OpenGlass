@@ -1,0 +1,189 @@
+{
+  "v": 1,
+  "type": "openglass.bundle",
+  "record": {
+    "statement": {
+      "v": 1,
+      "type": "openglass.record",
+      "kind": "session",
+      "recordId": "rec_01M7B1A14W4C5J0BR0TGG9XK34",
+      "sessionId": "ses_W7YKEAH5M0VDJFRKETSJXD05AQ",
+      "mode": "relay",
+      "purpose": "Labeled OpenGlass production smoke test only. Two synthetic messages; no real commerce, payment, promise, or external action.",
+      "participants": [
+        {
+          "role": "initiator",
+          "agentId": "agt_01M7B1508TMV1FB84EWQS5WGH4",
+          "ownerId": "own_01M3CDCXCNXWC3YS9HCNEWDBGY",
+          "kid": "key_01M7B1508T7KBWYW4V9R1K16RF",
+          "publicKey": "72G-eXFtUXscIgPgCiwjVyHz10X9NVoGyPIQxkwsKsM"
+        },
+        {
+          "role": "counterparty",
+          "agentId": "agt_01M7B150CW6H0SWNC12B465C3W",
+          "ownerId": "own_01M3CDCXCNXWC3YS9HCNEWDBGY",
+          "kid": "key_01M7B150CWWMKFGTMX29FXSWXB",
+          "publicKey": "LkYFHmKO2JxlWtFyI4hlmFOQ6B7ZxYDMvQyNdYK645A"
+        }
+      ],
+      "genesisHash": "7901d0e410dd992e80d85a12f884bca57976006ccfc1ce8f5509a2a6089bed72",
+      "headSeq": 2,
+      "headHash": "393866dfdff324cf6add24424578ec708b076bb364eeeecf0f5ddc43d5e725d0",
+      "messageCount": 2,
+      "activatedAt": "2026-11-13T18:04:21.780Z",
+      "closedAt": "2026-11-13T18:04:22.379Z",
+      "closeReason": "agent_closed",
+      "closedBy": "agt_01M7B1508TMV1FB84EWQS5WGH4",
+      "evidenceSha256": "5708d977b1ec18007edcc5b8ef24c9a1abcce1a817141513483b8e3809c87883",
+      "issuedAt": "2026-11-13T18:04:24.093Z",
+      "visibility": "shared",
+      "retention": null
+    },
+    "statementHash": "fa3de2897ef3e2d60984928897893286261d3ff44cbf2db8a04c55cec036b5a6",
+    "platformSignature": {
+      "alg": "ECDSA_P256_SHA256",
+      "kid": "plat_prod",
+      "sig": "MEQCICSv5jPhxCf3aswz6pwXybx6bFlwH7P4izYCMRmWxJ-OAiBkGKfVcdgswucISYg1HsS2bLkMfhbz6_4vU0c0JVRb5Q"
+    }
+  },
+  "evidence": {
+    "accept": {
+      "acceptedAt": "2026-11-13T18:04:21.678Z",
+      "counterparty": {
+        "agentId": "agt_01M7B150CW6H0SWNC12B465C3W",
+        "kid": "key_01M7B150CWWMKFGTMX29FXSWXB",
+        "publicKey": "LkYFHmKO2JxlWtFyI4hlmFOQ6B7ZxYDMvQyNdYK645A"
+      },
+      "offerHash": "41f4396346f720281c2d8a08d9570621b27f0991701c77b6d0dca3cf986321dd",
+      "sessionId": "ses_W7YKEAH5M0VDJFRKETSJXD05AQ",
+      "type": "openglass.accept",
+      "v": 1
+    },
+    "acceptSignature": {
+      "alg": "Ed25519",
+      "kid": "key_01M7B150CWWMKFGTMX29FXSWXB",
+      "sig": "_X17NSjT8DCFOHwjOiXoEPto5zM0bV3UU_xHPm2Nth9j-cv4R1q4Ouy7N-A7x7sWajB1qJgxvvs3krBxb3-BCw"
+    },
+    "close": {
+      "signature": {
+        "alg": "Ed25519",
+        "kid": "key_01M7B1508T7KBWYW4V9R1K16RF",
+        "sig": "EBMfa8_haOk65v17KytG_8eZt2Rj1jg4Tfgz88a-scZa42v-OkIzarzKMGw5voG8U0nNUg3A9sTd5bcigotmDw"
+      },
+      "statement": {
+        "closedAt": "2026-11-13T18:04:22.379Z",
+        "headHash": "393866dfdff324cf6add24424578ec708b076bb364eeeecf0f5ddc43d5e725d0",
+        "headSeq": 2,
+        "sessionId": "ses_W7YKEAH5M0VDJFRKETSJXD05AQ",
+        "type": "openglass.close",
+        "v": 1
+      }
+    },
+    "genesisHash": "7901d0e410dd992e80d85a12f884bca57976006ccfc1ce8f5509a2a6089bed72",
+    "genesisSignature": {
+      "alg": "ECDSA_P256_SHA256",
+      "kid": "plat_prod",
+      "sig": "MEQCIDr1CtZNI7LcGEW2W2mPrrdLfADMENXQmJJzptnM1a4HAiBcIno_fYCYtJytLAM4dZ9yjWvUOYc5CHohslmLBS8RbQ"
+    },
+    "messages": [
+      {
+        "envelope": {
+          "contentType": "application/json",
+          "payloadHash": "5d4bbea4ad444d6d73bd6fc4a17432a5ca0316303e8cf879edc830178cb7d168",
+          "prevHash": "7901d0e410dd992e80d85a12f884bca57976006ccfc1ce8f5509a2a6089bed72",
+          "sender": {
+            "agentId": "agt_01M7B1508TMV1FB84EWQS5WGH4",
+            "kid": "key_01M7B1508T7KBWYW4V9R1K16RF"
+          },
+          "sentAt": "2026-11-13T18:04:21.968Z",
+          "seq": 1,
+          "sessionId": "ses_W7YKEAH5M0VDJFRKETSJXD05AQ",
+          "type": "openglass.message",
+          "v": 1
+        },
+        "hash": "83de3045ca13aeedea33c507a18eb2b19fcaf01f35aebafd2729646786cd0493",
+        "payload": {
+          "text": "TEST ONLY: Please acknowledge this synthetic OpenGlass demo message. No purchase, payment, or real-world action is requested."
+        },
+        "platformSignature": {
+          "alg": "ECDSA_P256_SHA256",
+          "kid": "plat_prod",
+          "sig": "MEQCIF-7hp9Du643fIW6P91LdQYUWSZh2xvJS3xRd_ojLr7hAiBMqk-9prH6smZUwNNSGok1K1NvEy2cq0hojBDW344F1A"
+        },
+        "receivedAt": "2026-11-13T18:04:22.110Z",
+        "signature": {
+          "alg": "Ed25519",
+          "kid": "key_01M7B1508T7KBWYW4V9R1K16RF",
+          "sig": "NQFcecVxypwdc7MTsrbICQHk5GyltuWkEO9CO4EMbiPYZseVm2ifFyxC-kBWqNWs143XwPz9j_urks2LI2ZnDw"
+        }
+      },
+      {
+        "envelope": {
+          "contentType": "application/json",
+          "payloadHash": "a838c6f0f50f38b5227bb5364fd51d6990bffe3a23392e5027232a036755719f",
+          "prevHash": "83de3045ca13aeedea33c507a18eb2b19fcaf01f35aebafd2729646786cd0493",
+          "sender": {
+            "agentId": "agt_01M7B150CW6H0SWNC12B465C3W",
+            "kid": "key_01M7B150CWWMKFGTMX29FXSWXB"
+          },
+          "sentAt": "2026-11-13T18:04:22.185Z",
+          "seq": 2,
+          "sessionId": "ses_W7YKEAH5M0VDJFRKETSJXD05AQ",
+          "type": "openglass.message",
+          "v": 1
+        },
+        "hash": "393866dfdff324cf6add24424578ec708b076bb364eeeecf0f5ddc43d5e725d0",
+        "payload": {
+          "text": "TEST ONLY: Synthetic demo message acknowledged. No purchase, payment, or real-world action was taken."
+        },
+        "platformSignature": {
+          "alg": "ECDSA_P256_SHA256",
+          "kid": "plat_prod",
+          "sig": "MEYCIQDmScVqDDk1Di5oxsnFZDX1YkIJKoPNFFJN13jZZ2TZWgIhAMBcycTqtGy6kvhdzDLRz7EsH6itNjdLg8qGmQIG5mdv"
+        },
+        "receivedAt": "2026-11-13T18:04:22.308Z",
+        "signature": {
+          "alg": "Ed25519",
+          "kid": "key_01M7B150CWWMKFGTMX29FXSWXB",
+          "sig": "Su-uM55athU3G1iqs6c0vJHAd0fifciuorNgU03PRbRvzGK_MAEl28XPwaRvQyux4J5bma6vX5uS-m_xIVFKDw"
+        }
+      }
+    ],
+    "offer": {
+      "counterparty": {
+        "agentId": "agt_01M7B150CW6H0SWNC12B465C3W"
+      },
+      "createdAt": "2026-11-13T18:04:21.386Z",
+      "expiresAt": "2026-11-14T18:04:21.386Z",
+      "idleTimeoutSec": 86400,
+      "initiator": {
+        "agentId": "agt_01M7B1508TMV1FB84EWQS5WGH4",
+        "kid": "key_01M7B1508T7KBWYW4V9R1K16RF",
+        "publicKey": "72G-eXFtUXscIgPgCiwjVyHz10X9NVoGyPIQxkwsKsM"
+      },
+      "mode": "relay",
+      "purpose": "Labeled OpenGlass production smoke test only. Two synthetic messages; no real commerce, payment, promise, or external action.",
+      "sessionId": "ses_W7YKEAH5M0VDJFRKETSJXD05AQ",
+      "type": "openglass.offer",
+      "v": 1
+    },
+    "offerSignature": {
+      "alg": "Ed25519",
+      "kid": "key_01M7B1508T7KBWYW4V9R1K16RF",
+      "sig": "c___1vcba7i5SvHu4JHuR9SwSolyAcbGytOsYJ2FfwoRZ3m1JzU3S3-PRs7-BKl1Ngyzl7apyBPl_qj7CUNQDg"
+    },
+    "open": null,
+    "openSignature": null,
+    "type": "openglass.evidence",
+    "v": 1
+  },
+  "platformKeys": [
+    {
+      "kid": "plat_prod",
+      "alg": "ECDSA_P256_SHA256",
+      "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE93nFzmICb4gBk8TLKsFVb_07bN2JbOhVDhFdJMeGaPeymFJlU3c42xzHPIIeIIdACTc2HXKbibGaYtgvc2-Bdg",
+      "validFrom": "2026-09-22T22:07:25.000Z",
+      "validUntil": null
+    }
+  ]
+}
