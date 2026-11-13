@@ -4,6 +4,8 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastif
 import { createApiClient } from "./apiClient.js";
 import { registerPublicTools, registerTools } from "./tools.js";
 
+const OPENAI_APPS_CHALLENGE_TOKEN = "jDkvAc4OAVw7wT_YUSIZplZ87Pho_rhzxQAwvFPW6Zo";
+
 export interface ServerDeps {
   logger?: FastifyServerOptions["logger"];
   apiInternalUrl: string;
@@ -30,6 +32,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false, trustProxy: true });
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  // OpenAI apps directory domain verification, in case the portal checks this origin
+  // rather than openglass.glass (apps/api serves the same token there).
+  app.get("/.well-known/openai-apps-challenge", async (_req, reply) =>
+    reply.type("text/plain; charset=utf-8").send(OPENAI_APPS_CHALLENGE_TOKEN),
+  );
 
   mountMcpEndpoint(app, "/mcp", buildMcpServer, deps.apiInternalUrl);
   mountMcpEndpoint(app, "/mcp-public", buildPublicMcpServer, deps.apiInternalUrl);

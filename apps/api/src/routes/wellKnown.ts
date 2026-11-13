@@ -87,10 +87,19 @@ function agentCard(deps: ServerDeps) {
   };
 }
 
+/** OpenAI apps directory domain verification for openglass.glass: the portal fetches this
+ * path and expects exactly the token as plain text. Public by design (it proves domain
+ * control, nothing else). apps/mcp serves the same token for mcp.openglass.glass. */
+export const OPENAI_APPS_CHALLENGE_TOKEN = "jDkvAc4OAVw7wT_YUSIZplZ87Pho_rhzxQAwvFPW6Zo";
+
 export function registerWellKnownRoutes(app: FastifyInstance, deps: ServerDeps): void {
   app.get("/.well-known/openglass-keys.json", async () => ({ keys: await trustedPlatformKeys(deps.signer, deps.platformKeyValidFrom) }));
 
   const card = agentCard(deps);
   app.get("/.well-known/agent.json", async () => card);
   app.get("/.well-known/agent-card.json", async () => card);
+
+  app.get("/.well-known/openai-apps-challenge", async (_req, reply) =>
+    reply.type("text/plain; charset=utf-8").send(OPENAI_APPS_CHALLENGE_TOKEN),
+  );
 }
