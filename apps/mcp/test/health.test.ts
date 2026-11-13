@@ -8,3 +8,17 @@ describe("GET /health", () => {
     expect(res.json()).toEqual({ status: "ok" });
   });
 });
+
+describe("/mcp-public transport routes", () => {
+  // GET is probed without `text/event-stream` in Accept: with it, stateless mode would
+  // open a long-lived SSE stream rather than answer.
+  it("answers GET and DELETE the same way /mcp does", async () => {
+    const app = buildServer({ apiInternalUrl: "http://127.0.0.1:1" });
+    for (const [method, accept] of [["GET", "application/json"], ["DELETE", "application/json, text/event-stream"]] as const) {
+      const full = await app.inject({ method, url: "/mcp", headers: { accept } });
+      const pub = await app.inject({ method, url: "/mcp-public", headers: { accept } });
+      expect(pub.statusCode).toBe(full.statusCode);
+      expect(pub.statusCode).not.toBe(404);
+    }
+  });
+});

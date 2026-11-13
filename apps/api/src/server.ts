@@ -2,7 +2,6 @@ import cookie from "@fastify/cookie";
 import websocket from "@fastify/websocket";
 import type { S3Client } from "@aws-sdk/client-s3";
 import type { PlatformSigner } from "@openglass/db";
-import type { RoutesConfig } from "@x402/core/server";
 import { paymentMiddleware } from "@x402/fastify";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import fp from "fastify-plugin";
@@ -30,6 +29,7 @@ import { registerWsRoutes } from "./routes/ws.js";
 import { createWsHub, type WsHub } from "./ws/hub.js";
 import type { Mailer } from "./mailer.js";
 import type { X402Deps } from "./domain/x402.js";
+import { premiumRoutesConfig } from "./domain/x402Discovery.js";
 import type { AgentCardFetcher } from "./domain/lookup.js";
 import type { ContentEncryptionDeps } from "./domain/contentEncryptionDeps.js";
 import type { WitnessFetcher } from "./domain/witnessFetch.js";
@@ -157,21 +157,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.addHook("onClose", async () => wsHub.close());
 
   if (deps.x402) {
-    const { resourceServer, payTo, network } = deps.x402;
-    const routes: RoutesConfig = {
-      "POST /v1/premium/agents/me/verified-badge": {
-        accepts: { scheme: "exact", network, payTo, price: "$1.00" },
-        description: "Mark this agent as verified — shown on its public profile and in agent.json.",
-      },
-      "POST /v1/premium/records/:recordId/extend-retention": {
-        accepts: { scheme: "exact", network, payTo, price: "$0.50" },
-        description: "Extend a record's evidence retention (S3 Object Lock) by 10 years.",
-      },
-      "GET /v1/premium/records/:recordId/pdf": {
-        accepts: { scheme: "exact", network, payTo, price: "$0.25" },
-        description: "A human-readable PDF summary of a witnessed session record.",
-      },
-    };
+    const { resourceServer } = deps.x402;
+    // Prices, payTo/network and the Bazaar discovery metadata live in domain/x402Discovery.ts.
+    const routes = premiumRoutesConfig(deps.x402, deps.webOrigin);
     // See requireExistingRecordForPremiumRoutes' and requireWithinSpendLimit's own doc
     // comments: both must be registered before paymentMiddleware so they run first.
     app.addHook("onRequest", requireExistingRecordForPremiumRoutes(deps.db));

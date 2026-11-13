@@ -53,6 +53,82 @@ function toAuth(a: z.infer<typeof RequestAuthSchema>): RequestAuth {
   return a;
 }
 
+/**
+ * The two tools that need no signing at all: `lookup_agent` and `verify_agent`. Registered
+ * by `registerTools` on the full `/mcp` endpoint and on their own by the public
+ * `/mcp-public` endpoint (server.ts), so their definitions exist exactly once.
+ */
+export function registerPublicTools(server: McpServer, api: ApiClient): void {
+  server.registerTool(
+    "lookup_agent",
+    {
+      title: "Look up an agent",
+      description:
+        "Realignment R2 (SPEC §14): look up a counterparty BEFORE accepting an invite or offering a " +
+        "session with them — no signing, no auth, free. Pass exactly one of agentId, domain, " +
+        "agentCardUrl, or publicKey. For a registered agent, returns whether it's claimed, its verified " +
+        "domain (if any), activity facts (sessions/attestations in the last 90 days — only counting " +
+        "counterparties that are themselves domain-verified, so these numbers are conservative by " +
+        "design, not a popularity score), open disputes, and flags (new agent, unverified domain, " +
+        "recently rotated key). For an unregistered one, returns whatever public signals exist (its " +
+        "A2A agent card if fetchable, an MCP Registry entry, domain age) plus an invite URL you can " +
+        "pass along. This is informational — decide what an unverified or new counterparty means for " +
+        "your own situation; this tool never tells you to block or refuse anyone.",
+      inputSchema: {
+        agentId: z.string().optional(),
+        domain: z.string().optional(),
+        agentCardUrl: z.string().optional(),
+        publicKey: z.string().optional(),
+      },
+      // Read-only. Open world: for an unregistered counterparty it fetches the agent's own
+      // A2A agent card and other public signals from outside OpenGlass.
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ agentId, domain, agentCardUrl, publicKey }) =>
+      guarded(async () => {
+        const provided = [agentId, domain, agentCardUrl, publicKey].filter((v) => v !== undefined);
+        if (provided.length !== 1) return toolError("Provide exactly one of agentId, domain, agentCardUrl, publicKey.");
+        const params = new URLSearchParams(
+          Object.entries({ agentId, domain, agentCardUrl, publicKey }).filter(([, v]) => v !== undefined) as [string, string][],
+        );
+        const res = await api.get(`/v1/lookup?${params.toString()}`);
+        return toolJson(res);
+      }),
+  );
+
+  server.registerTool(
+    "verify_agent",
+    {
+      title: "Verify an agent or record bundle",
+      description:
+        "Two independent checks, pick one: pass `agentId` to look up a counterparty's public profile " +
+        "before trusting them (confirms they're registered and claimed — do this before accepting an " +
+        "invite from someone you don't already know). Or pass `bundle` (a full record bundle, e.g. from " +
+        "get_record with bundle=true) to independently re-run the full cryptographic verification " +
+        "(SPEC §7.6) against OpenGlass's own trusted platform keys — this is a public check, no signing " +
+        "required, and anyone can run the same check themselves, so the record is independently " +
+        "verifiable without trusting OpenGlass's word for it.",
+      inputSchema: {
+        agentId: z.string().optional(),
+        bundle: RecordBundle.optional(),
+      },
+      // Read-only: a profile read or a pure cryptographic check of the supplied bundle.
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ agentId, bundle }) =>
+      guarded(async () => {
+        if (!agentId && !bundle) return toolError("Provide either agentId or bundle.");
+        if (agentId && bundle) return toolError("Provide only one of agentId or bundle, not both.");
+        if (agentId) {
+          const res = await api.get(`/v1/agents/${agentId}`);
+          return toolJson(res);
+        }
+        const res = await api.post("/v1/verify", bundle);
+        return toolJson(res);
+      }),
+  );
+}
+
 export function registerTools(server: McpServer, api: ApiClient): void {
   server.registerTool(
     "register_agent",
@@ -409,69 +485,7 @@ export function registerTools(server: McpServer, api: ApiClient): void {
       }),
   );
 
-  server.registerTool(
-    "lookup_agent",
-    {
-      title: "Check who you're about to talk to",
-      description:
-        "Realignment R2 (SPEC §14): look up a counterparty BEFORE accepting an invite or offering a " +
-        "session with them — no signing, no auth, free. Pass exactly one of agentId, domain, " +
-        "agentCardUrl, or publicKey. For a registered agent, returns whether it's claimed, its verified " +
-        "domain (if any), activity facts (sessions/attestations in the last 90 days — only counting " +
-        "counterparties that are themselves domain-verified, so these numbers are conservative by " +
-        "design, not a popularity score), open disputes, and flags (new agent, unverified domain, " +
-        "recently rotated key). For an unregistered one, returns whatever public signals exist (its " +
-        "A2A agent card if fetchable, an MCP Registry entry, domain age) plus an invite URL you can " +
-        "pass along. This is informational — decide what an unverified or new counterparty means for " +
-        "your own situation; this tool never tells you to block or refuse anyone.",
-      inputSchema: {
-        agentId: z.string().optional(),
-        domain: z.string().optional(),
-        agentCardUrl: z.string().optional(),
-        publicKey: z.string().optional(),
-      },
-    },
-    async ({ agentId, domain, agentCardUrl, publicKey }) =>
-      guarded(async () => {
-        const provided = [agentId, domain, agentCardUrl, publicKey].filter((v) => v !== undefined);
-        if (provided.length !== 1) return toolError("Provide exactly one of agentId, domain, agentCardUrl, publicKey.");
-        const params = new URLSearchParams(
-          Object.entries({ agentId, domain, agentCardUrl, publicKey }).filter(([, v]) => v !== undefined) as [string, string][],
-        );
-        const res = await api.get(`/v1/lookup?${params.toString()}`);
-        return toolJson(res);
-      }),
-  );
-
-  server.registerTool(
-    "verify_agent",
-    {
-      title: "Verify a counterparty or a record bundle",
-      description:
-        "Two independent checks, pick one: pass `agentId` to look up a counterparty's public profile " +
-        "before trusting them (confirms they're registered and claimed — do this before accepting an " +
-        "invite from someone you don't already know). Or pass `bundle` (a full record bundle, e.g. from " +
-        "get_record with bundle=true) to independently re-run the full cryptographic verification " +
-        "(SPEC §7.6) against OpenGlass's own trusted platform keys — this is a public check, no signing " +
-        "required, and is exactly what a court or auditor could run themselves without trusting " +
-        "OpenGlass's word for it.",
-      inputSchema: {
-        agentId: z.string().optional(),
-        bundle: RecordBundle.optional(),
-      },
-    },
-    async ({ agentId, bundle }) =>
-      guarded(async () => {
-        if (!agentId && !bundle) return toolError("Provide either agentId or bundle.");
-        if (agentId && bundle) return toolError("Provide only one of agentId or bundle, not both.");
-        if (agentId) {
-          const res = await api.get(`/v1/agents/${agentId}`);
-          return toolJson(res);
-        }
-        const res = await api.post("/v1/verify", bundle);
-        return toolJson(res);
-      }),
-  );
+  registerPublicTools(server, api);
 
   server.registerTool(
     "register_counterparty",
