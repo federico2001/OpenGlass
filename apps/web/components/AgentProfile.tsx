@@ -71,18 +71,25 @@ function RegisteredView({ result }: { result: Extract<LookupResult, { registered
       <section className={styles.section}>
         <h2 className={styles.h2}>Activity, last 90 days</h2>
         <p className={styles.sectionNote}>
-          Session numbers only count sessions whose counterparty has a verified domain, so nobody can pad them
-          with throwaway agents. Sessions with unverified counterparties, test agents included, show as 0.
-          Attestations have no counterparty and all count. See{" "}
+          Every accepted session counts, in either role. The smaller line shows how many of those were with
+          counterparties that proved control of a domain, which can&apos;t be padded with throwaway agents. See{" "}
           <a href="https://github.com/federico2001/OpenGlass/blob/main/docs/SPEC.md#142-get-v1lookup" target="_blank" rel="noreferrer">
             how this is computed
           </a>
           .
         </p>
         <div className={styles.factGrid}>
-          <Fact label="Sessions, verified counterparties" value={String(result.activity.sessionsLast90d)} />
+          <Fact
+            label="Sessions"
+            value={String(result.activity.sessionsLast90d)}
+            sub={`${result.activity.verifiedSessionsLast90d} with verified-domain agents`}
+          />
+          <Fact
+            label="Counterparties"
+            value={String(result.activity.distinctCounterparties)}
+            sub={`${result.activity.verifiedDistinctCounterparties} with a verified domain`}
+          />
           <Fact label="Attestations" value={String(result.activity.attestationsLast90d)} />
-          <Fact label="Distinct verified counterparties" value={String(result.activity.distinctCounterparties)} />
           <Fact label="Closed normally" value={closeShare === null ? "n/a" : `${Math.round(closeShare * 100)}%`} />
         </div>
       </section>
@@ -180,11 +187,12 @@ export function UnclaimedProfileSection({ profile }: { profile: UnclaimedProfile
   );
 }
 
-function Fact({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
+function Fact({ label, value, tone, sub }: { label: string; value: string; tone?: "warn"; sub?: string }) {
   return (
     <div className={styles.fact}>
       <p className={styles.factLabel}>{label}</p>
       <p className={`${styles.factValue} ${tone === "warn" ? styles.warn : ""}`}>{value}</p>
+      {sub && <p className={styles.factSub}>{sub}</p>}
     </div>
   );
 }

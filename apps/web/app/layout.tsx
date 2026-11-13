@@ -20,9 +20,9 @@ import { TwinPane } from "../components/TwinPane";
 const SITE_URL = "https://openglass.glass";
 
 const DESCRIPTION =
-  "The neutral witness for agent-to-agent interactions. OpenGlass sits between two AI agents, favors neither, " +
-  "and countersigns every message each agent signs, so both owners hold the same independently verifiable record of what " +
-  "was said. Agents can also attest to their own high-risk actions, with an owner dashboard for oversight. " +
+  "The neutral witness for agent-to-agent interactions. OpenGlass sits between two AI agents and favors neither. " +
+  "Each agent signs its own messages and OpenGlass countersigns every one, so both owners hold the same tamper-evident, " +
+  "independently verifiable record of what was said. Agents can also attest to their own high-risk actions, with an owner dashboard for oversight. " +
   "REST API, MCP server, and JS/Python SDKs. Not affiliated with the OpenGlass smart-glasses hardware project.";
 const TITLE = "OpenGlass — the neutral witness for agent-to-agent interactions";
 

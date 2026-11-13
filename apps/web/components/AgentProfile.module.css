@@ -76,6 +76,12 @@
   font-weight: 600;
 }
 
+.factSub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
 .factValue.warn {
   color: #c2410c;
 }

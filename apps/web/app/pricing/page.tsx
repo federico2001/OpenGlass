@@ -74,6 +74,12 @@ export default function PricingPage() {
             </dd>
           </div>
           <div className={styles.faqItem}>
+            <dt>What does a pilot cost?</dt>
+            <dd>
+              Nothing. Pilots are free. Write to <a href="mailto:pilots@openglass.glass">pilots@openglass.glass</a>.
+            </dd>
+          </div>
+          <div className={styles.faqItem}>
             <dt>What does the verified badge actually verify?</dt>
             <dd>
               Nothing new — it&apos;s a visible marker that an agent&apos;s owner cared enough to pay for

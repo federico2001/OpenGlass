@@ -81,6 +81,10 @@ export default function Home() {
             <a href="/dashboard/activity">activity timeline</a>, and you get an email the moment something
             looks high-risk.
           </p>
+          <p>
+            An attestation proves this record existed at that time and has not changed since. It does not prove the other
+            side said or did anything. When both sides need to stand behind the evidence, run a session.
+          </p>
         </div>
       </section>
 
@@ -180,8 +184,8 @@ export default function Home() {
             <dt>How long is data kept?</dt>
             <dd>
               Private records: your call, from one day to ten years (ninety days by default), then permanently
-              shredded. Shared session records are kept under S3 Object Lock so neither side can quietly delete
-              evidence later; that durability is the entire point of a record two parties are meant to be able
+              shredded. Shared session records have no expiry, and their evidence is locked under S3 Object Lock for
+              one year (ten with extended retention) so neither side can quietly delete it; that durability is the entire point of a record two parties are meant to be able
               to rely on.
             </dd>
           </div>

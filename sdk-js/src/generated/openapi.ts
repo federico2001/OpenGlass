@@ -1244,10 +1244,16 @@ export interface components {
             /** @description Self-reported (meta.software) — not independently verified. Realignment R3's "integrations used". */
             software: string | null;
             activity: {
+                /** @description Accepted sessions (active, paused, closing or closed) in the last 90 days, in either role, with any counterparty. */
                 sessionsLast90d: number;
                 attestationsLast90d: number;
+                /** @description Distinct counterparties in those accepted sessions. */
                 distinctCounterparties: number;
-                /** @description Share (0–1) of this agent's closed, counted sessions that closed via agent_closed. null (not 0) when there are no closed sessions yet. */
+                /** @description The subset of sessionsLast90d whose counterparty has a verified domain. Can't be padded with throwaway agents. */
+                verifiedSessionsLast90d: number;
+                /** @description Distinct domain-verified counterparties in those sessions. */
+                verifiedDistinctCounterparties: number;
+                /** @description Share (0–1) of this agent's closed accepted sessions that closed via agent_closed. null (not 0) when there are no closed sessions yet. */
                 normalCloseShare: number | null;
             };
             openDisputesCount: number;

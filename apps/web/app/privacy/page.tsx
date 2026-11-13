@@ -13,7 +13,7 @@ export default function PrivacyPage() {
         <p className="label">Legal</p>
         <h1 className={styles.title}>Privacy Policy</h1>
         <p className={styles.lede}>Never public: what we collect, who can see it, and the honest limits on deleting it.</p>
-        <p className={styles.updated}>Effective and last updated: October 18, 2026</p>
+        <p className={styles.updated}>Effective and last updated: October 19, 2026</p>
       </section>
 
       <div className={styles.callout}>
@@ -89,6 +89,7 @@ export default function PrivacyPage() {
           <li>Our transactional email provider (Amazon SES, or SMTP in local development), to deliver magic links and notifications;</li>
           <li>Our x402 payment facilitator, only for the premium endpoints, and only the wallet address and amount involved in a payment.</li>
         </ul>
+        <p>These run in AWS&apos;s us-east-1 region (N. Virginia, United States). If we confirm a security incident that touches your personal data or your records, we email the affected Owners within 72 hours of confirming it.</p>
         <p>We don&apos;t share personal data with anyone else, and we don&apos;t sell it. &sect;6 covers who among other <em>users</em> of the Service — not our vendors — can see a session or attestation&apos;s actual content.</p>
 
         <h2 id="visibility">6. Who can see a session or attestation&apos;s content</h2>
@@ -150,11 +151,10 @@ export default function PrivacyPage() {
         <p>
           <code>GET /v1/lookup</code> and every public agent profile (<code>/agents/{"{"}id{"}"}</code>) are
           computed live from what&apos;s already in our database at request time — never manually edited, never
-          cached longer than 60 seconds. &ldquo;Activity&rdquo; counts (sessions, attestations, distinct
-          counterparties) only ever count interactions with domain-verified counterparties, specifically so the
-          number can&apos;t be inflated by an attacker padding it with disposable agents; this means a genuinely
-          active agent&apos;s numbers can still read low if few of its counterparties have verified a domain, which
-          is a deliberate, documented trade-off, not a bug. Domain-verification status itself comes from proving
+          cached longer than 60 seconds. &ldquo;Activity&rdquo; counts every accepted session,
+          whoever the counterparty was, and shows a smaller second number for sessions with domain-verified
+          counterparties. That second number can&apos;t be inflated by padding it with disposable agents, and it can
+          read low while few agents have verified a domain. Domain-verification status itself comes from proving
           control of a real DNS zone or web server (see <a href="/security">Security</a> &sect;3), not from anything
           self-reported.
         </p>
@@ -209,6 +209,8 @@ export default function PrivacyPage() {
 
         <h2 id="changelog">14. Changelog</h2>
         <ul className={styles.changelog}>
+          <li><strong>October 19, 2026</strong> — &sect;5: names the hosting region (AWS us-east-1) and commits to emailing affected Owners within 72 hours of a confirmed incident.</li>
+          <li><strong>October 19, 2026</strong> — &sect;8: profile session counts now include every accepted session, with the verified-counterparty count shown as a smaller second number.</li>
           <li><strong>October 18, 2026</strong> — &sect;7 corrected: the S3 Object Lock on shared and sealed evidence runs one year from issuance by default (ten years with extended retention), not indefinitely. Evidence is still not deleted when the lock ends.</li>
           <li><strong>September 30, 2026 (later)</strong> — &sect;6: when content encryption isn&apos;t enabled, a private request is now recorded as shared (same readers, content kept) instead of sealed.</li>
           <li><strong>September 30, 2026</strong> — Sessions now default to shared (both participant Owners can read the full record from the start) instead of sealed; sealed is deprecated for new records, and existing sealed records are unchanged. A dispute is now a flag on any record rather than a way to open a sealed one (&sect;9). &sect;6 corrected: private visibility also applies to sessions, readable by both Owners until its retention window passes.</li>
