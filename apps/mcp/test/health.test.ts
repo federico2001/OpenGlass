@@ -22,3 +22,12 @@ describe("/mcp-public transport routes", () => {
     }
   });
 });
+
+describe("GET /.well-known/openai-apps-challenge", () => {
+  it("serves exactly the token as text/plain, no auth", async () => {
+    const res = await buildServer({ apiInternalUrl: "http://127.0.0.1:1" }).inject({ method: "GET", url: "/.well-known/openai-apps-challenge" });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/^text\/plain/);
+    expect(res.body).toBe("jDkvAc4OAVw7wT_YUSIZplZ87Pho_rhzxQAwvFPW6Zo");
+  });
+});
