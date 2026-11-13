@@ -410,6 +410,8 @@ describe("/mcp-public: only the two tools that need no signing", () => {
     for (const tool of tools) {
       expect(tool.title).toBeTruthy();
       expect(tool.annotations?.readOnlyHint).toBe(true);
+      expect(tool.annotations?.destructiveHint).toBe(false);
+      expect(tool.annotations?.openWorldHint).toBe(tool.name === "lookup_agent");
       expect(JSON.stringify(tool.inputSchema)).not.toContain('"auth"');
     }
   });

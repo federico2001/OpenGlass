@@ -82,7 +82,7 @@ export function registerPublicTools(server: McpServer, api: ApiClient): void {
       },
       // Read-only. Open world: for an unregistered counterparty it fetches the agent's own
       // A2A agent card and other public signals from outside OpenGlass.
-      annotations: { readOnlyHint: true, openWorldHint: true },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
     async ({ agentId, domain, agentCardUrl, publicKey }) =>
       guarded(async () => {
@@ -113,7 +113,7 @@ export function registerPublicTools(server: McpServer, api: ApiClient): void {
         bundle: RecordBundle.optional(),
       },
       // Read-only: a profile read or a pure cryptographic check of the supplied bundle.
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ agentId, bundle }) =>
       guarded(async () => {
