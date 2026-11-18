@@ -22,6 +22,7 @@ const app = buildServer({
   registryUrl: config.A2A_REGISTRY_URL,
   allowPrivateTargets: config.CHECKUP_ALLOW_PRIVATE_TARGETS,
   witnessMode: config.CHECKUP_WITNESS_MODE,
+  inspect: { perTargetPerMinute: config.INSPECT_FETCH_PER_TARGET_PER_MINUTE, maxConcurrent: config.INSPECT_FETCH_MAX_CONCURRENT },
   logger: { level: config.LOG_LEVEL },
 });
 

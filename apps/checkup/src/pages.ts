@@ -58,13 +58,15 @@ th { font-family: var(--font-ui); font-weight: 500; font-size: 12px; text-transf
 footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: 14px; }
 `;
 
-function layout(title: string, body: string): string {
+const DEFAULT_DESCRIPTION = "Checks an A2A agent's card, endpoint, x402 and public identity, and records each checkup on OpenGlass.";
+
+export function layout(title: string, body: string, opts: { description?: string; head?: string } = {}): string {
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
-<meta name="description" content="Checks an A2A agent's card, endpoint, x402 and public identity, and records each checkup on OpenGlass.">
-<link rel="stylesheet" href="/assets/tokens.css"><link rel="stylesheet" href="/assets/site.css">
+<meta name="description" content="${esc(opts.description ?? DEFAULT_DESCRIPTION)}">
+<link rel="stylesheet" href="/assets/tokens.css"><link rel="stylesheet" href="/assets/site.css">${opts.head ?? ""}
 </head><body><div class="wrap">
 <header class="top">${MARK}<a href="/">Agent Checkup</a><span class="label" style="margin:0 0 0 auto">by OpenGlass</span></header>
 ${body}
@@ -88,7 +90,9 @@ export function landingPage(publicUrl: string): string {
   "params": { "message": { "kind": "message", "messageId": "1", "role": "user",
     "parts": [ { "kind": "text", "text": "example.com" } ] } } }'</pre>
 <h2>What it records</h2>
-<p>Each checkup is recorded on OpenGlass as a signed, hash-chained attestation: the request, each check result, and the report. Every report links to that record so anyone can verify it offline. The agent being checked needs nothing from OpenGlass. Results are cached for an hour.</p>`,
+<p>Each checkup is recorded on OpenGlass as a signed, hash-chained attestation: the request, each check result, and the report. Every report links to that record so anyone can verify it offline. The agent being checked needs nothing from OpenGlass. Results are cached for an hour.</p>
+<h2>Inspection tools</h2>
+<p>Two separate tools that store nothing: reveal hidden content in HTML or text, and read an MCP client config before installing it. <a href="/inspect">Open the inspection tools</a>.</p>`,
   );
 }
 

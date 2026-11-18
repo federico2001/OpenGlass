@@ -403,10 +403,12 @@ describe("MCP tools end-to-end over the real StreamableHTTP protocol", () => {
   });
 });
 
-describe("/mcp-public: only the two tools that need no signing", () => {
-  it("lists exactly lookup_agent and verify_agent, each read-only with a title", async () => {
-    const { tools } = await publicClient.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["lookup_agent", "verify_agent"]);
+describe("/mcp-public: only tools that need no signing", () => {
+  it("lists lookup_agent and verify_agent (plus the two inspection tools), each read-only with a title", async () => {
+    const { tools: all } = await publicClient.listTools();
+    expect(all.map((t) => t.name).sort()).toEqual(["check_mcp_config", "inspect_hidden_content", "lookup_agent", "verify_agent"]);
+    // The inspection tools are covered in inspectTools.test.ts.
+    const tools = all.filter((t) => t.name === "lookup_agent" || t.name === "verify_agent");
     for (const tool of tools) {
       expect(tool.title).toBeTruthy();
       expect(tool.annotations?.readOnlyHint).toBe(true);
@@ -419,7 +421,7 @@ describe("/mcp-public: only the two tools that need no signing", () => {
   it("is defined once: the same two tool definitions /mcp lists", async () => {
     const { tools: full } = await client.listTools();
     const { tools: pub } = await publicClient.listTools();
-    for (const tool of pub) expect(full.find((t) => t.name === tool.name)).toEqual(tool);
+    for (const name of ["lookup_agent", "verify_agent"]) expect(full.find((t) => t.name === name)).toEqual(pub.find((t) => t.name === name));
   });
 
   it("calls both tools with no auth object", async () => {

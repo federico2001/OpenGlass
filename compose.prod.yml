@@ -25,6 +25,8 @@ services:
       PORT: "3001"
       # Called directly over the Docker network, never through Caddy/TLS.
       API_INTERNAL_URL: http://api:3000
+      # The inspection tools on /mcp-public proxy to apps/checkup, also over the Docker network.
+      CHECKUP_INTERNAL_URL: http://checkup:3004
       PUBLIC_MCP_URL: https://mcp.${OPENGLASS_DOMAIN:?}
     depends_on:
       api: { condition: service_healthy }

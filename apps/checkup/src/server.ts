@@ -12,6 +12,7 @@ import type { Report } from "./report.js";
 import { handleRpc, rpcError } from "./rpc.js";
 import { createStore, type Source } from "./store.js";
 import { parseTarget } from "./target.js";
+import { FetchLimiter, inspectRoutes } from "./inspect/routes.js";
 
 export interface ServerOptions {
   db: Db;
@@ -24,10 +25,14 @@ export interface ServerOptions {
    * that, not sdk-js's own "primary" recommendation, is this service's own default. */
   witnessMode?: WitnessMode;
   logger?: boolean | { level: string };
+  /** The inspection tools (src/inspect). Limits default to 6 fetches per host per minute
+   * and 4 fetches in flight. `allowAnyPort` is for tests against a local fake target only. */
+  inspect?: { perTargetPerMinute?: number; maxConcurrent?: number; allowAnyPort?: boolean };
 }
 
 const USER_AGENT = "OpenGlass-AgentCheckup/1.0 (+https://checkup.openglass.glass)";
 const MAX_RPC_BODY = 64 * 1024;
+const INSPECT_USER_AGENT = "OpenGlass-Inspect/1.0 (+https://checkup.openglass.glass/inspect)";
 
 /** A2A Registry probes identify themselves by user-agent (A2A-Registry-TaskProbe/1.0,
  * A2A-Registry-Smoke/1.0); everything else counts as a user. */
@@ -82,6 +87,14 @@ export function buildServer(opts: ServerOptions) {
     }
     req.log.error({ err }, "request failed");
     return reply.code(err.statusCode ?? 500).type("text/html").send(messagePage("Something went wrong", "Please try again in a minute.", String(err.statusCode ?? 500)));
+  });
+
+  // The inspection tools: an encapsulated plugin with its own body parsing and error
+  // handling, so nothing above changes for the checkup's own routes.
+  app.register(inspectRoutes, {
+    net: { allowPrivateAddresses: opts.allowPrivateTargets, userAgent: INSPECT_USER_AGENT },
+    limiter: new FetchLimiter(opts.inspect?.perTargetPerMinute ?? 6, opts.inspect?.maxConcurrent ?? 4),
+    allowAnyPort: opts.inspect?.allowAnyPort ?? false,
   });
 
   app.get("/health", async () => {

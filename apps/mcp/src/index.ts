@@ -3,7 +3,7 @@ import { buildServer } from "./server.js";
 
 const config = loadConfig();
 
-const app = buildServer({ logger: { level: config.LOG_LEVEL }, apiInternalUrl: config.API_INTERNAL_URL });
+const app = buildServer({ logger: { level: config.LOG_LEVEL }, apiInternalUrl: config.API_INTERNAL_URL, checkupInternalUrl: config.CHECKUP_INTERNAL_URL });
 
 await app.listen({ host: "0.0.0.0", port: config.PORT });
 
