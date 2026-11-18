@@ -9,8 +9,8 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "@fontsource/fragment-mono/400.css";
 import "./tokens.css";
 import "./globals.css";
+import { SiteHeader } from "../components/SiteHeader";
 import { PublicOnly } from "../components/PublicOnly";
-import { TwinPane } from "../components/TwinPane";
 
 // Fixed, not env-driven: unlike sitemap.ts/skill.md (which must reflect whatever domain
 // the *current* deployment is actually running at, so they read PUBLIC_URL per request),
@@ -51,24 +51,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <PublicOnly>
-          <header className="site-header">
-            <div className="wrap">
-              <a className="brand" href="/">
-                <TwinPane size={28} />
-                OpenGlass
-              </a>
-              <nav className="site-nav">
-                <a href="/agents">For agents</a>
-                <a href="/pricing">Pricing</a>
-                <a href="/directory">Directory</a>
-                <a href="/live">Live</a>
-                <a href="/integrations">Integrations</a>
-                <a href="/login" className="site-nav-signin">
-                  Sign in
-                </a>
-              </nav>
-            </div>
-          </header>
+          <SiteHeader />
         </PublicOnly>
         {children}
         <PublicOnly>

@@ -100,26 +100,117 @@ samp {
   color: var(--ink);
 }
 
-/* Six links no longer fit a narrow header in one un-wrapped row (realignment R5 added
-   "For agents" and "Pricing") — scroll horizontally instead of wrapping into the brand. */
-@media (max-width: 640px) {
+/* Menu toggle: hidden on wide screens, where the links sit in a row. */
+.site-nav-toggle {
+  display: none;
+}
+
+/* Narrow screens: the logo stays on its own and the links move behind a "Menu" button
+   (components/SiteHeader.tsx), shown as a full-width list under the header row. */
+@media (max-width: 760px) {
   .site-header .wrap {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
   }
 
   .brand {
     flex-shrink: 0;
   }
 
-  .site-nav {
-    overflow-x: auto;
-    flex-shrink: 1;
-    gap: 14px;
-    scrollbar-width: none;
+  .site-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 12px;
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
   }
 
-  .site-nav::-webkit-scrollbar {
+  .site-nav-toggle:hover {
+    border-color: var(--accent);
+  }
+
+  .site-nav-toggle:focus-visible,
+  .site-nav a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .site-nav-toggle-icon,
+  .site-nav-toggle-icon::before,
+  .site-nav-toggle-icon::after {
+    display: block;
+    width: 14px;
+    height: 1.5px;
+    background: currentColor;
+  }
+
+  .site-nav-toggle-icon {
+    position: relative;
+  }
+
+  .site-nav-toggle-icon::before,
+  .site-nav-toggle-icon::after {
+    content: "";
+    position: absolute;
+    left: 0;
+  }
+
+  .site-nav-toggle-icon::before {
+    top: -5px;
+  }
+
+  .site-nav-toggle-icon::after {
+    top: 5px;
+  }
+
+  .site-nav-toggle-icon[data-open="true"] {
+    background: transparent;
+  }
+
+  .site-nav-toggle-icon[data-open="true"]::before {
+    top: 0;
+    transform: rotate(45deg);
+  }
+
+  .site-nav-toggle-icon[data-open="true"]::after {
+    top: 0;
+    transform: rotate(-45deg);
+  }
+
+  .site-nav {
     display: none;
+  }
+
+  .site-nav[data-open="true"] {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    flex-basis: 100%;
+    padding: 4px 0 12px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .site-nav[data-open="true"] a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 14px;
+    color: var(--ink);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .site-nav[data-open="true"] a.site-nav-signin {
+    justify-content: center;
+    margin-top: 12px;
+    border: 1px solid var(--rule-strong);
   }
 }
 
