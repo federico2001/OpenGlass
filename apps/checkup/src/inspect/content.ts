@@ -1,5 +1,5 @@
 import { type CheckInfo, InspectError, LineIndex, quote, RuleCollector, type RuleFindings, summaryLine } from "./common.js";
-import { HIDDEN_CHECKS, CHECK_A11Y, CHECK_COMMENT, CHECK_DATA_ATTR, CHECK_META, DATA_ATTR_MIN_LENGTH, htmlChecks, type HtmlFacts } from "./html.js";
+import { HIDDEN_CHECKS, CHECK_A11Y, CHECK_COMMENT, CHECK_DATA_ATTR, CHECK_META, DATA_ATTR_MIN_LENGTH, MAX_NESTING_DEPTH, htmlChecks, type HtmlFacts } from "./html.js";
 import { HEURISTIC_WORDING } from "./heuristicPatterns.js";
 import {
   BASE64_MIN_LENGTH,
@@ -59,6 +59,7 @@ export interface ContentReport {
     base64MinLength: number;
     dataAttributeMinLength: number;
     unfetched: HtmlFacts["unfetched"] | null;
+    maxNestingDepth: number;
     notes: string[];
   };
   heuristicWording: string;
@@ -121,6 +122,10 @@ export function inspectContent(input: InspectContentInput): ContentReport {
     notes.push("Hidden-text checks read raw markup and inline style attributes only. No layout was computed, <style> blocks and external stylesheets were not applied, and no script ran, so actual visibility is unknown.");
     notes.push("Color and contrast are not checked.");
   }
+  if (html?.stoppedAt != null) {
+    const at = lines.at(html.stoppedAt);
+    notes.push(`Element nesting passed ${MAX_NESTING_DEPTH} levels at line ${at.line}, column ${at.column}; markup checks (hidden text, comments, attributes, meta, accessibility, references) stopped there. The Unicode, encoded-run and heuristic checks still covered the whole input.`);
+  }
   if (input.fetch) notes.push("Only the one URL was fetched. No subresources, images, stylesheets, scripts or frames were requested, and no browser was used.");
   else notes.push("Nothing was fetched.");
   if (truncated) notes.push(`Input was cut at ${MAX_INPUT_BYTES} bytes; content after that was not inspected.`);
@@ -140,6 +145,7 @@ export function inspectContent(input: InspectContentInput): ContentReport {
       base64MinLength: BASE64_MIN_LENGTH,
       dataAttributeMinLength: DATA_ATTR_MIN_LENGTH,
       unfetched: html?.unfetched ?? null,
+      maxNestingDepth: MAX_NESTING_DEPTH,
       notes,
     },
     heuristicWording: HEURISTIC_WORDING,

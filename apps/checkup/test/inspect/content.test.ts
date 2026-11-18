@@ -263,12 +263,22 @@ describe("caps and robustness", () => {
     }
   });
 
-  it("a huge, deeply nested document finishes quickly", () => {
-    const deep = "<div>".repeat(50_000) + "text" + "</div>".repeat(50_000);
+  it("a 2 MB deeply nested document finishes quickly, stopping the markup checks at the depth cap", () => {
+    const n = 200_000; // 2 MB of <div>…</div>
+    const deep = "<div>".repeat(n) + "text\u200B" + "</div>".repeat(n);
     const started = Date.now();
-    const r = html(deep + `<p style="display:none">${"x".repeat(100_000)}</p>`);
-    expect(Date.now() - started).toBeLessThan(10_000);
+    const r = html(deep);
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(r.limits.notes.join(" ")).toMatch(/nesting passed 1000 levels at line 1, column 5001/);
+    // Text-level checks still ran over the whole input.
+    expect(rule(r, "unicode.zero-width")!.count).toBe(1);
+  });
+
+  it("long hidden text is quoted within bounds", () => {
+    const r = html(`<div>${"<div>".repeat(500)}<p style="display:none">${"x".repeat(100_000)}</p></div>`);
     expect(rule(r, "hidden.display-none")!.items[0]!.quote.length).toBeLessThanOrEqual(241);
+    expect(rule(r, "hidden.display-none")!.items[0]!.details).toMatchObject({ textLength: 100_000 });
+    expect(r.limits.notes.join(" ")).not.toMatch(/nesting passed/);
   });
 
   it("a 2 MB run of near-base64 and URL-ish text finishes quickly", () => {

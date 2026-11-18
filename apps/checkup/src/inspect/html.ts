@@ -31,6 +31,11 @@ export const CHECK_META: CheckInfo = { rule: "html.meta-content", title: "Meta t
 export const CHECK_A11Y: CheckInfo = { rule: "a11y.text-not-visible", title: "Accessibility text not otherwise visible", label: "deterministic", informational: true };
 
 export const DATA_ATTR_MIN_LENGTH = 256;
+/** Element nesting deeper than this stops the markup checks (the tokenizer's cost grows with
+ * depth, so a pathological document could otherwise take seconds). Text-level checks still
+ * cover the whole input. */
+export const MAX_NESTING_DEPTH = 1000;
+const WRITE_CHUNK = 16 * 1024;
 const MAX_HIDDEN_TEXT = 4000;
 const A11Y_ATTRS = ["aria-label", "aria-description", "alt", "title"] as const;
 /** Elements whose text content isn't page text. */
@@ -104,6 +109,8 @@ export interface HtmlFacts {
   references: RawReference[];
   /** What the page points at but this tool never fetched. */
   unfetched: { scripts: number; inlineScripts: number; stylesheets: number; styleBlocks: number; images: number; frames: number; other: number };
+  /** Offset where markup checks stopped because nesting passed MAX_NESTING_DEPTH, or null. */
+  stoppedAt: number | null;
 }
 
 export function htmlChecks(html: string, lines: LineIndex, cap: number): HtmlFacts {
@@ -122,6 +129,7 @@ export function htmlChecks(html: string, lines: LineIndex, cap: number): HtmlFac
   let hiddenOwner: OpenElement | null = null;
   let comment = "";
   let commentStart = 0;
+  let stoppedAt: number | null = null;
 
   const closeElement = (el: OpenElement) => {
     if (NON_TEXT.has(el.name)) nonText = Math.max(0, nonText - 1);
@@ -144,7 +152,12 @@ export function htmlChecks(html: string, lines: LineIndex, cap: number): HtmlFac
   const parser = new Parser(
     {
       onopentag(name, attribs) {
+        if (stoppedAt !== null) return;
         const offset = parser.startIndex;
+        if (stack.length >= MAX_NESTING_DEPTH) {
+          stoppedAt = offset;
+          return;
+        }
         const el: OpenElement = { name, offset, hidden: null };
         if (NON_TEXT.has(name)) nonText += 1;
 
@@ -192,6 +205,7 @@ export function htmlChecks(html: string, lines: LineIndex, cap: number): HtmlFac
         stack.push(el);
       },
       onclosetag(name) {
+        if (stoppedAt !== null) return;
         // htmlparser2 closes implied and void elements itself, so the top normally matches.
         for (let i = stack.length - 1; i >= 0; i--) {
           if (stack[i]!.name === name) {
@@ -201,7 +215,7 @@ export function htmlChecks(html: string, lines: LineIndex, cap: number): HtmlFac
         }
       },
       ontext(text) {
-        if (nonText > 0) return;
+        if (stoppedAt !== null || nonText > 0) return;
         if (hiddenOwner) {
           const h = hiddenOwner.hidden!;
           h.textLength += text.length;
@@ -213,10 +227,12 @@ export function htmlChecks(html: string, lines: LineIndex, cap: number): HtmlFac
         for (const ref of textReferences(text)) references.push({ ...ref, offset: parser.startIndex + ref.offset });
       },
       oncomment(data) {
+        if (stoppedAt !== null) return;
         if (!comment) commentStart = parser.startIndex;
         comment += data;
       },
       oncommentend() {
+        if (stoppedAt !== null) return;
         const text = comment.trim();
         if (text) {
           comments.add({
@@ -231,8 +247,8 @@ export function htmlChecks(html: string, lines: LineIndex, cap: number): HtmlFac
     },
     { decodeEntities: true, lowerCaseTags: true, lowerCaseAttributeNames: true },
   );
-  parser.write(html);
-  parser.end();
+  for (let i = 0; i < html.length && stoppedAt === null; i += WRITE_CHUNK) parser.write(html.slice(i, i + WRITE_CHUNK));
+  if (stoppedAt === null) parser.end();
   while (stack.length) closeElement(stack.pop()!);
 
   // Accessibility text is information, never a flag: list what doesn't appear as visible text.
@@ -257,5 +273,6 @@ export function htmlChecks(html: string, lines: LineIndex, cap: number): HtmlFac
     collectors: [...HIDDEN_SIGNALS.map(([id]) => hidden[id]), comments, dataAttrs, meta, a11y],
     references,
     unfetched,
+    stoppedAt,
   };
 }
