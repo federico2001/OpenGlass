@@ -18,7 +18,7 @@ describe("clean config", () => {
   it("no findings, standing note, and no verdict words", () => {
     const r = cfg(CLEAN);
     expect(r.findings).toEqual([]);
-    expect(r.summary).toBe(`No findings from the ${r.checksRun.length} checks that ran.`);
+    expect(r.summary).toBe(`No findings across ${r.checksRun.length} checks.`);
     expect(r.note).toBe("Static reading of settings. Cannot tell whether a server is malicious; no findings is not a safety guarantee. Nothing here was run.");
     expect(JSON.stringify({ ...r, note: "" })).not.toMatch(VERDICT_WORDS);
   });

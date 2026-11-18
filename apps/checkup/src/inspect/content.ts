@@ -1,4 +1,4 @@
-import { type CheckInfo, InspectError, LineIndex, quote, RuleCollector, type RuleFindings, summaryLine } from "./common.js";
+import { type CheckInfo, InspectError, LineIndex, quote, RuleCollector, type RuleFindings, summaryLine, informationalLine } from "./common.js";
 import { HIDDEN_CHECKS, CHECK_A11Y, CHECK_COMMENT, CHECK_DATA_ATTR, CHECK_META, DATA_ATTR_MIN_LENGTH, MAX_NESTING_DEPTH, htmlChecks, type HtmlFacts } from "./html.js";
 import { HEURISTIC_WORDING } from "./heuristicPatterns.js";
 import {
@@ -24,7 +24,7 @@ import {
 export const MAX_INPUT_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_PER_RULE_CAP = 25;
 
-export const CHECK_REFS: CheckInfo = { rule: "refs.outbound-hosts", title: "Outbound reference inventory", label: "deterministic", informational: true };
+export const CHECK_REFS: CheckInfo = { rule: "refs.outbound-hosts", title: "Outbound reference inventory", label: "deterministic", informational: true, itemNoun: ["outbound host", "outbound hosts"] };
 
 export type ContentKind = "html" | "text";
 
@@ -50,6 +50,8 @@ export interface ContentReport {
     fetch?: FetchFacts;
   };
   summary: string;
+  /** Informational inventories, kept out of the headline: "2 outbound hosts listed for information." */
+  informational: string | null;
   checksRun: CheckInfo[];
   findings: RuleFindings[];
   limits: {
@@ -136,6 +138,7 @@ export function inspectContent(input: InspectContentInput): ContentReport {
     version: 1,
     input: { kind: input.kind, source: input.fetch ? "url" : "pasted", bytesRead: bytes.length, truncated, ...(input.fetch ? { fetch: input.fetch } : {}) },
     summary: summaryLine(findings, checks.length),
+    informational: informationalLine(findings),
     checksRun: checks,
     findings,
     limits: {
