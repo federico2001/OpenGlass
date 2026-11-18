@@ -28,7 +28,7 @@ export const HIDDEN_CHECKS: Record<Signal, CheckInfo> = Object.fromEntries(
 export const CHECK_COMMENT: CheckInfo = { rule: "html.comment-text", title: "HTML comments with text", label: "deterministic" };
 export const CHECK_DATA_ATTR: CheckInfo = { rule: "html.data-attribute-large", title: "Oversized data-* attributes", label: "deterministic" };
 export const CHECK_META: CheckInfo = { rule: "html.meta-content", title: "Meta tag content", label: "deterministic" };
-export const CHECK_A11Y: CheckInfo = { rule: "a11y.text-not-visible", title: "Accessibility text not otherwise visible", label: "deterministic", informational: true };
+export const CHECK_A11Y: CheckInfo = { rule: "a11y.text-not-visible", title: "Accessibility text not otherwise visible", label: "deterministic", informational: true, itemNoun: ["item of accessibility text", "items of accessibility text"] };
 
 export const DATA_ATTR_MIN_LENGTH = 256;
 /** Element nesting deeper than this stops the markup checks (the tokenizer's cost grows with

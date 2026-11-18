@@ -29,57 +29,101 @@
   margin: 0 0 24px;
 }
 
-/*
- * The hero fills the first screen (viewport minus the 64px header and the page's top padding),
- * ending in a small cue, so the setup prompt starts below the fold as its own section.
- */
 .hero {
-  min-height: calc(100vh - 121px);
-  min-height: calc(100svh - 121px);
   display: flex;
   flex-direction: column;
 }
 
-.scrollCue {
-  margin: auto auto 0;
-  padding: 24px 12px 20px;
+/* Two entry paths, side by side on wide screens, stacked on narrow ones. */
+.paths {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 760px) {
+  .paths {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.path {
+  background: var(--bg-panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 22px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pathLabel {
   font-family: var(--font-ui);
   font-size: 12px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+  color: var(--accent-text);
+  margin: 0;
+}
+
+.pathTitle {
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.pathText {
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--ink-soft);
+  margin: 0;
+}
+
+.pathActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding-top: 4px;
+}
+
+.cta {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 14px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
-.scrollCue:hover {
+.cta:hover {
+  background: var(--bg-inset);
+}
+
+.pathLink {
+  font-family: var(--font-ui);
+  font-size: 13.5px;
   color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.scrollCue svg {
-  color: var(--accent-text);
-  animation: nudge 2.4s ease-in-out infinite;
+.cta:focus-visible,
+.pathLink:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
 }
 
-@keyframes nudge {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(4px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .scrollCue svg {
-    animation: none;
-  }
-}
-
-/* Clicking the cue glides down to the setup prompt instead of jumping. */
-@media (prefers-reduced-motion: no-preference) {
-  :global(html):has(.hero) {
-    scroll-behavior: smooth;
-  }
+/* The witness diagram, right under the two paths. */
+.witness {
+  padding-top: 32px;
+  scroll-margin-top: 24px;
 }
 
 /* The setup prompt reads as its own section, set apart from the hero above it. */
@@ -275,4 +319,11 @@
 
 .footer a:hover {
   color: var(--accent-text);
+}
+
+/* In-page links (to the setup prompt and the diagram) glide instead of jumping. */
+@media (prefers-reduced-motion: no-preference) {
+  :global(html):has(.hero) {
+    scroll-behavior: smooth;
+  }
 }

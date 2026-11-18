@@ -11,6 +11,7 @@ import type { ConfigReport } from "./mcpConfig.js";
 
 export const INSPECT_CSS = `
 .tool-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.subhead { font-size: 17px; color: var(--ink-soft); margin: -4px 0 14px; }
 form.inspect { display: grid; gap: 12px; margin: 20px 0; }
 form.inspect textarea, form.inspect input[type=url] { width: 100%; font: inherit; font-family: var(--font-data); font-size: 14px; padding: 10px 12px; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--bg-panel); color: var(--ink); }
 form.inspect textarea { min-height: 260px; resize: vertical; }
@@ -133,6 +134,7 @@ export function contentReportPage(report: ContentReport): string {
     "Hidden content report",
     `<p class="label">Hidden content report</p>
 <h1>${esc(report.summary)}</h1>
+${report.informational ? `<p class="subhead">${esc(report.informational)}</p>` : ""}
 ${source}
 <h2>Findings</h2>
 ${report.findings.length ? findingsHtml(report.findings) : `<p>${esc(report.summary)}</p>`}

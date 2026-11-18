@@ -7,27 +7,43 @@ import { TwinPane } from "../components/TwinPane";
 describe("GET / (home)", () => {
   const html = renderToStaticMarkup(<Home />);
 
-  it("leads with the neutral witness and links to both onward audiences", () => {
-    expect(html).toContain("The neutral witness for agent-to-agent interactions");
+  it("leads with transparency, two paths (Inspect, Witness), and links to both onward audiences", () => {
+    expect(html).toContain("Transparency for agentic interactions");
+    expect(html).toContain("Inspect the input. Keep a verifiable record.");
     expect(html).toContain("Every agent conversation, on the record.");
-    expect(html).toContain("favoring neither");
+    expect(html.indexOf("path-inspect")).toBeLessThan(html.indexOf("path-witness"));
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain('href="/agents"');
   });
 
-  it("shows the witness diagram under the headline, then a copyable setup prompt", () => {
+  it("shows the witness diagram under the two paths, then a copyable setup prompt", () => {
     const title = html.indexOf("Every agent conversation, on the record.");
     const diagram = html.indexOf("<figure");
     const prompt = html.indexOf("Add a witness to your agent (5 minutes)");
     expect(title).toBeLessThan(diagram);
     expect(diagram).toBeLessThan(prompt);
-    // A small cue under the diagram points down to the prompt, which starts below the first screen.
-    const cue = html.indexOf('href="#setup"');
-    expect(diagram).toBeLessThan(cue);
-    expect(cue).toBeLessThan(prompt);
+    // The Witness path's CTA points down to the prompt.
+    const cta = html.indexOf('href="#setup"');
+    expect(title).toBeLessThan(cta);
+    expect(cta).toBeLessThan(prompt);
     expect(html).toContain('id="setup"');
     expect(html).toContain("Prompt for your Claude Code, Codex or preferred AI (It&#x27;ll know what to do)");
     expect(html).toContain("Copy prompt");
+  });
+
+  it("gives each inspection tool a try link, a synthetic example, and its limits, with no verdict language", () => {
+    expect(html).toContain('href="https://checkup.openglass.glass/inspect/content"');
+    expect(html).toContain('href="https://checkup.openglass.glass/inspect/mcp-config"');
+    expect(html.match(/See an example/g)?.length).toBe(2);
+    expect(html).toContain("nothing inspected is ever run");
+    expect(html).toContain("describe the bytes fetched at check time");
+    expect(html).toContain("isn&#x27;t stored or logged");
+    expect(html).toContain("No OpenGlass account needed");
+    for (const word of [/\bsafe\b/i, /\bunsafe\b/i, /\bmalicious\b/i, /\bsecure\b/i, /\bprotection\b/i, /prove what your agent did/i]) {
+      expect(html).not.toMatch(word);
+    }
+    // Signed records show integrity and key attribution, not real-world performance.
+    expect(html).toContain("doesn&#x27;t show that an agent actually carried out what a message describes");
   });
 
   it("explains the witness with a diagram, not a paragraph", () => {

@@ -34,6 +34,8 @@ export interface RuleFindings {
   title: string;
   label: FindingLabel;
   informational: boolean;
+  /** Set on informational rules: what one listed item is, singular and plural. */
+  itemNoun?: [string, string];
   /** How many matches the rule found in total. */
   count: number;
   /** True when `items` stops before `count` because of the per-rule cap. */
@@ -49,6 +51,8 @@ export interface CheckInfo {
   label: FindingLabel;
   /** Neutral inventory (outbound hosts, accessibility text): listed, never counted as a finding. */
   informational?: boolean;
+  /** For informational checks: what one listed item is, singular and plural ("outbound host"). */
+  itemNoun?: [string, string];
 }
 
 /** Collects matches for one rule, keeping at most `cap` items and counting the rest. */
@@ -70,7 +74,7 @@ export class RuleCollector {
   }
   result(): RuleFindings | null {
     if (this.count === 0) return null;
-    return { rule: this.check.rule, title: this.check.title, label: this.check.label, informational: this.check.informational ?? false, count: this.count, truncated: this.items.length < this.count, items: this.items, ...(this.details ? { details: this.details } : {}) };
+    return { rule: this.check.rule, title: this.check.title, label: this.check.label, informational: this.check.informational ?? false, ...(this.check.itemNoun ? { itemNoun: this.check.itemNoun } : {}), count: this.count, truncated: this.items.length < this.count, items: this.items, ...(this.details ? { details: this.details } : {}) };
   }
 }
 
@@ -115,14 +119,27 @@ export class LineIndex {
   }
 }
 
-/** "N findings from the M checks that ran" — never "clean" or "safe". */
+/** Report headline: "N findings across M checks" — never "clean" or "safe". Informational
+ * inventories are not findings and go on their own line (see `informationalLine`). */
 export function summaryLine(findings: RuleFindings[], checksRun: number): string {
-  const counted = findings.filter((f) => !f.informational);
-  const total = counted.reduce((n, f) => n + f.count, 0);
-  const listed = findings.filter((f) => f.informational).map((f) => `${f.count} ${f.title.toLowerCase()}`);
-  const inventory = listed.length ? ` Also listed for information: ${listed.join("; ")}.` : "";
-  if (total === 0) return `No findings from the ${checksRun} checks that ran.${inventory}`;
-  return `${total} finding${total === 1 ? "" : "s"} under ${counted.length} rule${counted.length === 1 ? "" : "s"}, from the ${checksRun} checks that ran.${inventory}`;
+  const total = findings.filter((f) => !f.informational).reduce((n, f) => n + f.count, 0);
+  const checks = `${checksRun} check${checksRun === 1 ? "" : "s"}`;
+  if (total === 0) return `No findings across ${checks}.`;
+  return `${total} finding${total === 1 ? "" : "s"} across ${checks}.`;
+}
+
+/** The smaller line under the headline: "2 outbound hosts listed for information." Null when
+ * no informational rule matched. */
+export function informationalLine(findings: RuleFindings[]): string | null {
+  const listed = findings
+    .filter((f) => f.informational)
+    .map((f) => {
+      const [one, many] = f.itemNoun ?? [f.title.toLowerCase(), f.title.toLowerCase()];
+      return `${f.count} ${f.count === 1 ? one : many}`;
+    });
+  if (!listed.length) return null;
+  const joined = listed.length === 1 ? listed[0] : `${listed.slice(0, -1).join(", ")} and ${listed[listed.length - 1]}`;
+  return `${joined} listed for information.`;
 }
 
 /** Deterministic error a caller can show as-is (bad input, too large, refused URL...). */

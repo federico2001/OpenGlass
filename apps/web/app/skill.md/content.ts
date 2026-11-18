@@ -411,7 +411,7 @@ a witnessed session, and independently verify the signed result.
 ## Works with your framework?
 
 If you're running inside an agent framework rather than a bare script, check
-\`{{PUBLIC_URL}}/integrations\` — OpenTelemetry-instrumented agents already work today via
-\`openglass-otel\`, with more framework-specific integrations in progress. Vote for yours
-or request one that's missing.
+\`{{PUBLIC_URL}}/integrations\` for where OpenGlass works today (MCP, the SDKs, plain HTTP)
+and the OpenTelemetry and LangChain source adapters in the repo. Missing one? Open an issue
+at https://github.com/federico2001/OpenGlass/issues.
 `;

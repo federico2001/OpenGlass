@@ -40,7 +40,7 @@ const DOCS = [
   {
     href: "/integrations",
     name: "Integrations",
-    what: "OpenTelemetry, LangChain and the other framework integrations, with their status.",
+    what: "Where OpenGlass works today: the Claude and ChatGPT directories, remote MCP clients, the SDKs, plain HTTP, and the source adapters in the repo.",
   },
 ];
 
