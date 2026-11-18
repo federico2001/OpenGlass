@@ -1,3 +1,4 @@
+import { InspectPath } from "../components/InspectPath";
 import { SetupPrompt } from "../components/SetupPrompt";
 import { WitnessDiagram } from "../components/WitnessDiagram";
 import styles from "./page.module.css";
@@ -7,16 +8,41 @@ export default function Home() {
     <main className={`wrap ${styles.main}`}>
       <section className={styles.masthead}>
         <div className={styles.hero}>
-          <p className={styles.kicker}>The neutral witness for agent-to-agent interactions</p>
-          <h1 className={styles.title}>Every agent conversation, on the record.</h1>
-          <p className={styles.subtitle}>Put your agent&apos;s interactions on a signed record nobody can quietly change.</p>
+          <p className={styles.kicker}>Transparency for agentic interactions</p>
+          <h1 className={styles.title}>Inspect the input. Keep a verifiable record.</h1>
+          <p className={styles.subtitle}>
+            Reveal hidden content, review MCP configurations, and keep tamper-evident records of agent-to-agent
+            exchanges.
+          </p>
+          <div className={styles.paths}>
+            <InspectPath />
+            <section className={styles.path} aria-labelledby="path-witness">
+              <p className={styles.pathLabel}>Witness</p>
+              <h2 id="path-witness" className={styles.pathTitle}>
+                Every agent conversation, on the record.
+              </h2>
+              <p className={styles.pathText}>
+                Put your agent&apos;s interactions with other agents on a signed, hash-chained record nobody can
+                quietly change. Each agent signs its own messages, OpenGlass countersigns them, and both owners hold
+                the same record, which anyone can verify offline.
+              </p>
+              <p className={styles.pathText}>
+                It shows the record is intact and which keys signed it. It doesn&apos;t show that an agent actually
+                carried out what a message describes.
+              </p>
+              <div className={styles.pathActions}>
+                <a className={styles.cta} href="#setup">
+                  Add a witness to your agent
+                </a>
+                <a className={styles.pathLink} href="#witness">
+                  How the witness works
+                </a>
+              </div>
+            </section>
+          </div>
+        </div>
+        <div id="witness" className={styles.witness}>
           <WitnessDiagram />
-          <a className={styles.scrollCue} href="#setup">
-            <span>Add it to your agent</span>
-            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-              <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </a>
         </div>
         <div id="setup" className={styles.setup}>
           <SetupPrompt />

@@ -87,6 +87,8 @@ export default function AgentsPage() {
           <div><dt>LLM-readable summary</dt><dd><a href="/llms.txt">/llms.txt</a> / <a href="/llms-full.txt">/llms-full.txt</a></dd></div>
           <div><dt>Agent card</dt><dd><a href="/.well-known/agent.json">/.well-known/agent.json</a></dd></div>
           <div><dt>MCP server</dt><dd><a href="https://mcp.openglass.glass">mcp.openglass.glass</a> — <code>lookup_agent</code>, <code>register_agent</code>, <code>attest_action</code>, <code>start_session</code>, <code>send_message</code>, <code>close_session</code>, <code>get_record</code>, <code>verify_agent</code>, <code>invite_counterparty</code>, <code>register_counterparty</code></dd></div>
+          <div><dt>Public MCP endpoint</dt><dd><code>/mcp-public</code> on <a href="https://mcp.openglass.glass">mcp.openglass.glass</a> — read-only tools that need no OpenGlass account and no signing: <code>lookup_agent</code>, <code>verify_agent</code>, <code>inspect_hidden_content</code>, <code>check_mcp_config</code></dd></div>
+          <div><dt>Inspection tools</dt><dd><a href="https://checkup.openglass.glass/inspect">Open the inspection tools</a> — hidden-content reveal and MCP config check, in the browser or as JSON</dd></div>
           <div><dt>JS SDK</dt><dd><code>npm install openglass-sdk</code> — <a href="https://www.npmjs.com/package/openglass-sdk">npm</a></dd></div>
           <div><dt>Python SDK</dt><dd><code>pip install openglass-sdk</code> — <a href="https://pypi.org/project/openglass-sdk/">PyPI</a></dd></div>
           <div><dt>Example, end to end</dt><dd><a href="https://github.com/federico2001/OpenGlass/tree/main/examples/witnessed-negotiation">Witnessed negotiation</a></dd></div>

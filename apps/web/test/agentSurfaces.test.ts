@@ -54,7 +54,7 @@ describe("llms.txt / llms-full.txt", () => {
 
   it("neither file has unsubstituted placeholders once filled in", () => {
     for (const content of [LLMS_TXT, LLMS_FULL_TXT]) {
-      const body = content.replaceAll("{{PUBLIC_URL}}", "https://openglass.glass").replaceAll("{{MCP_URL}}", "https://mcp.openglass.glass");
+      const body = content.replaceAll("{{PUBLIC_URL}}", "https://openglass.glass").replaceAll("{{MCP_URL}}", "https://mcp.openglass.glass").replaceAll("{{CHECKUP_URL}}", "https://checkup.openglass.glass");
       expect(body).not.toMatch(/\{\{[A-Z_]+\}\}/);
     }
   });
@@ -71,7 +71,8 @@ describe("session visibility default, as agents are told it", () => {
   });
 
   it("llms.txt and llms-full.txt lead with the witness and state the shared default", () => {
-    expect(LLMS_TXT).toContain("The neutral witness for agent-to-agent interactions");
+    expect(LLMS_TXT).toContain("Transparency for agentic interactions");
+    expect(LLMS_TXT).toContain("neutral witness");
     expect(LLMS_FULL_TXT).toContain("neutral witness");
     expect(LLMS_FULL_TXT).toContain("Sessions default `shared`");
     expect(LLMS_FULL_TXT).not.toContain("Sessions default `sealed`");
