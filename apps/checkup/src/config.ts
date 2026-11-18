@@ -34,6 +34,10 @@ const ConfigSchema = z.object({
   CHECKUP_WITNESS_MODE: z.enum(["primary", "shadow", "off"]).default("shadow"),
   /** Test-only: lets the SSRF guard connect to loopback/private addresses (a local fake
    * target). Leave unset everywhere else. */
+  /** Inspection tools (/inspect): fetches of one host allowed per rolling minute. */
+  INSPECT_FETCH_PER_TARGET_PER_MINUTE: z.coerce.number().int().min(1).max(600).default(6),
+  /** Inspection tools: fetches allowed in flight at once, across all callers. */
+  INSPECT_FETCH_MAX_CONCURRENT: z.coerce.number().int().min(1).max(64).default(4),
   CHECKUP_ALLOW_PRIVATE_TARGETS: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
 });
 

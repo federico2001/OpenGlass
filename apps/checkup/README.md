@@ -59,7 +59,20 @@ The reply is a short plain-language report with a 0–100 score per section and 
 | `CHECKUP_AGENT_PRIVATE_KEY` | 32-byte Ed25519 key, base64url. Generate once: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
 | `CHECKUP_ADMIN_TOKEN` | At least 16 characters. |
 | `A2A_REGISTRY_URL` | Default `https://a2aregistry.org`. |
+| `INSPECT_FETCH_PER_TARGET_PER_MINUTE` | Inspection tools: fetches of one host per rolling minute. Default 6. |
+| `INSPECT_FETCH_MAX_CONCURRENT` | Inspection tools: fetches in flight at once. Default 4. |
 | `CHECKUP_ALLOW_PRIVATE_TARGETS` | Tests only. |
+
+## Inspection tools (`/inspect`)
+
+Two narrow inspection tools live alongside the checkup, in `src/inspect/`. They are separate from the checkup: they store nothing, record nothing on OpenGlass, and need no database.
+
+- **What's hiding in this?** (`/inspect/content`, `POST /api/inspect/content` with exactly one of `html`, `text`, `url`). Invisible Unicode (zero-width, bidi overrides and isolates, tag characters, also as HTML character references), text hidden by inline styles or the `hidden` attribute (display, visibility, opacity, font-size, off-screen, clipped), comments with text, `data-*` attributes of 256+ characters, meta content, accessibility text not otherwise visible (information only), base64-looking runs of 80+ characters (location, length, and a printable 48-byte prefix at most), and an inventory of outbound hosts. Plain text gets the Unicode, blob and reference checks. One heuristic (`heuristicPatterns.ts`, at most 10 matches) flags text that reads like it addresses an AI reader. No layout, no stylesheet, no script: where visibility depends on CSS it didn't see, the finding says so.
+- **Check this MCP setup before I install it** (`/inspect/mcp-config`, `POST /api/inspect/mcp-config` with `config` as a JSON string or object). Static rules, each quoting the setting by JSON path: `mcp.unpinned-package`, `mcp.download-and-execute`, `mcp.http-loopback` / `mcp.http-non-loopback`, `mcp.broad-filesystem-scope`, `mcp.entrypoint-privileged` / `-container` / `-shell`, `mcp.auto-approve`, `mcp.credential-in-env` / `-headers` / `-args`. Credential detection is best-effort; every string in a report goes through the redactor before it is returned.
+
+Findings are deterministic (same bytes, same findings) and capped per rule (25 for content, 50 for configs), with truncation marked. Reports come back in the response only (`cache-control: no-store`, no report URL); request bodies are parsed as strings by the plugin and never logged, and its error handler logs codes only. The URL fetch (`fetch.ts`) builds on `net.ts`: standard ports only, no userinfo, every address and redirect hop checked (3 hops), one 10 s timeout, 2 MB of decoded body with streaming, bounded gzip/deflate/br decompression, HTML and plain text only, one request per inspection. `limiter.ts` keeps the per-host rate limit and the concurrency cap in memory.
+
+The public MCP endpoint (`mcp.<domain>/mcp-public`) exposes both as `inspect_hidden_content` and `check_mcp_config`, proxied over the Docker network (`CHECKUP_INTERNAL_URL` in apps/mcp).
 
 ## Run and ship
 

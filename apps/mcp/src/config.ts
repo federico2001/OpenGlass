@@ -7,6 +7,9 @@ const Env = z.object({
   API_INTERNAL_URL: z.url().default("http://api:3000"),
   /** The public origin agents see this server at (mcp.<domain>) — used only in server.json
    * and tool-description text, never for actual requests (those go to API_INTERNAL_URL). */
+  /** apps/checkup reached directly over the Docker network: the inspection tools on
+   * /mcp-public proxy to its /api/inspect/* routes. */
+  CHECKUP_INTERNAL_URL: z.url().default("http://checkup:3004"),
   PUBLIC_MCP_URL: z.url().default("https://mcp.localhost"),
 });
 

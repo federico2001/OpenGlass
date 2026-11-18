@@ -104,7 +104,8 @@ function pinnedLookup(policy: NetPolicy): LookupFunction {
 }
 
 const agents = new WeakMap<NetPolicy, Dispatcher>();
-function dispatcherFor(policy: NetPolicy): Dispatcher {
+/** The pinned-lookup dispatcher for `policy` (shared by safeFetch and the inspection fetch). */
+export function dispatcherFor(policy: NetPolicy): Dispatcher {
   let agent = agents.get(policy);
   if (!agent) {
     agent = new Agent({ connect: { lookup: pinnedLookup(policy), timeout: policy.timeoutMs ?? REQUEST_TIMEOUT_MS }, keepAliveTimeout: 1000 });
